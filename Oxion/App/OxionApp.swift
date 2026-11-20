@@ -36,7 +36,15 @@ struct OxionApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .oxionUnauthorized)) { _ in
                     model.logoutLocal()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .oxionRoute)) { n in
+                    if let r = n.object as? String {
+                        _ = PendingRoute.take()
+                        model.handle(route: r)
+                    }
+                }
                 .onChange(of: scenePhase) {
+                    if scenePhase == .active, let r = PendingRoute.take() { model.handle(route: r) }
+                    if scenePhase == .background { Task { await SmartNotify.reschedule() } }
                     if scenePhase == .active, model.me != nil {
                         Task {
                             await WorkoutSync.flush()
@@ -188,6 +196,7 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var model
     @State private var chats = ChatsStore()
     @State private var showCard = false
+    @State private var engine = WorkoutEngine.shared
 
     var body: some View {
         @Bindable var model = model
@@ -223,6 +232,9 @@ struct MainTabView: View {
                 .padding(.bottom, 92)
         }
         .fullScreenCover(isPresented: $model.showActiveWorkout) { ActiveWorkoutView() }
+        .onAppear { WatchLink.shared.activate() }
+        .onChange(of: engine.state?.phase) { WatchLink.shared.send(engine.state) }
+        .onChange(of: engine.state?.setsDoneAll) { WatchLink.shared.send(engine.state) }
         .task {
             // счётчик непрочитанных на вкладке «Чаты»
             while !Task.isCancelled {

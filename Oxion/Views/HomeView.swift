@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var newWorkout = false
     @State private var showExercises = false
     @State private var showShop = false
+    @State private var showVision = false
 
     private var goal: Int { max(1, model.me?.weekGoal ?? 3) }
 
@@ -43,6 +44,7 @@ struct HomeView: View {
             .navigationDestination(isPresented: $showProfile) { ProfileView(embedded: true) }
             .navigationDestination(isPresented: $showExercises) { ExercisesView() }
             .navigationDestination(isPresented: $showShop) { ShopView() }
+            .fullScreenCover(isPresented: $showVision) { VisionCoachView() }
             .sheet(isPresented: $newWorkout) {
                 NewWorkoutSheet { id in
                     Task { await load(); openWorkout = id }
@@ -55,6 +57,7 @@ struct HomeView: View {
                 case .health: HealthView()
                 case .challenges: ChallengesView()
                 case .records: RecordsView()
+                case .ecosystem: EcosystemView()
                 }
             }
             .refreshable { await load() }
@@ -316,6 +319,14 @@ struct HomeView: View {
     private var quickCards: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
+                QuickCard(icon: "camera.viewfinder", tint: Color.lime, title: "OXION Vision", sub: "Камера считает повторы") {
+                    showVision = true
+                }
+                QuickCard(icon: "sparkles.rectangle.stack.fill", tint: Color(hex: 0x58F670), title: "OXION OS", sub: "Виджеты, Siri, часы") {
+                    push = .ecosystem
+                }
+            }
+            HStack(spacing: 12) {
                 QuickCard(icon: "book.fill", tint: Color.lime, title: "Справочник", sub: "9 групп мышц и техника") {
                     showExercises = true
                 }
@@ -392,7 +403,7 @@ struct HomeView: View {
     }
 }
 
-enum HomeRoute: Hashable { case pro, coach, health, challenges, records }
+enum HomeRoute: Hashable { case pro, coach, health, challenges, records, ecosystem }
 
 // MARK: - Элементы главной
 

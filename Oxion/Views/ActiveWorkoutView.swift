@@ -100,6 +100,7 @@ struct ActiveWorkoutView: View {
     @State private var engine = WorkoutEngine.shared
     @State private var reps = 0
     @State private var weight: Double?
+    @State private var vision = false
 
     var body: some View {
         ZStack {
@@ -118,6 +119,7 @@ struct ActiveWorkoutView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .fullScreenCover(isPresented: $vision) { VisionCoachView() }
         .task(id: engine.state?.restEndsAt) {
             // сигнал «отдых окончен» — ровно в момент окончания, без секундного цикла
             guard let end = engine.state?.restEndsAt, engine.state?.phase == .resting else { return }
@@ -240,6 +242,9 @@ struct ActiveWorkoutView: View {
                     }
                 }
                 HStack(spacing: 10) {
+                    if !paused && !resting {
+                        small("Камера", "camera.viewfinder") { vision = true }
+                    }
                     if !paused {
                         small("Пауза", "pause.fill") { engine.pause() }
                     }

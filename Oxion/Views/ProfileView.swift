@@ -54,6 +54,9 @@ struct ProfileView: View {
                     }
                 }
 
+                Section {
+                    nav("OXION OS — экосистема Apple", "sparkles.rectangle.stack.fill", Color.lime) { EcosystemView() }
+                }
                 Section("Тренировки") {
                     nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
                     nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
