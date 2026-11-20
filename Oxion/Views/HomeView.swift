@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var showProfile = false
     @State private var newWorkout = false
     @State private var showExercises = false
+    @State private var showShop = false
 
     private var goal: Int { max(1, model.me?.weekGoal ?? 3) }
 
@@ -41,6 +42,7 @@ struct HomeView: View {
             }
             .navigationDestination(isPresented: $showProfile) { ProfileView(embedded: true) }
             .navigationDestination(isPresented: $showExercises) { ExercisesView() }
+            .navigationDestination(isPresented: $showShop) { ShopView() }
             .sheet(isPresented: $newWorkout) {
                 NewWorkoutSheet { id in
                     Task { await load(); openWorkout = id }
@@ -315,7 +317,7 @@ struct HomeView: View {
             }
             HStack(spacing: 12) {
                 QuickCard(icon: "bag.fill", tint: Color(hex: 0xF0A030), title: "Магазин", sub: "Спортпит с доставкой") {
-                    web = WebTarget(path: "/#shop")
+                    showShop = true
                 }
                 QuickCard(icon: "heart.text.square.fill", tint: Color(hex: 0xFF5A4E), title: "Здоровье", sub: "Шаги, сон, пульс") {
                     web = WebTarget(path: "/#health")

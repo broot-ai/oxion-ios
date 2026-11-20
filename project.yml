@@ -51,6 +51,7 @@ targets:
         UIUserInterfaceStyle: Dark
         LSApplicationQueriesSchemes:
           - tg
-        NSCameraUsageDescription: Oxion использует камеру, чтобы снимать фото и видео для ленты и профиля.
+        NSCameraUsageDescription: Oxion использует камеру для видеозвонков, фото и видео в ленте и чатах.
+        NSMicrophoneUsageDescription: Oxion использует микрофон для звонков, голосовых и видеосообщений.
         NSPhotoLibraryUsageDescription: Oxion открывает галерею, чтобы вы могли загрузить фото и видео.
         NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.

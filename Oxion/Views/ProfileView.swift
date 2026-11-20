@@ -59,16 +59,39 @@ struct ProfileView: View {
                     Button { web = WebTarget(path: "") } label: {
                         Label("Полная версия Oxion", systemImage: "square.grid.2x2.fill")
                     }
-                    Button { web = WebTarget(path: "") } label: {
+                    NavigationLink {
+                        ShopView()
+                    } label: {
                         Label("Магазин спортпита", systemImage: "cart.fill")
                     }
+                    Button { web = WebTarget(path: "/#morders") } label: {
+                        Label("Мои заказы", systemImage: "shippingbox.fill")
+                    }
+                    Button { web = WebTarget(path: "/#goals") } label: {
+                        Label("Цели", systemImage: "target")
+                    }
+                    Button { web = WebTarget(path: "/#records") } label: {
+                        Label("Рекорды", systemImage: "trophy.fill")
+                    }
+                    Button { web = WebTarget(path: "/#challenges") } label: {
+                        Label("Челленджи", systemImage: "flag.checkered")
+                    }
+                    Button { web = WebTarget(path: "/#mycoach") } label: {
+                        Label("Мой тренер", systemImage: "person.crop.circle.badge.checkmark")
+                    }
                     if model.me?.mode == "trainer" || model.me?.hasTrainer == true {
-                        Button { web = WebTarget(path: "") } label: {
-                            Label("Анкета тренера и клиенты", systemImage: "person.2.fill")
+                        Button { web = WebTarget(path: "/#myprofile") } label: {
+                            Label("Моя анкета тренера", systemImage: "person.text.rectangle.fill")
+                        }
+                        Button { web = WebTarget(path: "/#cclients") } label: {
+                            Label("Мои клиенты", systemImage: "person.2.fill")
                         }
                     }
+                    Button { web = WebTarget(path: "/#work") } label: {
+                        Label("Работа в Oxion", systemImage: "briefcase.fill")
+                    }
                     if model.me?.admin == true {
-                        Button { web = WebTarget(path: "/platform") } label: {
+                        Button { web = WebTarget(path: "/#phome") } label: {
                             Label("Панель платформы", systemImage: "shield.lefthalf.filled")
                         }
                     }

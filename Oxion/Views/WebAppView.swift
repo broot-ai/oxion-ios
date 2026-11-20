@@ -97,6 +97,15 @@ private struct WebView: UIViewRepresentable {
             }
         }
 
+        /// камера и микрофон для звонков и видео — разрешаем странице Oxion (iOS всё равно спросит человека)
+        func webView(_ webView: WKWebView,
+                     requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                     initiatedByFrame frame: WKFrameInfo,
+                     type: WKMediaCaptureType,
+                     decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            decisionHandler(origin.host == AppSettings.serverURL.host ? .grant : .prompt)
+        }
+
         /// target="_blank"
         func webView(_ webView: WKWebView,
                      createWebViewWith configuration: WKWebViewConfiguration,

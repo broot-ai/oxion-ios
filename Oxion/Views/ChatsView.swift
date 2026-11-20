@@ -154,6 +154,8 @@ struct ChatView: View {
     @State private var sending = false
     @State private var photoPick: PhotosPickerItem?
     @State private var loaded = false
+    @State private var attaching = false
+    @State private var callWeb: WebTarget?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -226,10 +228,34 @@ struct ChatView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Avatar(url: API.media(peer?.photo), name: peer?.name ?? title, size: 32)
+                Menu {
+                    Button {
+                        callWeb = WebTarget(path: "/#chat/\(chatId)")
+                    } label: {
+                        Label("Аудиозвонок", systemImage: "phone.fill")
+                    }
+                    Button {
+                        callWeb = WebTarget(path: "/#chat/\(chatId)")
+                    } label: {
+                        Label("Видеозвонок", systemImage: "video.fill")
+                    }
+                    Button {
+                        callWeb = WebTarget(path: "/#chat/\(chatId)")
+                    } label: {
+                        Label("Открыть чат в полной версии", systemImage: "square.grid.2x2")
+                    }
+                } label: {
+                    Image(systemName: "phone.fill")
+                }
             }
         }
         .toolbar(.hidden, for: .tabBar)
+        .fullScreenCover(item: $callWeb) { t in WebAppView(path: t.path) }
+        .sheet(isPresented: $attaching) {
+            AttachSheet(chatId: chatId) { m in
+                if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
+            }
+        }
         .task {
             await load(initial: true)
             while !Task.isCancelled {
@@ -274,6 +300,15 @@ struct ChatView: View {
                     .foregroundStyle(.red)
             }
             HStack(alignment: .bottom, spacing: 8) {
+                Button {
+                    attaching = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                }
+                .glassEffect(.regular.interactive(), in: .circle)
+
                 PhotosPicker(selection: $photoPick, matching: .images) {
                     Image(systemName: "photo")
                         .font(.title3)
@@ -420,11 +455,11 @@ struct Bubble: View {
                                 .frame(width: 220, height: 260)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
+                        if let k = m.kind {
+                            ChatCard(kind: k, card: m.card, mine: m.mine)
+                        }
                         if let t = m.text, !t.isEmpty {
                             Text(t)
-                        } else if let k = m.kind {
-                            Text(Kinds.label[k] ?? "Карточка")
-                                .font(.subheadline.weight(.semibold))
                         }
                     }
                     HStack(spacing: 3) {

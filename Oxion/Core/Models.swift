@@ -270,6 +270,7 @@ struct Message: Decodable, Identifiable {
     let edited: Bool?
     let deleted: Bool?
     let reactions: [MsgReaction]?
+    let card: JSONValue?
 }
 
 struct ChatDetail: Decodable {
@@ -334,6 +335,167 @@ struct WorkoutFull: Decodable {
     let calories: Int?
     let note: String?
     let exercises: [WExercise]?
+}
+
+// MARK: - Любой JSON (карточки в чатах)
+
+enum JSONValue: Decodable, Hashable {
+    case string(String), number(Double), bool(Bool), array([JSONValue]), object([String: JSONValue]), null
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let b = try? c.decode(Bool.self) { self = .bool(b) }
+        else if let n = try? c.decode(Double.self) { self = .number(n) }
+        else if let s = try? c.decode(String.self) { self = .string(s) }
+        else if let a = try? c.decode([JSONValue].self) { self = .array(a) }
+        else if let o = try? c.decode([String: JSONValue].self) { self = .object(o) }
+        else { self = .null }
+    }
+
+    subscript(_ key: String) -> JSONValue? {
+        if case .object(let o) = self { return o[key] }
+        return nil
+    }
+    var string: String? {
+        switch self {
+        case .string(let s): return s
+        case .number(let n): return n.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(n)) : String(format: "%.1f", n)
+        default: return nil
+        }
+    }
+    var number: Double? {
+        switch self {
+        case .number(let n): return n
+        case .string(let s): return Double(s)
+        default: return nil
+        }
+    }
+    var int: Int? { number.map { Int($0) } }
+    var array: [JSONValue] {
+        if case .array(let a) = self { return a }
+        return []
+    }
+}
+
+// MARK: - Вложения в чат
+
+struct AttachWorkout: Decodable, Identifiable { let id: Int; let date: String; let title: String?; let sets: Int? }
+struct AttachExercise: Decodable, Identifiable { let id: Int; let name: String; let type: String?; let last: String? }
+struct AttachOptions: Decodable {
+    let workouts: [AttachWorkout]?
+    let exercises: [AttachExercise]?
+}
+
+// MARK: - Магазин (маркетплейс спортпита)
+
+func rub(_ kop: Int?) -> String {
+    let r = Double(kop ?? 0) / 100
+    let f = NumberFormatter()
+    f.numberStyle = .decimal
+    f.groupingSeparator = " "
+    f.maximumFractionDigits = r.truncatingRemainder(dividingBy: 1) == 0 ? 0 : 2
+    return (f.string(from: NSNumber(value: r)) ?? String(r)) + " ₽"
+}
+
+struct MCategory: Decodable, Identifiable, Hashable { let id: Int; let slug: String?; let name: String; let icon: String? }
+
+struct MProduct: Decodable, Identifiable, Hashable {
+    let id: Int
+    let title: String
+    let brand: String?
+    let storeId: Int?
+    let storeName: String?
+    let priceKop: Int?
+    let oldPriceKop: Int?
+    let inStock: Bool?
+    let rating: Double?
+    let ratingCount: Int?
+    let photo: String?
+    var fav: Bool?
+}
+
+struct MStoreShort: Decodable, Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let description: String?
+    let logo: String?
+    let rating: Double?
+    let ratingCount: Int?
+}
+
+struct ShopHome: Decodable {
+    let categories: [MCategory]?
+    let forGoal: [MProduct]?
+    let popular: [MProduct]?
+    let stores: [MStoreShort]?
+    let cartCount: Int?
+    let activeOrders: Int?
+    let city: String?
+}
+
+struct MCatalog: Decodable { let items: [MProduct]; let more: Bool?; let next: Int? }
+
+struct MVariant: Decodable, Identifiable, Hashable {
+    let id: Int
+    let flavor: String?
+    let size: String?
+    let priceKop: Int?
+    let oldPriceKop: Int?
+    let available: Int?
+    var title: String { [flavor, size].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ") }
+}
+
+struct MPhoto: Decodable, Hashable { let id: Int?; let url: String? }
+struct MReview: Decodable, Hashable { let rating: Double?; let text: String?; let name: String? }
+struct MStoreRef: Decodable, Hashable { let id: Int; let name: String?; let rating: Double?; let delivery: Bool?; let pickup: Bool? }
+
+struct MProductFull: Decodable {
+    let id: Int
+    let title: String
+    let description: String?
+    let composition: String?
+    let usage: String?
+    let brand: String?
+    let category: String?
+    let rating: Double?
+    let ratingCount: Int?
+    var fav: Bool?
+    let variants: [MVariant]
+    let photos: [MPhoto]?
+    let reviews: [MReview]?
+    let store: MStoreRef?
+}
+
+struct MCartItem: Decodable, Identifiable, Hashable {
+    let variantId: Int
+    let productId: Int
+    let title: String
+    let variant: String?
+    let priceKop: Int?
+    let oldPriceKop: Int?
+    let qty: Int
+    let sumKop: Int?
+    let available: Int?
+    let ok: Bool?
+    let issue: String?
+    let photo: String?
+    var id: Int { variantId }
+}
+
+struct MCartStore: Decodable, Identifiable, Hashable {
+    let storeId: Int
+    let storeName: String?
+    let minOrderKop: Int?
+    let items: [MCartItem]
+    let itemsKop: Int?
+    var id: Int { storeId }
+}
+
+struct MCart: Decodable {
+    let stores: [MCartStore]
+    let count: Int
+    let itemsKop: Int
 }
 
 // MARK: - Утилиты
