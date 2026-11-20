@@ -188,7 +188,7 @@ struct ChatsView: View {
                     }
                 }
             }
-            .toolbar(editing ? .hidden : .visible, for: .tabBar)
+            .toolbar(editing ? .hidden : .automatic, for: .tabBar)
             .safeAreaInset(edge: .bottom) {
                 if editing { editBar }
             }
