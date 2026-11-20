@@ -244,7 +244,7 @@ struct TrainerDetailView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                 .disabled(opening)
                 .padding(.horizontal)
                 .padding(.bottom, 8)

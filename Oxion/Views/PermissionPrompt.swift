@@ -60,7 +60,7 @@ struct PromptCard: View {
                     .buttonStyle(.glassProminent)
                     .tint(b.role == .primary ? Color.lime : Color.white.opacity(0.16))
                     .foregroundStyle(b.role == .primary ? Color.black : Color.white)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                 }
             }
             .padding(.top, 2)

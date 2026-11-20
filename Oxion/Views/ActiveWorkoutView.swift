@@ -64,7 +64,7 @@ struct StartWorkoutSheet: View {
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                 .disabled(items.isEmpty)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
@@ -291,19 +291,19 @@ struct ActiveWorkoutView: View {
 
     private func big(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: icon).font(.title3.bold()).frame(maxWidth: .infinity).padding(.vertical, 10)
+            Label(title, systemImage: icon).font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
         }
         .buttonStyle(.glassProminent)
-        .controlSize(.large)
+        .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
     }
 
     private func small(_ title: String, _ icon: String, destructive: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: icon).font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+            Label(title, systemImage: icon).font(.subheadline.bold()).frame(maxWidth: .infinity).padding(.vertical, 2)
         }
         .buttonStyle(.glass)
         .tint(destructive ? Color(hex: 0xFF5A4E) : .primary)
-        .controlSize(.large)
+        .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
     }
 
     // MARK: итоги

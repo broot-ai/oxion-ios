@@ -130,7 +130,7 @@ struct UserProfileView: View {
                     }
                     .buttonStyle(.glass)
                 }
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             }
         }
         .padding(16)

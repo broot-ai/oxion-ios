@@ -27,6 +27,7 @@ struct OxionApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .onOpenURL { url in
                     // ссылки из виджетов и Live Activity: oxion://diary, oxion://trainer/15 …
                     let route = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/")

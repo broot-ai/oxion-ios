@@ -383,7 +383,7 @@ struct ComposerView: View {
                 .padding(.horizontal, 6)
             }
             .buttonStyle(.glassProminent)
-            .controlSize(.large)
+            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             .disabled(sending)
         }
         .padding(.horizontal, 16)

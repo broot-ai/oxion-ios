@@ -295,7 +295,7 @@ struct VisionCoachView: View {
                     .buttonStyle(.glassProminent)
                     .disabled(pc.reps == 0)
                 }
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                 Text("Подсчёт приблизительный и не заменяет тренера. Обработка — только на вашем iPhone.")
                     .font(.caption2).foregroundStyle(.white.opacity(0.55)).multilineTextAlignment(.center)
             }

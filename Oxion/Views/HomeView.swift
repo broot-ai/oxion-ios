@@ -367,7 +367,7 @@ struct HomeView: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.glass)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             } else {
                 ForEach(todayWorkouts) { w in
                     Button {

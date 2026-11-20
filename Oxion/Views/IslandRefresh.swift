@@ -28,7 +28,7 @@ final class IslandHUD {
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         let w = PassthroughWindow(windowScene: scene)
         w.windowLevel = .statusBar + 1
-        let host = UIHostingController(rootView: IslandOverlay().preferredColorScheme(.dark))
+        let host = UIHostingController(rootView: IslandOverlay().preferredColorScheme(.dark).dynamicTypeSize(...DynamicTypeSize.large))
         host.view.backgroundColor = .clear
         w.rootViewController = host
         w.backgroundColor = .clear

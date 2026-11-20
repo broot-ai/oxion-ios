@@ -253,7 +253,7 @@ struct ChatsView: View {
             .disabled(sel.isEmpty)
         }
         .buttonStyle(.glass)
-        .controlSize(.large)
+        .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
     }

@@ -81,7 +81,7 @@ struct NFCCheckInView: View {
                     Label("Приложить iPhone", systemImage: "wave.3.right").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
 
                 if let r = last {
                     VStack(spacing: 6) {
@@ -242,14 +242,14 @@ struct SharePlayView: View {
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
 
                 ShareLink(item: AppSettings.serverURL.absoluteString + "/#challenges",
                           message: Text("Давай тренироваться вместе в OXION 💪")) {
                     Label("Пригласить без FaceTime", systemImage: "link").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glass)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
 
                 Text("Если связь у кого-то пропала, его прогресс догонит при переподключении: подходы хранятся на телефоне и на сервере OXION.")
                     .font(.caption).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)

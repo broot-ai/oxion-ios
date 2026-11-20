@@ -109,7 +109,7 @@ struct SubscriptionView: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                 NavigationLink {
                     TrainerEditView()
                 } label: {
@@ -119,7 +119,7 @@ struct SubscriptionView: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.glass)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 120)
@@ -494,7 +494,7 @@ struct ChallengeDetailView: View {
                     }
                     .buttonStyle(.glassProminent)
                     .tint(c.joined == true ? Color.white.opacity(0.2) : Color.lime)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     if let board = c.board, !board.isEmpty {
                         Text("Таблица лидеров").font(.title3.bold())
                         ForEach(Array(board.enumerated()), id: \.element.id) { i, b in
@@ -612,7 +612,7 @@ struct MyCoachView: View {
                                 Text("Найти тренера").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                             }
                             .buttonStyle(.glassProminent)
-                            .controlSize(.large)
+                            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                         }
                     }
                     ForEach(d.trainers ?? []) { t in
@@ -837,7 +837,7 @@ struct HealthView: View {
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
                     }
                     .buttonStyle(.glass)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     Text("Доступ можно изменить: Настройки iPhone → Здоровье → Доступ к данным → Oxion.")
                         .font(.caption)
                         .foregroundStyle(Color.oxHint)
@@ -888,7 +888,7 @@ struct HealthView: View {
                 .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.glassProminent)
-            .controlSize(.large)
+            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             .disabled(asking || !hk.available)
             if !hk.available {
                 Text("«Здоровье» недоступно на этом устройстве").font(.caption).foregroundStyle(.orange)
@@ -1101,7 +1101,7 @@ struct WorkView: View {
             }
             .buttonStyle(.glassProminent)
             .tint(tint)
-            .controlSize(.large)
+            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(18)
         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
@@ -1208,7 +1208,7 @@ struct PlatformView: View {
                             }
                             .buttonStyle(.glass)
                         }
-                        .controlSize(.large)
+                        .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     }
                     NavigationLink { NFCTagsAdminView() } label: {
                         HStack {
@@ -1263,7 +1263,7 @@ struct PlatformView: View {
                         Label("Поделиться ссылкой", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity).padding(.vertical, 4)
                     }
                     .buttonStyle(.glassProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     Spacer()
                 }
                 .padding(24)

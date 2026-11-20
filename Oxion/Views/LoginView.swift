@@ -11,6 +11,7 @@ struct LoginView: View {
     @State private var pollTask: Task<Void, Never>?
     @State private var showCode = false
     @State private var code = ""
+    @State private var phoneLogin = false
 
     var body: some View {
         ZStack {
@@ -51,14 +52,23 @@ struct LoginView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
                 .disabled(busy)
 
-                Button("Войти по коду из бота") {
-                    showCode = true
+                HStack(spacing: 10) {
+                    Button {
+                        phoneLogin = true
+                    } label: {
+                        Label("По номеру", systemImage: "phone.fill").frame(maxWidth: .infinity)
+                    }
+                    Button {
+                        showCode = true
+                    } label: {
+                        Label("Код из бота", systemImage: "number").frame(maxWidth: .infinity)
+                    }
                 }
+                .font(.subheadline.bold())
+                .lineLimit(1)
                 .buttonStyle(.glass)
-                .controlSize(.large)
 
                 if busy {
                     Button("Отменить") {
@@ -82,6 +92,7 @@ struct LoginView: View {
             Text("Отправьте боту команду /code и введите полученный код")
         }
         .onDisappear { pollTask?.cancel() }
+        .sheet(isPresented: $phoneLogin) { PhoneVerifyView(mode: .login) }
     }
 
     private func startLogin() async {

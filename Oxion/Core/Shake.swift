@@ -109,7 +109,7 @@ struct MyCardSheet: View {
                             .padding(.vertical, 4)
                     }
                     .buttonStyle(.glassProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     Button {
                         UIPasteboard.general.string = current
                         Haptic.success()
@@ -120,7 +120,7 @@ struct MyCardSheet: View {
                             .padding(.vertical, 4)
                     }
                     .buttonStyle(.glass)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                 }
                 Text("Встряхните телефон в любом месте приложения, чтобы открыть это окно.")
                     .font(.caption)

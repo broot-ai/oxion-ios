@@ -390,7 +390,7 @@ struct ProductView: View {
                         .padding(.vertical, 4)
                     }
                     .buttonStyle(.glassProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     .disabled(adding || (v.available ?? 0) == 0)
                 }
                 .padding(.horizontal, 16)
@@ -521,7 +521,7 @@ struct CartView: View {
                             .padding(.vertical, 4)
                     }
                     .buttonStyle(.glassProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
                 }

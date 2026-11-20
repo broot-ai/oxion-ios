@@ -124,7 +124,7 @@ struct OxAlertOverlay: View {
                             }
                             .buttonStyle(.glassProminent)
                             .tint(tint(for: b.role))
-                            .controlSize(.large)
+                            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                         }
                     }
                     .padding(.top, 6)
@@ -158,7 +158,7 @@ enum AlertWindow {
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1
-        let host = UIHostingController(rootView: OxAlertOverlay().preferredColorScheme(.dark))
+        let host = UIHostingController(rootView: OxAlertOverlay().preferredColorScheme(.dark).dynamicTypeSize(...DynamicTypeSize.large))
         host.view.backgroundColor = .clear
         w.rootViewController = host
         w.backgroundColor = .clear

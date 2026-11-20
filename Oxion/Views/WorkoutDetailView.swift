@@ -44,7 +44,7 @@ struct WorkoutDetailView: View {
                                 .padding(.vertical, 6)
                         }
                         .buttonStyle(.glassProminent)
-                        .controlSize(.large)
+                        .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets())
                     }

@@ -37,7 +37,7 @@ struct ErrorStateView: View {
                 .foregroundStyle(.secondary)
             Button("Повторить", action: retry)
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -120,13 +120,13 @@ struct NotRegisteredView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.large)
+                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             }
             Button("Я зарегистрировался, проверить") {
                 Task { await model.loadMe() }
             }
             .buttonStyle(.glass)
-            .controlSize(.large)
+            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
             Button("Выйти", role: .destructive) {
                 Task { await model.logout() }
             }
