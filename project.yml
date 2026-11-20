@@ -65,6 +65,7 @@ targets:
         NSCameraUsageDescription: Oxion использует камеру для видеозвонков, фото и видео в ленте и чатах.
         NSMicrophoneUsageDescription: Oxion использует микрофон для звонков, голосовых и видеосообщений.
         NSPhotoLibraryUsageDescription: Oxion открывает галерею, чтобы вы могли загрузить фото и видео.
+        NFCReaderUsageDescription: OXION читает NFC-метку клуба, чтобы отметить посещение.
         NSHealthShareUsageDescription: Oxion читает шаги, калории, дистанцию, сон, пульс покоя и вес из «Здоровья», чтобы показать прогресс вам и вашему тренеру.
         NSHealthUpdateUsageDescription: Oxion может сохранять ваши тренировки в «Здоровье».
         NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.

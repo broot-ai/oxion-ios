@@ -30,6 +30,13 @@ struct EcosystemView: View {
                 nav("Умные уведомления", "Категории и частота", "bell.badge.fill", .works) { SmartNotifySettingsView() }
                 nav("Siri и Быстрые команды", "Голосовые команды OXION", "waveform", .works) { SiriHelpView() }
                 item("Виджеты и StandBy", "Долгое нажатие на главный экран → «+» → OXION", "square.grid.2x2.fill", .preview)
+                item("Пункт управления", "Пункт управления → «+» → «Добавить элемент» → OXION", "switch.2", .works)
+                nav("Apple Health", "Шаги, сон, пульс, вес", "heart.fill", .paid) { HealthView() }
+            }
+
+            Section("Вместе") {
+                nav("NFC check-in в клубе", "Отметка посещения меткой на входе", "wave.3.right.circle.fill", .paid) { NFCCheckInView() }
+                nav("SharePlay", "Совместная тренировка в FaceTime", "shareplay", .paid) { SharePlayView() }
             }
         }
         .scrollContentBackground(.hidden)

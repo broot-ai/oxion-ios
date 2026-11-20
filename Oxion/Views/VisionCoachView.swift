@@ -172,7 +172,8 @@ final class PoseCounter: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         let dot = v1.dx * v2.dx + v1.dy * v2.dy
         let m = sqrt(v1.dx * v1.dx + v1.dy * v1.dy) * sqrt(v2.dx * v2.dx + v2.dy * v2.dy)
         guard m > 0 else { return 180 }
-        return acos(max(-1, min(1, dot / m))) * 180 / .pi
+        let cosv = Double(max(-1, min(1, dot / m)))
+        return Foundation.acos(cosv) * 180 / Double.pi
     }
 }
 

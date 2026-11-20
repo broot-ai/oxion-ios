@@ -1211,6 +1211,17 @@ struct PlatformView: View {
                         }
                         .controlSize(.large)
                     }
+                    NavigationLink { NFCTagsAdminView() } label: {
+                        HStack {
+                            IconBubble(icon: "wave.3.right.circle.fill", size: 38)
+                            Text("NFC-метки клубов").font(.headline)
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
+                        }
+                        .padding(14)
+                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                     SectionCard(title: "Обращения в поддержку") {
                         if tickets.isEmpty {
                             Text("Открытых обращений нет").foregroundStyle(Color.oxHint)
