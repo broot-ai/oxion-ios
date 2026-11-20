@@ -39,42 +39,53 @@ final class FeedStore {
         loading = false
     }
 
-    func toggleLike(_ id: Int) async {
-        guard let i = items.firstIndex(where: { $0.post.id == id }) else { return }
-        let was = items[i].post.liked ?? false
-        items[i].post.liked = !was
-        items[i].post.likes = max(0, (items[i].post.likes ?? 0) + (was ? -1 : 1))
-        Haptic.tap(was ? .light : .medium)
-        do {
-            let _: OK = try await API.call("/feed/posts/\(id)/like", method: was ? "DELETE" : "POST")
-        } catch {
-            if let j = items.firstIndex(where: { $0.post.id == id }) {
-                items[j].post.liked = was
-                items[j].post.likes = max(0, (items[j].post.likes ?? 0) + (was ? 1 : -1))
-            }
+    func update(_ id: Int, _ change: (inout Post) -> Void) {
+        for i in items.indices where items[i].post.id == id {
+            change(&items[i].post)
         }
     }
 
-    func toggleSave(_ id: Int) async {
-        guard let i = items.firstIndex(where: { $0.post.id == id }) else { return }
-        let was = items[i].post.saved ?? false
-        items[i].post.saved = !was
-        Haptic.tap()
+    func remove(_ id: Int) {
+        items.removeAll { $0.post.id == id }
+    }
+}
+
+/// Действия с постом — общие для ленты и экрана ветки.
+enum PostActions {
+    static func toggle(_ what: String, id: Int, on: Bool) async -> Bool {
         do {
-            let _: OK = try await API.call("/feed/posts/\(id)/save", method: was ? "DELETE" : "POST")
+            let _: OK = try await API.call("/feed/posts/\(id)/\(what)", method: on ? "POST" : "DELETE")
+            return true
+        } catch { return false }
+    }
+
+    static func report(_ id: Int, reason: ReportReason) async -> String {
+        do {
+            let _: OK = try await API.call("/feed/posts/\(id)/report", method: "POST", body: ["reason": reason.rawValue])
+            return "Спасибо, жалоба отправлена"
         } catch {
-            if let j = items.firstIndex(where: { $0.post.id == id }) {
-                items[j].post.saved = was
-            }
+            return error.localizedDescription
+        }
+    }
+
+    static func delete(_ id: Int) async -> String? {
+        do {
+            let _: OK = try await API.call("/feed/posts/\(id)", method: "DELETE")
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 }
 
 struct FeedView: View {
     @State private var store = FeedStore()
+    @State private var path: [PostRef] = []
+    @State private var composing = false
+    @State private var toast: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     Picker("Лента", selection: $store.tab) {
@@ -93,14 +104,17 @@ struct FeedView: View {
                     }
 
                     ForEach(store.items) { item in
-                        PostCard(item: item,
-                                 onLike: { Task { await store.toggleLike(item.post.id) } },
-                                 onSave: { Task { await store.toggleSave(item.post.id) } })
-                            .onAppear {
-                                if item.id == store.items.last?.id {
-                                    Task { await store.load(reset: false) }
-                                }
+                        PostCard(post: item.post,
+                                 repostBy: item.repostBy?.name,
+                                 onChange: { change in store.update(item.post.id, change) },
+                                 onDeleted: { store.remove(item.post.id) },
+                                 onToast: { toast = $0 },
+                                 onOpen: { path.append(PostRef(id: item.post.id)) })
+                        .onAppear {
+                            if item.id == store.items.last?.id {
+                                Task { await store.load(reset: false) }
                             }
+                        }
                     }
 
                     if store.loading {
@@ -119,6 +133,24 @@ struct FeedView: View {
                 .padding(.vertical, 8)
             }
             .navigationTitle("Лента")
+            .navigationDestination(for: PostRef.self) { ref in
+                PostDetailView(postId: ref.id)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        composing = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .accessibilityLabel("Новый пост")
+                }
+            }
+            .sheet(isPresented: $composing) {
+                ComposerView(parentId: nil) { _ in
+                    Task { await store.load(reset: true) }
+                }
+            }
             .refreshable { await store.load(reset: true) }
             .task {
                 if store.items.isEmpty { await store.load(reset: true) }
@@ -127,20 +159,27 @@ struct FeedView: View {
                 Haptic.tap(.soft)
                 Task { await store.load(reset: true) }
             }
+            .toast($toast)
         }
     }
 }
 
 struct PostCard: View {
-    let item: FeedItem
-    var onLike: () -> Void
-    var onSave: () -> Void
+    let post: Post
+    var repostBy: String? = nil
+    var onChange: ((inout Post) -> Void) -> Void
+    var onDeleted: () -> Void
+    var onToast: (String) -> Void
+    var onOpen: (() -> Void)? = nil
+
+    @State private var reporting = false
+    @State private var confirmDelete = false
 
     var body: some View {
-        let p = item.post
+        let p = post
         VStack(alignment: .leading, spacing: 10) {
-            if let rb = item.repostBy {
-                Label("\(rb.name ?? "Кто-то") сделал репост", systemImage: "arrow.2.squarepath")
+            if let rb = repostBy {
+                Label("\(rb) сделал репост", systemImage: "arrow.2.squarepath")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -164,11 +203,51 @@ struct PostCard: View {
                     }
                 }
                 Spacer()
+                Menu {
+                    if p.mine == true {
+                        Button(role: .destructive) {
+                            confirmDelete = true
+                        } label: {
+                            Label("Удалить", systemImage: "trash")
+                        }
+                    } else {
+                        Button {
+                            reporting = true
+                        } label: {
+                            Label("Пожаловаться", systemImage: "exclamationmark.bubble")
+                        }
+                        Button {
+                            Task {
+                                if await PostActions.toggle("hide", id: p.id, on: true) {
+                                    onDeleted()
+                                    onToast("Пост скрыт")
+                                }
+                            }
+                        } label: {
+                            Label("Не интересно", systemImage: "eye.slash")
+                        }
+                    }
+                    ShareLink(item: AppSettings.serverURL.absoluteString + "/#post/\(p.id)") {
+                        Label("Поделиться", systemImage: "square.and.arrow.up")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .foregroundStyle(.secondary)
+            }
+
+            if let r = p.replyToName, !r.isEmpty {
+                Text("в ответ \(r)")
+                    .font(.caption)
+                    .foregroundStyle(Color.lime.opacity(0.8))
             }
 
             if let t = p.text, !t.isEmpty {
                 Text(t)
                     .font(.body)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -177,7 +256,16 @@ struct PostCard: View {
             }
 
             HStack(spacing: 22) {
-                Button(action: onLike) {
+                Button {
+                    let was = p.liked ?? false
+                    onChange { $0.liked = !was; $0.likes = max(0, ($0.likes ?? 0) + (was ? -1 : 1)) }
+                    Task {
+                        if !(await PostActions.toggle("like", id: p.id, on: !was)) {
+                            onChange { $0.liked = was; $0.likes = max(0, ($0.likes ?? 0) + (was ? 1 : -1)) }
+                        }
+                    }
+                    Haptic.tap(was ? .light : .medium)
+                } label: {
                     Label("\(p.likes ?? 0)", systemImage: p.liked == true ? "heart.fill" : "heart")
                         .contentTransition(.symbolEffect(.replace))
                 }
@@ -186,12 +274,35 @@ struct PostCard: View {
                 Label("\(p.replies ?? 0)", systemImage: "bubble.right")
                     .foregroundStyle(.secondary)
 
-                Label("\(p.reposts ?? 0)", systemImage: "arrow.2.squarepath")
-                    .foregroundStyle(.secondary)
+                Button {
+                    let was = p.reposted ?? false
+                    if p.mine == true { return }
+                    onChange { $0.reposted = !was; $0.reposts = max(0, ($0.reposts ?? 0) + (was ? -1 : 1)) }
+                    Haptic.tap()
+                    Task {
+                        if !(await PostActions.toggle("repost", id: p.id, on: !was)) {
+                            onChange { $0.reposted = was; $0.reposts = max(0, ($0.reposts ?? 0) + (was ? 1 : -1)) }
+                        } else if !was {
+                            onToast("Репост сделан")
+                        }
+                    }
+                } label: {
+                    Label("\(p.reposts ?? 0)", systemImage: "arrow.2.squarepath")
+                }
+                .foregroundStyle(p.reposted == true ? Color.lime : Color.secondary)
 
                 Spacer()
 
-                Button(action: onSave) {
+                Button {
+                    let was = p.saved ?? false
+                    onChange { $0.saved = !was }
+                    Haptic.tap()
+                    Task {
+                        if !(await PostActions.toggle("save", id: p.id, on: !was)) {
+                            onChange { $0.saved = was }
+                        }
+                    }
+                } label: {
                     Image(systemName: p.saved == true ? "bookmark.fill" : "bookmark")
                 }
                 .foregroundStyle(p.saved == true ? Color.lime : Color.secondary)
@@ -201,7 +312,23 @@ struct PostCard: View {
         }
         .padding(14)
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .onTapGesture { onOpen?() }
         .padding(.horizontal)
+        .confirmationDialog("Пожаловаться на пост", isPresented: $reporting, titleVisibility: .visible) {
+            ForEach(ReportReason.allCases) { r in
+                Button(r.title) {
+                    Task { onToast(await PostActions.report(p.id, reason: r)) }
+                }
+            }
+        }
+        .confirmationDialog("Удалить пост?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Удалить", role: .destructive) {
+                Task {
+                    if let err = await PostActions.delete(p.id) { onToast(err) } else { onDeleted(); onToast("Пост удалён") }
+                }
+            }
+        }
     }
 }
 

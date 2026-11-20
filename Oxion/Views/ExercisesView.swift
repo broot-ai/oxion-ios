@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Вкладка поиска (отдельная круглая кнопка справа в таббаре): библиотека упражнений.
+/// Библиотека упражнений (открывается из Дневника).
 struct ExercisesView: View {
     @Environment(AppModel.self) private var model
     @State private var all: [Exercise] = []
@@ -22,7 +22,6 @@ struct ExercisesView: View {
     }
 
     var body: some View {
-        NavigationStack {
             List {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -102,7 +101,6 @@ struct ExercisesView: View {
             .task {
                 if all.isEmpty { await load() }
             }
-        }
     }
 
     private func load() async {

@@ -190,6 +190,8 @@ struct TrainerDetailView: View {
     let id: Int
     @State private var t: TrainerDetail?
     @State private var errorText: String?
+    @State private var chat: ChatRef?
+    @State private var opening = false
 
     var body: some View {
         Group {
@@ -206,6 +208,29 @@ struct TrainerDetailView: View {
         }
         .navigationTitle(t?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $chat) { ref in
+            ChatView(chatId: ref.id, title: ref.name)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let t, t.isMe != true {
+                Button {
+                    Task { await openChat(name: t.name ?? "Тренер") }
+                } label: {
+                    HStack {
+                        if opening { ProgressView() } else { Image(systemName: "bubble.left.and.bubble.right.fill") }
+                        Text("Написать тренеру")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+                .disabled(opening)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
+        }
         .toolbar {
             if let t, t.isMe != true {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -279,7 +304,7 @@ struct TrainerDetailView: View {
                     }
                 }
                 .padding(.horizontal)
-                .padding(.bottom, 40)
+                .padding(.bottom, 90)
             }
         }
         .ignoresSafeArea(edges: .top)
@@ -290,6 +315,17 @@ struct TrainerDetailView: View {
             let r: TrainerDetail = try await API.call("/trainers/\(id)")
             t = r
             errorText = nil
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func openChat(name: String) async {
+        opening = true
+        defer { opening = false }
+        do {
+            let r: IdResponse = try await API.call("/chats/open", method: "POST", body: ["user_id": id])
+            chat = ChatRef(id: r.id, name: name)
         } catch {
             errorText = error.localizedDescription
         }

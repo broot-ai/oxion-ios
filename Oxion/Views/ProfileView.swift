@@ -7,6 +7,9 @@ struct ProfileView: View {
     @Environment(\.openURL) private var openURL
     @State private var confirmLogout = false
     @State private var notifText = ""
+    @State private var editing = false
+    @State private var web: WebTarget?
+    @State private var deleteInfo = false
 
     var body: some View {
         NavigationStack {
@@ -28,14 +31,43 @@ struct ProfileView: View {
                                     .padding(.vertical, 4)
                                     .glassEffect(.regular.tint(Color.lime.opacity(0.3)), in: .capsule)
                             }
+                            Spacer()
                         }
                         .padding(.vertical, 6)
+                        Button {
+                            editing = true
+                        } label: {
+                            Label("Изменить профиль", systemImage: "pencil")
+                        }
                     }
 
                     Section("Аккаунт") {
                         LabeledContent("Город", value: me.city ?? "не указан")
                         LabeledContent("Цель в неделю", value: "\(me.weekGoal ?? 3) \(RU.plural(me.weekGoal ?? 3, "тренировка", "тренировки", "тренировок"))")
                     }
+                }
+
+                Section {
+                    Button { web = WebTarget(path: "") } label: {
+                        Label("Полная версия Oxion", systemImage: "square.grid.2x2.fill")
+                    }
+                    Button { web = WebTarget(path: "") } label: {
+                        Label("Магазин спортпита", systemImage: "cart.fill")
+                    }
+                    if model.me?.mode == "trainer" || model.me?.hasTrainer == true {
+                        Button { web = WebTarget(path: "") } label: {
+                            Label("Анкета тренера и клиенты", systemImage: "person.2.fill")
+                        }
+                    }
+                    if model.me?.admin == true {
+                        Button { web = WebTarget(path: "/platform") } label: {
+                            Label("Панель платформы", systemImage: "shield.lefthalf.filled")
+                        }
+                    }
+                } header: {
+                    Text("Ещё в Oxion")
+                } footer: {
+                    Text("Эти разделы пока открываются в веб-версии внутри приложения. Вход сохраняется автоматически.")
                 }
 
                 Section {
@@ -61,8 +93,7 @@ struct ProfileView: View {
                 }
 
                 Section("Поддержка") {
-                    if let s = model.meta?.supportTg, !s.isEmpty,
-                       let url = URL(string: "https://t.me/\(s.replacingOccurrences(of: "@", with: ""))") {
+                    if let url = supportURL {
                         Button {
                             openURL(url)
                         } label: {
@@ -87,6 +118,11 @@ struct ProfileView: View {
                     } label: {
                         Label("Выйти", systemImage: "rectangle.portrait.and.arrow.right")
                     }
+                    Button(role: .destructive) {
+                        deleteInfo = true
+                    } label: {
+                        Label("Удалить аккаунт", systemImage: "person.crop.circle.badge.xmark")
+                    }
                 } footer: {
                     Text("Oxion \(AppSettings.version)")
                         .frame(maxWidth: .infinity)
@@ -100,8 +136,27 @@ struct ProfileView: View {
                     Task { await model.logout() }
                 }
             }
+            .alert("Удаление аккаунта", isPresented: $deleteInfo) {
+                if let url = supportURL {
+                    Button("Написать в поддержку") { openURL(url) }
+                }
+                Button("Закрыть", role: .cancel) {}
+            } message: {
+                Text("Напишите в поддержку — аккаунт и все данные удалят. Скоро это можно будет сделать прямо здесь одной кнопкой.")
+            }
+            .sheet(isPresented: $editing) {
+                EditProfileSheet()
+            }
+            .fullScreenCover(item: $web) { t in
+                WebAppView(path: t.path)
+            }
             .task { await refreshNotifText() }
         }
+    }
+
+    private var supportURL: URL? {
+        guard let s = model.meta?.supportTg, !s.isEmpty else { return nil }
+        return URL(string: "https://t.me/\(s.replacingOccurrences(of: "@", with: ""))")
     }
 
     private func askNotifications() async {
@@ -124,6 +179,81 @@ struct ProfileView: View {
             notifText = "Запрещены. Нажмите, чтобы открыть настройки и разрешить."
         default:
             notifText = ""
+        }
+    }
+}
+
+struct WebTarget: Identifiable {
+    let id = UUID()
+    let path: String
+}
+
+struct EditProfileSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var city = ""
+    @State private var weekGoal = 3
+    @State private var saving = false
+    @State private var errorText: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Имя") {
+                    TextField("Как вас зовут", text: $name)
+                }
+                Section("Город") {
+                    if let cities = model.meta?.cities, !cities.isEmpty {
+                        Picker("Город", selection: $city) {
+                            ForEach(cities, id: \.self) { Text($0).tag($0) }
+                        }
+                        .pickerStyle(.navigationLink)
+                    } else {
+                        Text(city.isEmpty ? "не указан" : city)
+                    }
+                }
+                Section("Цель") {
+                    Stepper("\(weekGoal) \(RU.plural(weekGoal, "тренировка", "тренировки", "тренировок")) в неделю",
+                            value: $weekGoal, in: 1...7)
+                }
+                if let errorText {
+                    Text(errorText).foregroundStyle(.red)
+                }
+            }
+            .navigationTitle("Профиль")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Сохранить") { Task { await save() } }
+                        .disabled(saving)
+                }
+            }
+            .onAppear {
+                name = model.me?.displayName ?? ""
+                city = model.me?.city ?? ""
+                weekGoal = model.me?.weekGoal ?? 3
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        var body: [String: Any] = ["week_goal": weekGoal]
+        let n = name.trimmingCharacters(in: .whitespaces)
+        if !n.isEmpty && n != model.me?.displayName { body["name"] = n }
+        if !city.isEmpty && city != model.me?.city { body["city"] = city }
+        do {
+            let _: OK = try await API.call("/me", method: "PATCH", body: body)
+            await model.loadMe()
+            Haptic.success()
+            dismiss()
+        } catch {
+            errorText = error.localizedDescription
         }
     }
 }

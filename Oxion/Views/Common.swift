@@ -137,3 +137,36 @@ struct NotRegisteredView: View {
         .padding(24)
     }
 }
+
+// MARK: - Всплывающее сообщение в «стекле»
+
+struct ToastModifier: ViewModifier {
+    @Binding var text: String?
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) {
+            if let t = text {
+                Text(t)
+                    .font(.subheadline.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task(id: t) {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        withAnimation { text = nil }
+                    }
+            }
+        }
+        .animation(.spring(duration: 0.35), value: text)
+    }
+}
+
+extension View {
+    func toast(_ text: Binding<String?>) -> some View {
+        modifier(ToastModifier(text: text))
+    }
+}

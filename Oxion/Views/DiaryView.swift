@@ -5,6 +5,10 @@ struct DiaryView: View {
     @State private var workouts: [Workout] = []
     @State private var errorText: String?
     @State private var loading = false
+    @State private var newWorkout = false
+    @State private var addWeight = false
+    @State private var openWorkout: Int?
+    @State private var toast: String?
 
     var body: some View {
         NavigationStack {
@@ -22,10 +26,32 @@ struct DiaryView: View {
                         HStack(spacing: 12) {
                             StatTile(title: "Подходов", value: "\(s.sets ?? 0)", icon: "repeat")
                             StatTile(title: "Ккал", value: "\(s.calories ?? 0)", icon: "flame.fill")
-                            StatTile(title: "Вес",
-                                     value: s.lastWeight.map { String(format: "%.1f", $0.kg) } ?? "—",
-                                     icon: "scalemass.fill")
+                            Button {
+                                addWeight = true
+                            } label: {
+                                StatTile(title: "Вес, кг  +",
+                                         value: s.lastWeight.map { String(format: "%.1f", $0.kg) } ?? "—",
+                                         icon: "scalemass.fill")
+                            }
+                            .buttonStyle(.plain)
                         }
+
+                        NavigationLink {
+                            ExercisesView()
+                        } label: {
+                            HStack {
+                                Image(systemName: "dumbbell.fill")
+                                    .foregroundStyle(Color.lime)
+                                Text("Библиотека упражнений")
+                                    .font(.headline)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(16)
+                            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     if !workouts.isEmpty {
@@ -34,13 +60,18 @@ struct DiaryView: View {
                                 .font(.title3.bold())
                                 .padding(.top, 8)
                             ForEach(workouts) { w in
-                                WorkoutRow(w: w)
+                                Button {
+                                    openWorkout = w.id
+                                } label: {
+                                    WorkoutRow(w: w)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     } else if stats != nil && !loading {
                         ContentUnavailableView("Тренировок пока нет",
                                                systemImage: "figure.run",
-                                               description: Text("Добавляйте тренировки в боте или веб-версии — они появятся здесь"))
+                                               description: Text("Нажмите «+», чтобы записать первую"))
                     }
 
                     if loading && stats == nil {
@@ -51,10 +82,40 @@ struct DiaryView: View {
                 .padding(.vertical, 8)
             }
             .navigationTitle("Дневник")
+            .navigationDestination(item: $openWorkout) { id in
+                WorkoutDetailView(workoutId: id) {
+                    Task { await load() }
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        newWorkout = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Новая тренировка")
+                }
+            }
+            .sheet(isPresented: $newWorkout) {
+                NewWorkoutSheet { id in
+                    Task {
+                        await load()
+                        openWorkout = id
+                    }
+                }
+            }
+            .sheet(isPresented: $addWeight) {
+                WeightSheet(current: stats?.lastWeight?.kg) {
+                    toast = "Вес сохранён"
+                    Task { await load() }
+                }
+            }
             .refreshable { await load() }
             .task {
                 if stats == nil { await load() }
             }
+            .toast($toast)
         }
     }
 
@@ -182,8 +243,134 @@ struct WorkoutRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
         .padding(12)
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+// MARK: - Новая тренировка
+
+struct NewWorkoutSheet: View {
+    var onCreated: (Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var date = Date()
+    @State private var title = ""
+    @State private var hasTime = false
+    @State private var time = Date()
+    @State private var calories = ""
+    @State private var saving = false
+    @State private var errorText: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Название (например, «Грудь и трицепс»)", text: $title)
+                    DatePicker("Дата", selection: $date, displayedComponents: .date)
+                    Toggle("Указать время", isOn: $hasTime)
+                    if hasTime {
+                        DatePicker("Время", selection: $time, displayedComponents: .hourAndMinute)
+                    }
+                    TextField("Калории (необязательно)", text: $calories)
+                        .keyboardType(.numberPad)
+                }
+                if let errorText {
+                    Text(errorText).foregroundStyle(.red)
+                }
+            }
+            .navigationTitle("Новая тренировка")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Создать") { Task { await save() } }
+                        .disabled(saving)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        var body: [String: Any] = ["date": RU.dayFormatter.string(from: date), "title": title, "groups": [String]()]
+        if hasTime {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            body["time"] = f.string(from: time)
+        }
+        if let c = Int(calories) { body["calories"] = c }
+        do {
+            let w: WorkoutFull = try await API.call("/workouts", method: "POST", body: body)
+            Haptic.success()
+            dismiss()
+            onCreated(w.id)
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Вес тела
+
+struct WeightSheet: View {
+    var current: Double?
+    var onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var kg = ""
+    @State private var errorText: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Вес, кг", text: $kg)
+                        .keyboardType(.decimalPad)
+                        .font(.title2)
+                } footer: {
+                    Text("Сохранится на сегодня. Если вес за сегодня уже есть — обновится.")
+                }
+                if let errorText {
+                    Text(errorText).foregroundStyle(.red)
+                }
+            }
+            .navigationTitle("Вес тела")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Сохранить") { Task { await save() } }
+                }
+            }
+            .onAppear {
+                if let current { kg = String(format: "%.1f", current) }
+            }
+        }
+        .presentationDetents([.height(260)])
+    }
+
+    private func save() async {
+        guard let v = Double(kg.replacingOccurrences(of: ",", with: ".")) else {
+            errorText = "Введите число, например 72.5"
+            return
+        }
+        do {
+            let _: OK = try await API.call("/weights", method: "POST",
+                                           body: ["date": RU.dayFormatter.string(from: Date()), "kg": v])
+            Haptic.success()
+            onSaved()
+            dismiss()
+        } catch {
+            errorText = error.localizedDescription
+        }
     }
 }

@@ -124,11 +124,12 @@ struct RootView: View {
 }
 
 enum AppTab: Hashable {
-    case feed, trainers, diary, profile, search
+    case feed, trainers, chats, diary, profile
 }
 
 struct MainTabView: View {
     @State private var tab: AppTab = .feed
+    @State private var chats = ChatsStore()
 
     var body: some View {
         TabView(selection: $tab) {
@@ -138,17 +139,26 @@ struct MainTabView: View {
             Tab("Тренеры", systemImage: "figure.strengthtraining.traditional", value: AppTab.trainers) {
                 TrainersView()
             }
+            Tab("Чаты", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
+                ChatsView()
+            }
+            .badge(chats.unread)
             Tab("Дневник", systemImage: "chart.bar.fill", value: AppTab.diary) {
                 DiaryView()
             }
             Tab("Профиль", systemImage: "person.crop.circle.fill", value: AppTab.profile) {
                 ProfileView()
             }
-            Tab(value: AppTab.search, role: .search) {
-                ExercisesView()
-            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        .environment(chats)
         .onChange(of: tab) { Haptic.tap(.soft) }
+        .task {
+            // счётчик непрочитанных на вкладке «Чаты»
+            while !Task.isCancelled {
+                await chats.load()
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
     }
 }

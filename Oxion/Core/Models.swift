@@ -66,6 +66,7 @@ struct Meta: Decodable {
     let feedTopics: [FeedTopic]?
     let supportTg: String?
     let supportEmail: String?
+    let cities: [String]?
 }
 
 // MARK: - Лента
@@ -86,12 +87,15 @@ struct Post: Decodable, Identifiable {
     let topic: String?
     let author: Author
     var likes: Int?
-    let replies: Int?
-    let reposts: Int?
+    var replies: Int?
+    var reposts: Int?
     var liked: Bool?
-    let reposted: Bool?
+    var reposted: Bool?
     var saved: Bool?
     let mine: Bool?
+    let canReply: Bool?
+    let replyToName: String?
+    let parentId: Int?
 }
 
 struct RepostBy: Decodable { let id: Int; let name: String? }
@@ -198,6 +202,139 @@ struct Workout: Decodable, Identifiable {
 }
 
 struct WorkoutsResponse: Decodable { let items: [Workout] }
+
+// MARK: - Ветка поста, загрузка фото
+
+struct PostThread: Decodable {
+    let post: Post
+    let chain: [Post]?
+    let ancestors: [Post]?
+    let replies: [Post]?
+}
+
+struct UploadResponse: Decodable { let key: String; let url: String? }
+struct IdResponse: Decodable { let id: Int }
+
+struct PostRef: Hashable { let id: Int }
+struct ChatRef: Hashable { let id: Int; let name: String }
+struct WorkoutRef: Hashable { let id: Int }
+
+enum ReportReason: String, CaseIterable, Identifiable {
+    case spam, abuse, danger, adult, fake, other
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .spam: return "Спам или реклама"
+        case .abuse: return "Оскорбления"
+        case .danger: return "Опасные советы"
+        case .adult: return "Неприличный контент"
+        case .fake: return "Обман или мошенничество"
+        case .other: return "Другое"
+        }
+    }
+}
+
+// MARK: - Чаты
+
+struct Peer: Decodable {
+    let id: Int
+    let name: String?
+    let photo: String?
+    let trainer: Bool?
+    let lastSeen: Double?
+}
+
+struct ChatItem: Decodable, Identifiable {
+    let id: Int
+    let peer: Peer
+    let last: String?
+    let mine: Bool?
+    let at: Double?
+    var unread: Int?
+}
+
+struct ChatsResponse: Decodable { let items: [ChatItem] }
+
+struct MsgReply: Decodable { let id: Int?; let mine: Bool?; let text: String? }
+struct MsgReaction: Decodable, Hashable { let emoji: String; let n: Int; let mine: Bool? }
+
+struct Message: Decodable, Identifiable {
+    let id: Int
+    let mine: Bool
+    let text: String?
+    let photo: String?
+    let at: Double?
+    let kind: String?
+    let replyTo: Int?
+    let reply: MsgReply?
+    let edited: Bool?
+    let deleted: Bool?
+    let reactions: [MsgReaction]?
+}
+
+struct ChatDetail: Decodable {
+    let id: Int
+    let peer: Peer
+    let messages: [Message]
+    let changed: [Message]?
+    let peerReadId: Int?
+}
+
+enum Kinds {
+    static let label: [String: String] = [
+        "workout": "🏋️ Тренировка", "record": "🏆 Рекорд", "progress": "📈 Прогресс", "weight": "⚖️ Вес тела",
+        "week": "📊 Итоги недели", "goal": "🎯 Цель", "plan": "📋 Назначена тренировка", "slot": "📅 Время для занятия",
+        "check": "🎥 Проверка техники", "sticker": "🎨 Стикер", "voice": "🎤 Голосовое", "call": "📞 Звонок",
+        "vnote": "📹 Видеосообщение"
+    ]
+    static let reactions = ["👍", "🔥", "💪", "❤️", "😂", "👏"]
+}
+
+// MARK: - Тренировка целиком
+
+struct WSet: Decodable, Identifiable {
+    let id: Int
+    let weight: Double?
+    let reps: Int?
+    let duration: Int?
+    let distance: Double?
+
+    func text(type: String?, unit: String?) -> String {
+        let u = unit ?? ""
+        switch type {
+        case "wr":
+            let w = weight.map { $0.truncatingRemainder(dividingBy: 1) == 0 ? String(Int($0)) : String(format: "%.1f", $0) } ?? "0"
+            return "\(w) \(u.isEmpty ? "кг" : u) × \(reps ?? 0)"
+        case "r":
+            return "\(reps ?? 0) раз"
+        case "t":
+            return "\(duration ?? 0) \(u.isEmpty ? "сек" : u)"
+        default:
+            let d = distance.map { String(format: "%.2f", $0) } ?? "0"
+            return "\(d) \(u.isEmpty ? "км" : u) · \(duration ?? 0) мин"
+        }
+    }
+}
+
+struct WExercise: Decodable, Identifiable {
+    let id: Int
+    let exerciseId: Int
+    let name: String
+    let type: String?
+    let unit: String?
+    let muscle: String?
+    let sets: [WSet]
+}
+
+struct WorkoutFull: Decodable {
+    let id: Int
+    let date: String
+    let title: String?
+    let time: String?
+    let calories: Int?
+    let note: String?
+    let exercises: [WExercise]?
+}
 
 // MARK: - Утилиты
 
