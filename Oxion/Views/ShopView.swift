@@ -355,7 +355,7 @@ struct ProductView: View {
             }
         }
         .background(Color.oxBg)
-        .ignoresSafeArea(edges: .top)
+        .oxNoUnderlap()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let p {

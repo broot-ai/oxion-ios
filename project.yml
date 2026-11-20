@@ -71,8 +71,28 @@ targets:
         NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.
         NSSpeechRecognitionUsageDescription: OXION распознаёт голосовые команды «готово», «дальше», «пауза» во время тренировки. Речь обрабатывается на iPhone.
         NSFaceIDUsageDescription: OXION закрывает фото прогресса Face ID, если вы включили эту защиту.
+        NSContactsUsageDescription: OXION показывает ваши контакты, чтобы вы могли пригласить друзей. Контакты не отправляются на сервер.
+        NSPhotoLibraryAddUsageDescription: OXION сохраняет карточки прогресса и итогов тренировки в «Фото».
+        NSLocalNetworkUsageDescription: OXION ищет экраны и тренажёры в вашей сети Wi‑Fi, чтобы показать на них тренировку.
+        NSBonjourServices:
+          - _airplay._tcp
+          - _oxion._tcp
         UIBackgroundModes:
           - audio
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - ru.oxion.app.refresh
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: ru.oxion.workout
+            UIApplicationShortcutItemTitle: Тренировка
+            UIApplicationShortcutItemSubtitle: Дневник и запуск
+            UIApplicationShortcutItemIconSymbolName: figure.strengthtraining.traditional
+          - UIApplicationShortcutItemType: ru.oxion.qr
+            UIApplicationShortcutItemTitle: Мой QR-код
+            UIApplicationShortcutItemIconSymbolName: qrcode
+          - UIApplicationShortcutItemType: ru.oxion.compose
+            UIApplicationShortcutItemTitle: Новый пост
+            UIApplicationShortcutItemIconSymbolName: square.and.pencil
 
   OxionWidget:
     type: app-extension

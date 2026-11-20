@@ -15,6 +15,7 @@ extension Color {
 
 @main
 struct OxionApp: App {
+    @UIApplicationDelegateAdaptor(OxAppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -45,7 +46,11 @@ struct OxionApp: App {
                 }
                 .onChange(of: scenePhase) {
                     if scenePhase == .active, let r = PendingRoute.take() { model.handle(route: r) }
-                    if scenePhase == .background { Task { await SmartNotify.reschedule() } }
+                    if scenePhase == .background {
+                        Task { await SmartNotify.reschedule() }
+                        OxAppDelegate.schedule()
+                        QuickActions.update()
+                    }
                     if scenePhase == .active, model.me != nil {
                         Task {
                             await WorkoutSync.flush()
@@ -79,6 +84,14 @@ final class AppModel {
     var showActiveWorkout = false
     var openTrainerId: Int?
     var showFavorites = false
+    /// Экраны поверх вкладок (из меню иконки, Siri, ссылок)
+    var sheet: AppSheet?
+    var showVision = false
+
+    enum AppSheet: String, Identifiable {
+        case qr, compose, progress, body, permissions
+        var id: String { rawValue }
+    }
 
     /// Переходы из виджетов, Пункта управления, Siri: oxion://home, diary, workout, trainers, trainer/ID, favorites, chats, feed
     func handle(route: String) {
@@ -93,6 +106,14 @@ final class AppModel {
         case "favorites":
             selectedTab = .trainers
             showFavorites = true
+        case "qr": sheet = .qr
+        case "compose":
+            selectedTab = .feed
+            sheet = .compose
+        case "progress": sheet = .progress
+        case "body": sheet = .body
+        case "permissions": sheet = .permissions
+        case "vision": showVision = true
         case "trainer":
             selectedTab = .trainers
             if parts.count > 1, let id = Int(parts[1]), id > 0 { openTrainerId = id }
@@ -228,6 +249,17 @@ struct MainTabView: View {
             showCard = true
         }
         .sheet(isPresented: $showCard) { MyCardSheet() }
+        .sheet(item: $model.sheet) { s in
+            switch s {
+            case .qr: MyCardSheet()
+            case .compose: ComposerView(request: ComposeRequest()) { _ in }
+            case .progress: NavigationStack { ProgressHubView() }
+            case .body: NavigationStack { BodyExplorerView() }
+            case .permissions: NavigationStack { PermissionsView() }
+            }
+        }
+        .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
+        .onChange(of: chats.unread) { QuickActions.update(unread: chats.unread) }
         .overlay(alignment: .bottom) {
             ActiveWorkoutBar { model.showActiveWorkout = true }
                 .padding(.bottom, 92)

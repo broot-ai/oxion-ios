@@ -55,23 +55,21 @@ struct SubscriptionView: View {
         ScrollView {
             VStack(spacing: 20) {
                 ZStack {
-                    Image("ox-fire")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 220)
-                        .clipped()
-                        .overlay(LinearGradient(colors: [.clear, Color.oxBg], startPoint: .center, endPoint: .bottom))
+                    OxBlob(height: 230)
                     VStack(spacing: 6) {
                         Label("PRO", systemImage: "crown.fill")
                             .font(.title.bold())
+                            .foregroundStyle(.black)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 8)
-                            .glassEffect(.regular.tint(Color.lime.opacity(0.35)), in: .capsule)
+                            .glassEffect(.regular.tint(Color.white.opacity(0.25)), in: .capsule)
                         Text(t?.published == true ? "Анкета в каталоге" : "Ваша анкета в каталоге тренеров")
                             .font(.headline)
+                            .foregroundStyle(.black.opacity(0.85))
                     }
-                    .padding(.top, 60)
+                    .allowsHitTesting(false)
                 }
+                .padding(.top, 8)
                 VStack(alignment: .leading, spacing: 14) {
                     benefit("magnifyingglass", "Клиенты находят вас в каталоге своего города")
                     benefit("sparkles", "Попадание в «Тренер для вас» под цель клиента")
@@ -123,10 +121,10 @@ struct SubscriptionView: View {
                 .controlSize(.large)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 30)
+            .padding(.bottom, 120)
         }
         .background(Color.oxBg)
-        .ignoresSafeArea(edges: .top)
+        .oxNoUnderlap()
         .navigationTitle("PRO")
         .navigationBarTitleDisplayMode(.inline)
         .task { t = try? await API.call("/my/trainer") as MyTrainer }

@@ -56,6 +56,7 @@ struct ProfileView: View {
 
                 Section {
                     nav("OXION OS — экосистема Apple", "sparkles.rectangle.stack.fill", Color.lime) { EcosystemView() }
+                    nav("Доступы и разрешения", "checkmark.shield.fill", Color(hex: 0x0A84FF)) { PermissionsView() }
                 }
                 Section("Тренировки") {
                     nav("Прогресс тела", "chart.line.uptrend.xyaxis", Color.lime) { ProgressHubView() }

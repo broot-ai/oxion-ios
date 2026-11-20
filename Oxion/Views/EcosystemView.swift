@@ -33,6 +33,8 @@ struct EcosystemView: View {
             }
 
             Section("Система") {
+                nav("Доступы и разрешения", "Геопозиция, контакты, фото, сеть, Face ID…", "checkmark.shield.fill", .works) { PermissionsView() }
+                item("Меню при удержании иконки", "Тренировка, QR-код, новый пост и ещё один пункт", "app.badge.fill", .works)
                 nav("Умные уведомления", "Категории и частота", "bell.badge.fill", .works) { SmartNotifySettingsView() }
                 nav("Siri и Быстрые команды", "Голосовые команды OXION", "waveform", .works) { SiriHelpView() }
                 item("Виджеты и StandBy", "Долгое нажатие на главный экран → «+» → OXION", "square.grid.2x2.fill", .preview)

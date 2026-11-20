@@ -229,7 +229,7 @@ final class WorkoutEngine {
     // MARK: Уведомление «Отдых окончен»
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
     private func scheduleRestNotification(at date: Date, next: String) {

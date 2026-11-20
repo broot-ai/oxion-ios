@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import Charts
+import Photos
 
 // MARK: - OXION Progress: история изменений тела
 
@@ -868,6 +869,7 @@ struct ReplayPlayerView: View {
     @State private var progress: Double = 0
     @State private var paused = false
     @State private var shareImage: Image?
+    @State private var shareUI: UIImage?
     private let slideTime = 3.2
 
     private var photos: [ProgressPhoto] { ProgressStore.shared.photos(from: from, to: to) }
@@ -1006,10 +1008,16 @@ struct ReplayPlayerView: View {
                 Spacer()
                 summaryCard.padding(.horizontal, 24)
                 if let shareImage {
-                    ShareLink(item: shareImage, preview: SharePreview("Мой прогресс в OXION", image: shareImage)) {
-                        Label("Поделиться", systemImage: "square.and.arrow.up").font(.headline).padding(.horizontal, 22).padding(.vertical, 8)
+                    HStack(spacing: 10) {
+                        ShareLink(item: shareImage, preview: SharePreview("Мой прогресс в OXION", image: shareImage)) {
+                            Label("Поделиться", systemImage: "square.and.arrow.up").font(.headline).padding(.horizontal, 8).padding(.vertical, 8)
+                        }
+                        .buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(.black)
+                        Button { Task { await saveToPhotos() } } label: {
+                            Label("В Фото", systemImage: "square.and.arrow.down").font(.headline).padding(.horizontal, 8).padding(.vertical, 8)
+                        }
+                        .buttonStyle(.glass)
                     }
-                    .buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(.black)
                 }
                 Text("Фото в карточку не попадают — только цифры.").font(.caption).foregroundStyle(.white.opacity(0.5))
                 Spacer()
@@ -1044,7 +1052,25 @@ struct ReplayPlayerView: View {
     private func renderSummary() -> Image? {
         let r = ImageRenderer(content: summaryCard.frame(width: 360).padding(20).background(Color.black))
         r.scale = 3
+        shareUI = r.uiImage
         return r.uiImage.map { Image(uiImage: $0) }
+    }
+
+    private func saveToPhotos() async {
+        guard let img = shareUI else { return }
+        let st = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard st == .authorized || st == .limited else {
+            OxAlert.show(icon: "photo.badge.exclamationmark", tint: Color(hex: 0xF0A030), title: "Нет доступа к Фото",
+                         message: "Разрешите: Настройки → Oxion → Фото.")
+            return
+        }
+        do {
+            try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: img) }
+            OxHaptics.play(.setDone)
+            OxAlert.show(icon: "checkmark.circle.fill", title: "Сохранено в Фото")
+        } catch {
+            OxAlert.error(error.localizedDescription)
+        }
     }
 
     private func tile(_ v: String, _ t: String) -> some View {

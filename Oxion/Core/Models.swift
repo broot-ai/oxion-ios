@@ -320,6 +320,11 @@ struct ChatItem: Decodable, Identifiable {
     let mine: Bool?
     let at: Double?
     var unread: Int?
+    var pinned: Bool?
+    var muted: Bool?
+    var archived: Bool?
+    var marked: Bool?
+    let lastId: Int?
 }
 
 struct ChatsResponse: Decodable { let items: [ChatItem] }

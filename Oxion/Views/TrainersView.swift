@@ -273,6 +273,8 @@ struct TrainerDetailView: View {
                 if photos.isEmpty {
                     RemoteImage(url: nil, icon: "figure.strengthtraining.traditional")
                         .frame(height: 300)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .padding(.horizontal, 12)
                 } else {
                     TabView {
                         ForEach(photos, id: \.self) { u in
@@ -283,6 +285,9 @@ struct TrainerDetailView: View {
                     }
                     .tabViewStyle(.page)
                     .frame(height: 380)
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -326,7 +331,7 @@ struct TrainerDetailView: View {
                 .padding(.bottom, 90)
             }
         }
-        .ignoresSafeArea(edges: .top)
+        .oxNoUnderlap()
     }
 
     private func load() async {
