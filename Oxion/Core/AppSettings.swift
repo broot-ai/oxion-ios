@@ -11,6 +11,7 @@ enum AppSettings {
             "autoload_photos": true,
             "start_feed": "foryou",
             "shake_card": true,
+            "haptic_level": "normal",
             "server_url": defaultServer
         ])
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"

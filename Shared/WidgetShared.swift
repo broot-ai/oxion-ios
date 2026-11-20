@@ -3,7 +3,7 @@ import Foundation
 /// Общие данные приложения и виджета. Лежат в App Group «group.ru.oxion.app».
 enum WidgetShared {
     static let group = "group.ru.oxion.app"
-    static let snapshotKey = "widget_snapshot"
+    static let snapshotKey = "widget_snapshot_v2"
     static let tokenKey = "widget_token"
     static let serverKey = "widget_server"
 
@@ -23,6 +23,21 @@ struct WidgetSnapshot: Codable {
     var todayTime: String?
     var reminder: String
     var updatedAt: Date = Date()
+    // панель (Medium / Large / StandBy)
+    var weekSets: Int = 0
+    var weekKcal: Int = 0
+    var streak: Int = 0
+    var trainerId: Int?
+    var trainerName: String?
+    var trainerInfo: String?
+    var trainerPrice: Int?
+    var trainers: [WTrainer] = []
+    var favorites: [WTrainer] = []
+    var upcoming: [WPlanned] = []
+    var achievementsDone: Int = 0
+    var achievementsTotal: Int = 0
+    var lastWorkout: String?
+    var isDemo: Bool = false
 
     static let quotes: [(String, String?)] = [
         ("Дисциплина — это мост между целями и результатом.", "Джим Рон"),
@@ -47,9 +62,22 @@ struct WidgetSnapshot: Codable {
 
     static var placeholder: WidgetSnapshot {
         let q = localQuote()
-        return WidgetSnapshot(quote: q.0, quoteAuthor: q.1, goalTitle: "Жим лёжа 100 кг", goalPct: 72,
-                              goalDetail: "72 из 100 кг", weekDone: 2, weekGoal: 3,
-                              reminder: "До цели недели: 1 тренировка")
+        var s = WidgetSnapshot(quote: q.0, quoteAuthor: q.1, goalTitle: "Жим лёжа 100 кг", goalPct: 72,
+                               goalDetail: "72 из 100 кг", weekDone: 2, weekGoal: 3,
+                               todayTitle: "День ног", todayTime: "19:00",
+                               reminder: "Сегодня: День ног в 19:00")
+        s.weekSets = 46; s.weekKcal = 1240; s.streak = 4
+        s.trainerId = 0; s.trainerName = "Анна Смирнова"; s.trainerInfo = "Силовые · Похудение"; s.trainerPrice = 1500
+        s.trainers = [WTrainer(id: 0, name: "Анна Смирнова", info: "Силовые", price: 1500, rating: 4.9),
+                      WTrainer(id: 0, name: "Игорь Ким", info: "Кроссфит", price: 1200, rating: 4.8),
+                      WTrainer(id: 0, name: "Мария Лен", info: "Йога", price: 1000, rating: 5.0)]
+        s.favorites = Array(s.trainers.prefix(2))
+        s.upcoming = [WPlanned(id: 0, title: "День ног", when: "Сегодня, 19:00"), WPlanned(id: 0, title: "Грудь и бицепс", when: "Чт"),
+                      WPlanned(id: 0, title: "Спина", when: "Сб")]
+        s.achievementsDone = 5; s.achievementsTotal = 15
+        s.lastWorkout = "Вчера · Спина"
+        s.isDemo = true
+        return s
     }
 
     static func load() -> WidgetSnapshot? {
@@ -62,6 +90,20 @@ struct WidgetSnapshot: Codable {
             WidgetShared.defaults?.set(d, forKey: WidgetShared.snapshotKey)
         }
     }
+}
+
+struct WTrainer: Codable, Hashable {
+    var id: Int
+    var name: String
+    var info: String?
+    var price: Int?
+    var rating: Double?
+}
+
+struct WPlanned: Codable, Hashable {
+    var id: Int
+    var title: String
+    var when: String
 }
 
 /// Ответ сервера /api/widget (Cloudflare Worker)

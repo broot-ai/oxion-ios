@@ -27,14 +27,9 @@ struct OxionApp: App {
             RootView()
                 .environment(model)
                 .onOpenURL { url in
-                    // ссылки из виджета: oxion://home, oxion://diary, oxion://goals
-                    switch url.host {
-                    case "workout": model.showActiveWorkout = WorkoutEngine.shared.state != nil
-                    case "diary": model.selectedTab = .diary
-                    case "feed": model.selectedTab = .feed
-                    case "chats": model.selectedTab = .chats
-                    default: model.selectedTab = .home
-                    }
+                    // ссылки из виджетов и Live Activity: oxion://diary, oxion://trainer/15 …
+                    let route = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/")
+                    model.handle(route: route)
                 }
                 .preferredColorScheme(.dark)
                 .tint(.lime)
@@ -73,6 +68,28 @@ final class AppModel {
     var meta: Meta?
     var selectedTab: AppTab = .home
     var showActiveWorkout = false
+    var openTrainerId: Int?
+    var showFavorites = false
+
+    /// Переходы из виджетов, Пункта управления, Siri: oxion://home, diary, workout, trainers, trainer/ID, favorites, chats, feed
+    func handle(route: String) {
+        let parts = route.split(separator: "/").map(String.init)
+        switch parts.first ?? "" {
+        case "workout":
+            if WorkoutEngine.shared.state != nil { showActiveWorkout = true } else { selectedTab = .diary }
+        case "diary": selectedTab = .diary
+        case "feed": selectedTab = .feed
+        case "chats": selectedTab = .chats
+        case "trainers": selectedTab = .trainers
+        case "favorites":
+            selectedTab = .trainers
+            showFavorites = true
+        case "trainer":
+            selectedTab = .trainers
+            if parts.count > 1, let id = Int(parts[1]), id > 0 { openTrainerId = id }
+        default: selectedTab = .home
+        }
+    }
     var trainerQuery = ""
 
     func start() async {

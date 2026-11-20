@@ -222,6 +222,7 @@ final class WorkoutEngine {
     }
 
     private func scheduleRestNotification(at date: Date, next: String) {
+        guard UserDefaults.standard.object(forKey: "notify_restEnd") as? Bool ?? true else { return }
         let c = UNMutableNotificationContent()
         c.title = "Отдых окончен 💪"
         c.body = next.isEmpty ? "Пора делать следующий подход" : next

@@ -90,6 +90,12 @@ struct TrainersView: View {
             .navigationDestination(for: Int.self) { id in
                 TrainerDetailView(id: id)
             }
+            .navigationDestination(item: Binding(get: { model.openTrainerId }, set: { model.openTrainerId = $0 })) { id in
+                TrainerDetailView(id: id)
+            }
+            .sheet(isPresented: Binding(get: { model.showFavorites }, set: { model.showFavorites = $0 })) {
+                NavigationStack { FavoritesView() }
+            }
             .searchable(text: $store.query, prompt: "Имя или описание")
             .onSubmit(of: .search) {
                 Task { await store.load(reset: true) }
@@ -367,5 +373,35 @@ struct StatPill: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .glassEffect(.regular, in: .capsule)
+    }
+}
+
+
+/// Избранные тренеры (из Siri, Пункта управления и виджета)
+struct FavoritesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [Trainer] = []
+    @State private var loaded = false
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 14) {
+                if loaded && items.isEmpty {
+                    ContentUnavailableView("В избранном пусто", systemImage: "heart", description: Text("Нажмите ♡ в карточке тренера"))
+                }
+                ForEach(items) { t in
+                    NavigationLink { TrainerDetailView(id: t.userId) } label: { TrainerCard(t: t) }
+                        .buttonStyle(.plain)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.oxBg)
+        .navigationTitle("Избранные тренеры")
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
+        .task {
+            if let r: TrainersResponse = try? await API.call("/favorites") { items = r.items }
+            loaded = true
+        }
     }
 }

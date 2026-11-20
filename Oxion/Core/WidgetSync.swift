@@ -16,6 +16,7 @@ enum WidgetSync {
         } else {
             snap = await localSnapshot()
         }
+        await addDashboard(&snap)
         snap.updatedAt = Date()
         snap.save()
         WidgetCenter.shared.reloadAllTimelines()
@@ -25,6 +26,51 @@ enum WidgetSync {
         WidgetShared.defaults?.removeObject(forKey: WidgetShared.snapshotKey)
         WidgetShared.defaults?.removeObject(forKey: WidgetShared.tokenKey)
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Данные для панели: тренер дня, рекомендации, избранные, статистика недели, план, достижения
+    private static func addDashboard(_ s: inout WidgetSnapshot) async {
+        let f = RU.dayFormatter
+        let cal = Calendar(identifier: .iso8601)
+        let now = Date()
+        let ws = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let we = cal.date(byAdding: .day, value: 6, to: ws) ?? now
+        func wt(_ t: Trainer) -> WTrainer {
+            WTrainer(id: t.userId, name: t.name ?? "Тренер", info: (t.directions ?? []).prefix(2).joined(separator: " · "), price: t.price, rating: t.rating)
+        }
+        if let st: Stats = try? await API.call("/stats", query: ["from": f.string(from: ws), "to": f.string(from: we), "today": f.string(from: now)]) {
+            s.weekSets = st.sets ?? 0
+            s.weekKcal = st.calories ?? 0
+            s.weekDone = st.workouts ?? s.weekDone
+            s.weekGoal = st.weekGoal ?? s.weekGoal
+        }
+        if let t: TrainersResponse = try? await API.call("/trainers", query: ["sort": "match"]) {
+            s.trainers = t.items.prefix(4).map(wt)
+            if let first = t.items.first {
+                s.trainerId = first.userId
+                s.trainerName = first.name
+                s.trainerInfo = (first.directions ?? []).prefix(2).joined(separator: " · ")
+                s.trainerPrice = first.price
+            }
+        }
+        if let fav: TrainersResponse = try? await API.call("/favorites") {
+            s.favorites = fav.items.prefix(4).map(wt)
+        }
+        if let w: WorkoutsResponse = try? await API.call("/workouts", query: ["from": f.string(from: cal.date(byAdding: .day, value: -14, to: now) ?? now),
+                                                                              "to": f.string(from: cal.date(byAdding: .day, value: 7, to: now) ?? now)]) {
+            let today = f.string(from: now)
+            s.upcoming = w.items.filter { $0.date >= today }.sorted { $0.date < $1.date }.prefix(4).map {
+                WPlanned(id: $0.id, title: $0.title ?? "Тренировка", when: RU.human($0.date) + ($0.time.map { ", \($0)" } ?? ""))
+            }
+            if let last = w.items.filter({ $0.date <= today && ($0.exCount ?? 0) > 0 }).max(by: { $0.date < $1.date }) {
+                s.lastWorkout = RU.human(last.date) + " · " + (last.title ?? "Тренировка")
+            }
+        }
+        if let a: AchievementsResponse = try? await API.call("/achievements") {
+            s.achievementsDone = a.done ?? 0
+            s.achievementsTotal = a.total ?? 0
+            s.streak = a.streak ?? 0
+        }
     }
 
     private static func localSnapshot() async -> WidgetSnapshot {

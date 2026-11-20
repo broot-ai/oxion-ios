@@ -15,6 +15,16 @@
 			<key>DefaultValue</key><true/>
 		</dict>
 		<dict>
+			<key>Type</key><string>PSMultiValueSpecifier</string>
+			<key>Title</key><string>Сила вибрации</string>
+			<key>Key</key><string>haptic_level</string>
+			<key>DefaultValue</key><string>normal</string>
+			<key>Titles</key>
+			<array><string>Выключена</string><string>Мягкая</string><string>Обычная</string><string>Сильная</string></array>
+			<key>Values</key>
+			<array><string>off</string><string>soft</string><string>normal</string><string>strong</string></array>
+		</dict>
+		<dict>
 			<key>Type</key><string>PSToggleSwitchSpecifier</string>
 			<key>Title</key><string>Встряхнуть — визитка с QR</string>
 			<key>Key</key><string>shake_card</string>

@@ -329,6 +329,7 @@ struct ExercisePickerSheet: View {
 
                 ForEach(filtered) { e in
                     Button {
+                        OxHaptics.play(.select)
                         onPick(e)
                         dismiss()
                     } label: {

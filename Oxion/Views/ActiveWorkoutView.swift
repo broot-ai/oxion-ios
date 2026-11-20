@@ -118,6 +118,13 @@ struct ActiveWorkoutView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task(id: engine.state?.restEndsAt) {
+            // сигнал «отдых окончен» — ровно в момент окончания, без секундного цикла
+            guard let end = engine.state?.restEndsAt, engine.state?.phase == .resting else { return }
+            let wait = end.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            if !Task.isCancelled, engine.state?.phase == .resting { OxHaptics.play(.restOver) }
+        }
         .onAppear { syncInputs() }
         .onChange(of: engine.state?.current) { syncInputs() }
         .onChange(of: engine.state?.items[safe: engine.state?.current ?? 0]?.doneSets) { syncInputs() }
@@ -229,7 +236,7 @@ struct ActiveWorkoutView: View {
                 } else {
                     big("Завершить подход", "checkmark") {
                         engine.completeSet(reps: reps, weight: it?.type == "wr" ? weight : nil)
-                        Haptic.success()
+                        OxHaptics.play(engine.state?.phase == .finished ? .workoutDone : .setDone)
                     }
                 }
                 HStack(spacing: 10) {
@@ -240,6 +247,7 @@ struct ActiveWorkoutView: View {
                         OxAlert.confirm(icon: "flag.checkered", title: "Завершить тренировку?",
                                         message: "Выполненные подходы уже сохранены в дневнике", action: "Завершить") {
                             engine.finish()
+                            OxHaptics.play(.workoutDone)
                         }
                     }
                 }
