@@ -117,6 +117,7 @@ struct ChatsView: View {
     @State private var editing = false
     @State private var selection = Set<Int>()
     @State private var path: [ChatRoute] = []
+    @State private var protectAll = false
 
     enum ChatRoute: Hashable { case chat(ChatRef), archive }
 
@@ -183,8 +184,15 @@ struct ChatsView: View {
                 }
                 if !editing {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { Task { await store.readAll() }; OxHaptics.play(.select) } label: { Image(systemName: "checkmark.message") }
+                        Menu {
+                            Button { Task { await store.readAll() }; OxHaptics.play(.select) } label: {
+                                Label("Прочитать все", systemImage: "checkmark.message")
+                            }
                             .disabled(store.unread == 0)
+                            Toggle(isOn: Binding(get: { protectAll }, set: { v in Task { await setProtectAll(v) } })) {
+                                Label("Защищать все мои чаты от снимков", systemImage: "lock.shield")
+                            }
+                        } label: { Image(systemName: "ellipsis") }
                     }
                 }
             }
@@ -200,7 +208,22 @@ struct ChatsView: View {
             }
             .searchable(text: $query, prompt: "Поиск по чатам")
             .oxRefreshable { await store.load() }
-            .task { await store.load() }
+            .task {
+                await store.load()
+                if let r: ProtectAll = try? await API.call("/chats/protect-all") { protectAll = r.enabled }
+            }
+        }
+    }
+
+    private func setProtectAll(_ v: Bool) async {
+        do {
+            let r: ProtectAll = try await API.call("/chats/protect-all", method: "POST", body: ["enabled": v])
+            protectAll = r.enabled
+            OxHaptics.play(.setDone)
+            OxAlert.show(icon: v ? "lock.shield.fill" : "lock.open", title: v ? "Все ваши чаты защищены" : "Защита для всех чатов выключена",
+                         message: v ? "На снимках и записи экрана переписка будет скрыта у вас и у собеседников. О каждом снимке придёт уведомление." : "Отдельные чаты, где вы включали защиту, остаются защищёнными.")
+        } catch {
+            OxAlert.error(error.localizedDescription)
         }
     }
 
@@ -471,9 +494,14 @@ struct ChatView: View {
     @State private var loaded = false
     @State private var attaching = false
     @State private var call: CallRequest?
+    @State private var protect: ChatProtect?
+    @State private var protectBusy = false
     @FocusState private var focused: Bool
 
+    private var shielded: Bool { protect?.on == true }
+
     var body: some View {
+        ScreenShield(enabled: shielded) {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 6) {
@@ -484,7 +512,29 @@ struct ChatView: View {
                             .foregroundStyle(.secondary)
                             .padding(.top, 60)
                     }
+                    if shielded {
+                        Label(protect?.by == "peer" ? "Собеседник включил защиту от снимков экрана" : "Защита от снимков экрана включена",
+                              systemImage: "lock.shield.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.lime)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Color.lime.opacity(0.12), in: Capsule())
+                            .padding(.bottom, 4)
+                    }
                     ForEach(messages) { m in
+                        if m.kind == "shot" {
+                            HStack(spacing: 6) {
+                                Image(systemName: (m.text ?? "").contains("снимок") && !(m.text ?? "").contains("защит") ? "camera.viewfinder" : "lock.shield")
+                                Text(m.text ?? "Снимок экрана")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Color.white.opacity(0.08), in: Capsule())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
+                            .id(m.id)
+                        } else {
                         Bubble(m: m, read: m.mine && m.id <= peerReadId)
                             .id(m.id)
                             .contextMenu {
@@ -514,6 +564,7 @@ struct ChatView: View {
                                     }
                                 }
                             }
+                        }
                     }
                 }
                 .padding(.horizontal, 12)
@@ -526,6 +577,12 @@ struct ChatView: View {
                     withAnimation { proxy.scrollTo(id, anchor: .bottom) }
                 }
             }
+        }
+        .environment(chats)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
+            guard shielded else { return }
+            Task { await reportScreenshot() }
         }
         .safeAreaInset(edge: .bottom) { inputBar }
         .navigationTitle(peer?.name ?? title)
@@ -543,6 +600,23 @@ struct ChatView: View {
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        Task { await toggleProtect() }
+                    } label: {
+                        Label(shielded ? "Выключить защиту от снимков" : "Защитить от снимков экрана",
+                              systemImage: shielded ? "lock.open" : "lock.shield")
+                    }
+                    .disabled(protectBusy || (shielded && protect?.by == "peer"))
+                    if shielded && protect?.by == "peer" {
+                        Text("Защиту включил собеседник")
+                    } else if shielded && protect?.mode == "all" {
+                        Text("Включено для всех ваших чатов — в списке чатов")
+                    }
+                } label: {
+                    Image(systemName: shielded ? "lock.shield.fill" : "lock.shield")
+                        .foregroundStyle(shielded ? Color.lime : Color.primary)
+                }
                 Button {
                     call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: false)
                 } label: { Image(systemName: "phone.fill") }
@@ -649,6 +723,7 @@ struct ChatView: View {
         do {
             let r: ChatDetail = try await API.call("/chats/\(chatId)", query: q)
             peer = r.peer
+            if let p = r.protect { protect = p }
             peerReadId = r.peerReadId ?? peerReadId
             if after == 0 {
                 messages = r.messages
@@ -666,6 +741,42 @@ struct ChatView: View {
             loaded = true
             if initial { errorText = error.localizedDescription }
         }
+    }
+
+    // MARK: защита от снимков экрана
+
+    private struct ProtectResponse: Decodable { let protect: ChatProtect? }
+
+    private func toggleProtect() async {
+        if protect?.mode == "all" && protect?.by == "me" {
+            OxAlert.show(icon: "lock.shield.fill", title: "Защита включена для всех чатов",
+                         message: "Выключить её можно в списке чатов: кнопка «•••» → «Защищать все мои чаты».")
+            return
+        }
+        protectBusy = true
+        defer { protectBusy = false }
+        let on = !shielded
+        do {
+            let r: ProtectResponse = try await API.call("/chats/\(chatId)/protect", method: "POST", body: ["enabled": on])
+            withAnimation { protect = r.protect }
+            OxHaptics.play(.setDone)
+            if on {
+                OxAlert.show(icon: "lock.shield.fill", title: "Защита включена",
+                             message: "На снимках и записи экрана переписка будет скрыта у обоих. Если собеседник сделает снимок, вы получите уведомление. Выключить защиту сможете только вы.")
+            }
+            await load(initial: false)
+        } catch {
+            OxAlert.error(error.localizedDescription)
+        }
+    }
+
+    private func reportScreenshot() async {
+        let _: OK? = try? await API.call("/chats/\(chatId)/screenshot", method: "POST")
+        OxAlert.show(icon: "camera.viewfinder", tint: Color(hex: 0xF0A030), title: "Переписка защищена",
+                     message: protect?.by == "peer"
+                        ? "Собеседник включил защиту: на снимке переписка не видна, а он получил уведомление о снимке."
+                        : "На снимке переписка не видна. Собеседник получил уведомление о снимке.")
+        await load(initial: false)
     }
 
     private func send() async {

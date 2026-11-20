@@ -349,6 +349,7 @@ struct Message: Decodable, Identifiable {
 
 struct ChatDetail: Decodable {
     let id: Int
+    let protect: ChatProtect?
     let peer: Peer
     let messages: [Message]
     let changed: [Message]?
