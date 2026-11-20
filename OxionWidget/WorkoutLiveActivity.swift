@@ -15,37 +15,42 @@ struct WorkoutLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            Image("ox-logo-w").resizable().scaledToFit().frame(width: 14, height: 18)
-                            Text(phaseTitle(context.state, stale: context.isStale)).font(.caption2.bold()).foregroundStyle(Color.oxLime)
+                    HStack(spacing: 8) {
+                        Image("ox-logo-w").resizable().scaledToFit().frame(width: 20, height: 26)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(context.state.exercise).font(.subheadline.bold()).lineLimit(1)
+                            Text("Подход \(context.state.setIndex)/\(context.state.setsTotal) · \(repsText(context.state))")
+                                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                         }
-                        Text(context.state.exercise).font(.headline).lineLimit(1)
-                        Text("Подход \(context.state.setIndex) из \(context.state.setsTotal)").font(.caption).foregroundStyle(.secondary)
                     }
-                    .padding(.leading, 4)
+                    .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 2) {
+                    VStack(alignment: .trailing, spacing: 0) {
                         BigTimer(st: context.state, stale: context.isStale)
-                            .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                            .font(.system(size: 24, weight: .bold, design: .rounded).monospacedDigit())
                             .foregroundStyle(context.state.phase == "resting" ? Color.oxLime : .white)
-                        Text(repsText(context.state)).font(.caption).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                        Text(phaseTitle(context.state, stale: context.isStale))
+                            .font(.caption2.bold()).foregroundStyle(Color.oxLime)
                     }
-                    .padding(.trailing, 4)
+                    .frame(maxWidth: 96, alignment: .trailing)
+                    .padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 8) {
-                        ProgressView(value: context.state.progress).tint(Color.oxLime)
-                        HStack {
-                            Text("Упр. \(context.state.exercisesDone)/\(context.state.exercisesTotal) · осталось подходов: \(context.state.setsLeft)")
-                            Spacer()
-                            if let n = context.state.nextExercise { Text("→ \(n)").lineLimit(1) }
+                    VStack(spacing: 6) {
+                        HStack(spacing: 6) {
+                            ProgressView(value: context.state.progress).tint(Color.oxLime)
+                            Text("\(context.state.setsDoneAll)/\(context.state.setsTotalAll)")
+                                .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                         }
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        if let n = context.state.nextExercise {
+                            Text("Далее: \(n)").font(.caption2).foregroundStyle(.secondary)
+                                .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         Controls(st: context.state, stale: context.isStale, compact: true)
                     }
+                    .padding(.horizontal, 6)
                 }
             } compactLeading: {
                 Image("ox-logo-w").resizable().scaledToFit().frame(width: 16, height: 20)
@@ -78,39 +83,35 @@ struct LockScreenWorkout: View {
 
     var body: some View {
         let st = context.state
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image("ox-logo-w").resizable().scaledToFit().frame(width: 18, height: 23)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(context.attributes.title).font(.caption.bold()).foregroundStyle(Color.oxLime).lineLimit(1)
-                    Text(phaseTitle(st, stale: context.isStale)).font(.caption2).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                Image("ox-logo-w").resizable().scaledToFit().frame(width: 22, height: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(st.phase == "finished" ? "Тренировка завершена" : st.exercise)
+                        .font(.headline).lineLimit(1)
+                    Text(st.phase == "finished" ? "\(st.setsDoneAll) подходов · \(context.attributes.title)"
+                         : "\(phaseTitle(st, stale: context.isStale)) · подход \(st.setIndex)/\(st.setsTotal) · \(repsText(st))")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 6)
                 BigTimer(st: st, stale: context.isStale)
-                    .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(st.phase == "resting" ? Color.oxLime : .white)
                     .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 100, alignment: .trailing)
             }
-            if st.phase == "finished" {
-                Text("Тренировка завершена · \(st.setsDoneAll) подходов").font(.headline)
-            } else {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(st.exercise).font(.title3.bold()).lineLimit(1)
-                    Spacer()
-                    Text("\(st.setIndex)/\(st.setsTotal)").font(.headline.monospacedDigit()).foregroundStyle(Color.oxLime)
+            if st.phase != "finished" {
+                HStack(spacing: 8) {
+                    ProgressView(value: st.progress).tint(Color.oxLime)
+                    Text(st.nextExercise.map { "далее: \($0)" } ?? "упр. \(st.exercisesDone + 1)/\(st.exercisesTotal)")
+                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        .layoutPriority(1)
                 }
-                HStack(spacing: 10) {
-                    Label(repsText(st), systemImage: "repeat")
-                    Label("осталось \(st.setsLeft)", systemImage: "square.stack.3d.up")
-                    if let n = st.nextExercise { Label(n, systemImage: "arrow.turn.down.right").lineLimit(1) }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                ProgressView(value: st.progress).tint(Color.oxLime)
                 Controls(st: st, stale: context.isStale, compact: false)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .foregroundStyle(.white)
     }
 }
@@ -146,7 +147,7 @@ struct Controls: View {
     let compact: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             switch st.phase {
             case "paused":
                 btn(ResumeWorkoutIntent(), "Продолжить", "play.fill", primary: true)
@@ -174,8 +175,8 @@ struct Controls: View {
                 Image(systemName: icon)
                 if !title.isEmpty { Text(title).lineLimit(1) }
             }
-            .font(.system(size: 14, weight: .semibold))
-            .frame(maxWidth: title.isEmpty ? 44 : .infinity, minHeight: 34)
+            .font(.system(size: 13, weight: .semibold))
+            .frame(maxWidth: title.isEmpty ? 40 : .infinity, minHeight: 30)
             .foregroundStyle(primary ? Color.black : Color.white)
             .background(primary ? Color.oxLime : Color.white.opacity(0.15), in: Capsule())
         }

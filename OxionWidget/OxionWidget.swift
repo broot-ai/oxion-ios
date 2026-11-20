@@ -30,9 +30,12 @@ struct OxionEntry: TimelineEntry {
     let date: Date
     let snap: WidgetSnapshot
     let content: WidgetContent
+    var hasData = true
 
     /// «Автоматически»: есть тренировка сегодня → напоминание; есть цель → цель; иначе цитата
     var resolved: WidgetContent {
+        // нет данных из приложения (общая папка недоступна) — показываем цитату, а не пустой экран
+        if !hasData && content != .quote { return .quote }
         guard content == .auto else { return content }
         if snap.todayTitle != nil { return .reminder }
         if snap.goalTitle != nil { return .goal }
@@ -62,7 +65,7 @@ struct OxionProvider: AppIntentTimelineProvider {
         let q = WidgetSnapshot.localQuote()
         if snap == nil || Calendar.current.isDateInToday(s.updatedAt) == false { s.quote = q.0; s.quoteAuthor = q.1 }
         let now = Date()
-        let entry = OxionEntry(date: now, snap: s, content: configuration.content)
+        let entry = OxionEntry(date: now, snap: s, content: configuration.content, hasData: snap != nil)
         // обновляем раз в час и обязательно после полуночи — новая цитата дня
         let nextHour = Calendar.current.date(byAdding: .hour, value: 1, to: now) ?? now
         let midnight = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now)
