@@ -1,0 +1,9 @@
+{
+  "name": "oxion-ios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Oxion — iOS-приложение (Capacitor) поверх PWA на Cloudflare Worker",
+  "scripts": {
+    "sync": "cap sync ios"
+  }
+}
