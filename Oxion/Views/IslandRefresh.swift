@@ -68,23 +68,46 @@ final class IslandHUD {
             withAnimation(.easeOut(duration: 0.25)) { phase = .hidden; progress = 0 }
             return
         }
-        Task { await run(work) }
+        Task { await run(title: "Синхронизация", doneText: "Всё актуально") { await work(); return true } }
     }
 
-    private func run(_ work: @escaping () async -> Void) async {
+    private(set) var title = "Синхронизация"
+    private(set) var doneText = "Всё актуально"
+
+    /// Любая долгая операция с анимацией под островом и настоящей Live Activity (если свернуть приложение)
+    func run(title: String, doneText: String, _ work: @escaping () async -> Bool) async {
+        guard phase != .syncing else { _ = await work(); return }
+        if window == nil { attach() }
+        if topInset == 0 {
+            topInset = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }.first { $0.isKeyWindow }?.safeAreaInsets.top ?? 0
+        }
+        self.title = title
+        self.doneText = doneText
+        ok = true
         ringDone = false
         withAnimation(.spring(response: 0.5, dampingFraction: 0.74)) { phase = .syncing }
+        await SyncIsland.start(title: title, doneText: doneText)
         let started = Date()
-        await work()
-        // чтобы анимацию было видно, даже если обновилось мгновенно
+        let success = await work()
+        // завершение доигрывается само, вызывающий код не ждёт
+        Task { await finishAnimation(success: success, started: started) }
+    }
+
+    private(set) var ok = true
+
+    private func finishAnimation(success: Bool, started: Date) async {
         let spent = Date().timeIntervalSince(started)
         if spent < 1.1 { try? await Task.sleep(for: .seconds(1.1 - spent)) }
+        ok = success
+        if !success { doneText = "Не получилось" }
         withAnimation(.easeInOut(duration: 0.45)) { ringDone = true }
+        Task { await SyncIsland.finish(nil, success: success) }
         try? await Task.sleep(for: .milliseconds(380))
         withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) { phase = .done }
-        OxHaptics.play(.setDone)
+        OxHaptics.play(success ? .setDone : .select)
         try? await Task.sleep(for: .seconds(1.3))
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) { phase = .hidden; progress = 0 }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) { phase = .hidden; progress = 0 }
         crossed = false
     }
 }
@@ -100,37 +123,30 @@ struct IslandOverlay: View {
 
     var body: some View {
         GeometryReader { g in
-            let top = hud.topInset
-            let hasIsland = top >= 51
-            // размер и положение острова iPhone 14 Pro … 17 Pro Max
-            let island = CGRect(x: (g.size.width - 126) / 2, y: hasIsland ? 11 : top + 4, width: 126, height: 37)
+            // всё рисуем ПОД строкой состояния: её iOS всегда показывает поверх приложений
+            let base = max(hud.topInset, 20) + 4
             let expanded = hud.phase == .syncing || hud.phase == .done
-            let w: CGFloat = expanded ? min(g.size.width - 24, 352) : 126
-            let h: CGFloat = expanded ? 72 : 37
+            let w: CGFloat = min(g.size.width - 24, 352)
+            let h: CGFloat = 70
 
             ZStack(alignment: .top) {
-                // «остров»
-                if hud.phase != .hidden {
+                if expanded {
                     RoundedRectangle(cornerRadius: h / 2, style: .continuous)
                         .fill(.black)
-                        .overlay {
-                            if expanded { islandContent.transition(.opacity.combined(with: .scale(scale: 0.9))) }
-                        }
+                        .overlay(RoundedRectangle(cornerRadius: h / 2, style: .continuous).stroke(Color.lime.opacity(0.25), lineWidth: 1))
+                        .overlay { islandContent }
                         .frame(width: w, height: h)
-                        .shadow(color: expanded ? Color.lime.opacity(0.25) : .clear, radius: 18, y: 4)
-                        .position(x: g.size.width / 2, y: island.minY + h / 2)
-                        .opacity(hasIsland || expanded || hud.phase == .pulling ? 1 : 0)
+                        .shadow(color: Color.lime.opacity(0.3), radius: 22, y: 6)
+                        .position(x: g.size.width / 2, y: base + h / 2)
+                        .transition(.scale(scale: 0.25, anchor: .top).combined(with: .opacity).combined(with: .offset(y: -30)))
                 }
-
-                // индикатор, который тянется из-под острова
                 if hud.phase == .pulling {
                     puller
-                        .position(x: g.size.width / 2, y: island.maxY + 14 + 26 * min(1, hud.progress) + 18)
-                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                        .position(x: g.size.width / 2, y: base + 24 + 30 * min(1, hud.progress))
+                        .transition(.scale(scale: 0.3, anchor: .top).combined(with: .opacity))
                 }
             }
             .frame(width: g.size.width, height: g.size.height, alignment: .top)
-            .ignoresSafeArea()
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -168,7 +184,7 @@ struct IslandOverlay: View {
             ZStack {
                 Circle().stroke(Color.lime.opacity(0.18), lineWidth: 3)
                 if hud.ringDone {
-                    Circle().stroke(Color.lime, lineWidth: 3)
+                    Circle().stroke(hud.ok ? Color.lime : Color(hex: 0xFF5A4E), lineWidth: 3)
                 } else {
                     Circle().trim(from: 0, to: 0.72)
                         .stroke(Color.lime, style: StrokeStyle(lineWidth: 3, lineCap: .round))
@@ -178,9 +194,9 @@ struct IslandOverlay: View {
                         .onDisappear { spin = false }
                 }
                 if hud.phase == .done {
-                    Image(systemName: "checkmark")
+                    Image(systemName: hud.ok ? "checkmark" : "xmark")
                         .font(.system(size: 17, weight: .heavy))
-                        .foregroundStyle(Color.lime)
+                        .foregroundStyle(hud.ok ? Color.lime : Color(hex: 0xFF5A4E))
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     Image("ox-logo").resizable().scaledToFit().frame(width: 16, height: 21)
@@ -191,9 +207,9 @@ struct IslandOverlay: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("OXION").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
-                Text(hud.phase == .done ? "Всё актуально" : "Синхронизация")
+                Text(hud.phase == .done ? hud.doneText : hud.title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(hud.phase == .done ? Color.lime : Color.white.opacity(0.6))
+                    .foregroundStyle(hud.phase == .done ? (hud.ok ? Color.lime : Color(hex: 0xFF5A4E)) : Color.white.opacity(0.6))
                     .contentTransition(.opacity)
             }
             Spacer(minLength: 0)

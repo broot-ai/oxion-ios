@@ -442,7 +442,14 @@ struct ComposerView: View {
                 chain.append(["text": t, "photos": k])
             }
             if !chain.isEmpty { body["chain"] = chain }
-            let r: IdResponse = try await API.call("/feed/posts", method: "POST", body: body)
+            var created: IdResponse?
+            var failure: Error?
+            let payload = body
+            await IslandHUD.shared.run(title: "Отправка публикации", doneText: "Опубликовано") {
+                do { created = try await API.call("/feed/posts", method: "POST", body: payload); return true } catch { failure = error; return false }
+            }
+            if let failure { throw failure }
+            guard let r = created else { return }
             Haptic.success()
             onPosted(r.id)
             dismiss()
