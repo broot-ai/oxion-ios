@@ -27,9 +27,11 @@ struct PromptCard: View {
             ZStack(alignment: .top) {
                 LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.03)], startPoint: .top, endPoint: .bottom)
                 PhoneMock(art: art)
-                    .padding(.top, 18)
+                    .padding(.top, 20)
             }
-            .frame(height: 178)
+            .frame(maxWidth: .infinity)
+            .frame(height: 186, alignment: .top)
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
             Text(a.title)
@@ -137,7 +139,7 @@ struct PhoneMock: View {
                 .font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 18, height: 18)
                 .background(r.tint, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-            Text(r.title).font(.system(size: 10, weight: .semibold)).lineLimit(1)
+            Text(r.title).font(.system(size: 10, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 4)
             if r.toggle {
                 Capsule().fill(highlighted && on ? Color.lime : Color.white.opacity(0.22))
@@ -152,6 +154,7 @@ struct PhoneMock: View {
             } else if let v = r.value {
                 HStack(spacing: 2) {
                     Text(highlighted && on ? "Разрешить" : v).font(.system(size: 9, weight: .medium))
+                        .lineLimit(1).fixedSize()
                         .foregroundStyle(highlighted && on ? Color.lime : .white.opacity(0.55))
                         .contentTransition(.opacity)
                     Image(systemName: "chevron.right").font(.system(size: 7, weight: .bold)).foregroundStyle(.white.opacity(0.4))
