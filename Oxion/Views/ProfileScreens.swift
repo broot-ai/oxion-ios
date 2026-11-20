@@ -54,22 +54,23 @@ struct SubscriptionView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                ZStack {
-                    OxBlob(height: 230)
-                    VStack(spacing: 6) {
+                OxCoinsCard(height: 250) {
+                    VStack(spacing: 8) {
                         Label("PRO", systemImage: "crown.fill")
-                            .font(.title.bold())
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 8)
-                            .glassEffect(.regular.tint(Color.white.opacity(0.25)), in: .capsule)
+                            .font(.system(size: 34, weight: .heavy))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 10)
+                            .glassEffect(.regular, in: .capsule)
                         Text(t?.published == true ? "Анкета в каталоге" : "Ваша анкета в каталоге тренеров")
-                            .font(.headline)
-                            .foregroundStyle(.black.opacity(0.85))
+                            .font(.subheadline.bold())
+                            .padding(.horizontal, 12).padding(.vertical, 5)
+                            .glassEffect(.regular, in: .capsule)
                     }
-                    .allowsHitTesting(false)
                 }
                 .padding(.top, 8)
+                Text("Нажмите на жетоны или наклоните телефон")
+                    .font(.caption).foregroundStyle(Color.oxHint)
+                    .padding(.top, -12)
                 VStack(alignment: .leading, spacing: 14) {
                     benefit("magnifyingglass", "Клиенты находят вас в каталоге своего города")
                     benefit("sparkles", "Попадание в «Тренер для вас» под цель клиента")
