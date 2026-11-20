@@ -497,6 +497,7 @@ struct ChatView: View {
     @State private var protect: ChatProtect?
     @State private var protectBusy = false
     @FocusState private var focused: Bool
+    @Namespace private var zoomNS
 
     private var shielded: Bool { protect?.on == true }
 
@@ -588,41 +589,40 @@ struct ChatView: View {
         .navigationTitle(peer?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // шапка как в Telegram: имя и статус в стеклянной капсуле, аватар справа открывает профиль
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 0) {
-                    Text(peer?.name ?? title)
-                        .font(.headline)
-                    if peer?.trainer == true {
-                        Text("тренер")
-                            .font(.caption2)
-                            .foregroundStyle(Color.lime)
-                    }
-                }
-            }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        Task { await toggleProtect() }
-                    } label: {
-                        Label(shielded ? "Выключить защиту от снимков" : "Защитить от снимков экрана",
-                              systemImage: shielded ? "lock.open" : "lock.shield")
-                    }
-                    .disabled(protectBusy || (shielded && protect?.by == "peer"))
-                    if shielded && protect?.by == "peer" {
-                        Text("Защиту включил собеседник")
-                    } else if shielded && protect?.mode == "all" {
-                        Text("Включено для всех ваших чатов — в списке чатов")
-                    }
+                NavigationLink {
+                    profile
                 } label: {
-                    Image(systemName: shielded ? "lock.shield.fill" : "lock.shield")
-                        .foregroundStyle(shielded ? Color.lime : Color.primary)
+                    VStack(spacing: 0) {
+                        HStack(spacing: 4) {
+                            Text(peer?.name ?? title).font(.headline).lineLimit(1)
+                            if peer?.trainer == true {
+                                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.lime)
+                            }
+                            if shielded {
+                                Image(systemName: "lock.shield.fill").font(.caption2).foregroundStyle(Color.lime)
+                            }
+                        }
+                        Text(PeerStatus.text(peer?.lastSeen))
+                            .font(.caption2)
+                            .foregroundStyle(PeerStatus.online(peer?.lastSeen) ? Color.lime : Color.oxHint)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
                 }
-                Button {
-                    call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: false)
-                } label: { Image(systemName: "phone.fill") }
-                Button {
-                    call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: true)
-                } label: { Image(systemName: "video.fill") }
+                .buttonStyle(.plain)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    profile
+                        .navigationTransition(.zoom(sourceID: "peer-avatar", in: zoomNS))
+                } label: {
+                    Avatar(url: API.media(peer?.photo), name: peer?.name ?? title, size: 36)
+                        .matchedTransitionSource(id: "peer-avatar", in: zoomNS)
+                }
+                .buttonStyle(.plain)
+                .disabled(peer == nil)
             }
         }
         .toolbar(.hidden, for: .tabBar)
@@ -740,6 +740,16 @@ struct ChatView: View {
         } catch {
             loaded = true
             if initial { errorText = error.localizedDescription }
+        }
+    }
+
+    @ViewBuilder
+    private var profile: some View {
+        if let p = peer {
+            ChatPeerProfileView(peer: p, chatId: chatId, messages: messages, shielded: shielded,
+                                shieldLockedByPeer: protect?.by == "peer",
+                                onCall: { video in call = CallRequest(name: p.name ?? title, photo: p.photo, video: video) },
+                                onToggleShield: { Task { await toggleProtect() } })
         }
     }
 
