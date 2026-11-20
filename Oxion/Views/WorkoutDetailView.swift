@@ -156,6 +156,7 @@ struct WorkoutDetailView: View {
             Haptic.success()
             await load()
             onChanged()
+            Task { await WidgetSync.refresh() }
         } catch {
             toast = error.localizedDescription
         }

@@ -22,6 +22,8 @@ targets:
         excludes:
           - "Settings.bundle"
           - "Info.plist"
+          - "Oxion.entitlements"
+      - path: Shared
       - path: Oxion/Settings.bundle
         type: folder
         buildPhase: resources
@@ -34,6 +36,10 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Oxion/Info.plist
         ENABLE_PREVIEWS: YES
+        CODE_SIGN_ENTITLEMENTS: Oxion/Oxion.entitlements
+    dependencies:
+      - target: OxionWidget
+        embed: true
     info:
       path: Oxion/Info.plist
       properties:
@@ -51,7 +57,38 @@ targets:
         UIUserInterfaceStyle: Dark
         LSApplicationQueriesSchemes:
           - tg
+        CFBundleURLTypes:
+          - CFBundleURLName: ru.oxion.app
+            CFBundleURLSchemes:
+              - oxion
         NSCameraUsageDescription: Oxion использует камеру для видеозвонков, фото и видео в ленте и чатах.
         NSMicrophoneUsageDescription: Oxion использует микрофон для звонков, голосовых и видеосообщений.
         NSPhotoLibraryUsageDescription: Oxion открывает галерею, чтобы вы могли загрузить фото и видео.
         NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.
+
+  OxionWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: OxionWidget
+        excludes:
+          - "Info.plist"
+          - "OxionWidget.entitlements"
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.oxion.app.widget
+        PRODUCT_NAME: OxionWidget
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: OxionWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: OxionWidget/OxionWidget.entitlements
+        SKIP_INSTALL: YES
+        ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: ""
+    info:
+      path: OxionWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Oxion
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension

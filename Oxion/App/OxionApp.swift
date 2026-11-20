@@ -16,6 +16,7 @@ extension Color {
 @main
 struct OxionApp: App {
     @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         AppSettings.register()
@@ -25,10 +26,23 @@ struct OxionApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .onOpenURL { url in
+                    // ссылки из виджета: oxion://home, oxion://diary, oxion://goals
+                    switch url.host {
+                    case "diary": model.selectedTab = .diary
+                    case "feed": model.selectedTab = .feed
+                    case "chats": model.selectedTab = .chats
+                    default: model.selectedTab = .home
+                    }
+                }
                 .preferredColorScheme(.dark)
                 .tint(.lime)
                 .onReceive(NotificationCenter.default.publisher(for: .oxionUnauthorized)) { _ in
                     model.logoutLocal()
+                }
+                .onChange(of: scenePhase) {
+                    // свернули приложение — обновляем виджет свежими данными
+                    if scenePhase == .background, model.me != nil { Task { await WidgetSync.refresh() } }
                 }
         }
     }
@@ -63,6 +77,7 @@ final class AppModel {
         do {
             let m: Me = try await API.call("/me")
             me = m
+            Task { await WidgetSync.refresh() }
             if meta == nil {
                 let mt: Meta? = try? await API.call("/meta")
                 meta = mt
@@ -87,6 +102,7 @@ final class AppModel {
     }
 
     func logoutLocal() {
+        WidgetSync.clear()
         API.token = nil
         me = nil
         phase = .loggedOut

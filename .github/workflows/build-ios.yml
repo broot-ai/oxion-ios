@@ -59,6 +59,13 @@ jobs:
             }
           APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/Oxion.app"
           test -d "$APP" || { echo "Oxion.app не найден"; exit 1; }
+          ls "$APP/PlugIns" || echo "виджета нет в сборке"
+          # подпись без сертификата, но с правами App Group — Sideloadly переподпишет своим Apple ID
+          if [ -d "$APP/PlugIns/OxionWidget.appex" ]; then
+            codesign --force --sign - --entitlements OxionWidget/OxionWidget.entitlements "$APP/PlugIns/OxionWidget.appex"
+          fi
+          codesign --force --sign - --entitlements Oxion/Oxion.entitlements "$APP"
+          codesign -d --entitlements - "$APP" || true
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
           cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/Oxion.ipa" Payload
