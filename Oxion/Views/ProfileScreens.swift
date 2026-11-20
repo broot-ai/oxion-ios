@@ -911,8 +911,22 @@ struct HealthView: View {
                              message: "Если вы не разрешили доступ, включите его: Настройки → Здоровье → Доступ к данным → Oxion.")
             }
         } catch {
-            OxAlert.show(icon: "heart.slash.fill", tint: Color(hex: 0xFF5A4E), title: "Не удалось подключить «Здоровье»",
-                         message: error.localizedDescription + "\n\nВ тестовой версии доступ может зависеть от того, как приложение установлено через Sideloadly.")
+            OxAlert.show(icon: "heart.slash.fill", tint: Color(hex: 0xFF5A4E), title: "Прямой доступ пока закрыт",
+                         message: "Тестовая установка через Sideloadly не дала приложению право на «Здоровье». Можно подключиться через команду iPhone «Здоровье • Oxion» — данные будут приходить так же.",
+                         buttons: [OxAlertButton(title: "Подключить через Команды", role: .primary) { Task { await shortcut() } },
+                                   OxAlertButton(title: "Закрыть", role: .cancel)])
+        }
+    }
+
+    /// Запасной путь: команда iPhone, которая сама отправляет данные «Здоровья» на сервер Oxion
+    private func shortcut() async {
+        struct Key: Decodable { let url: String?; let connect: String? }
+        var key: Key? = try? await API.call("/health/key")
+        if key?.connect == nil { key = try? await API.call("/health/key", method: "POST") }
+        if let c = key?.connect, let url = URL(string: c) {
+            await UIApplication.shared.open(url)
+        } else {
+            OxAlert.error("Не удалось получить ссылку для команды")
         }
     }
 
