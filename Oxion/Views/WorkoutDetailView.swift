@@ -13,6 +13,7 @@ struct WorkoutDetailView: View {
     @State private var setFor: WExercise?
     @State private var confirmDelete = false
     @State private var toast: String?
+    @State private var starting = false
 
     var body: some View {
         List {
@@ -29,6 +30,24 @@ struct WorkoutDetailView: View {
                         .foregroundStyle(.secondary)
                     }
                     .listRowBackground(Color.clear)
+                    if !(w.exercises ?? []).isEmpty {
+                        Button {
+                            if WorkoutEngine.shared.isActive {
+                                model.showActiveWorkout = true
+                            } else {
+                                starting = true
+                            }
+                        } label: {
+                            Label(WorkoutEngine.shared.isActive ? "Вернуться к тренировке" : "Начать тренировку", systemImage: "play.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .controlSize(.large)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                    }
                 }
 
                 ForEach(w.exercises ?? []) { ex in
@@ -117,6 +136,11 @@ struct WorkoutDetailView: View {
         .sheet(item: $setFor) { ex in
             AddSetSheet(ex: ex) { body in
                 Task { await addSet(ex.id, body) }
+            }
+        }
+        .sheet(isPresented: $starting) {
+            if let w {
+                StartWorkoutSheet(workout: w) { model.showActiveWorkout = true }
             }
         }
         .confirmationDialog("Удалить тренировку?", isPresented: $confirmDelete, titleVisibility: .visible) {

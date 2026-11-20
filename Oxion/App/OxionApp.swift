@@ -29,6 +29,7 @@ struct OxionApp: App {
                 .onOpenURL { url in
                     // ссылки из виджета: oxion://home, oxion://diary, oxion://goals
                     switch url.host {
+                    case "workout": model.showActiveWorkout = WorkoutEngine.shared.state != nil
                     case "diary": model.selectedTab = .diary
                     case "feed": model.selectedTab = .feed
                     case "chats": model.selectedTab = .chats
@@ -41,6 +42,12 @@ struct OxionApp: App {
                     model.logoutLocal()
                 }
                 .onChange(of: scenePhase) {
+                    if scenePhase == .active, model.me != nil {
+                        Task {
+                            await WorkoutSync.flush()
+                            await WorkoutEngine.shared.syncActivity()
+                        }
+                    }
                     // свернули приложение — обновляем виджет свежими данными
                     if scenePhase == .background, model.me != nil {
                         Task { await WidgetSync.refresh() }
@@ -65,6 +72,7 @@ final class AppModel {
     var me: Me?
     var meta: Meta?
     var selectedTab: AppTab = .home
+    var showActiveWorkout = false
     var trainerQuery = ""
 
     func start() async {
@@ -193,6 +201,11 @@ struct MainTabView: View {
             showCard = true
         }
         .sheet(isPresented: $showCard) { MyCardSheet() }
+        .overlay(alignment: .bottom) {
+            ActiveWorkoutBar { model.showActiveWorkout = true }
+                .padding(.bottom, 92)
+        }
+        .fullScreenCover(isPresented: $model.showActiveWorkout) { ActiveWorkoutView() }
         .task {
             // счётчик непрочитанных на вкладке «Чаты»
             while !Task.isCancelled {

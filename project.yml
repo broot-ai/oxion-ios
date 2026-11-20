@@ -57,6 +57,7 @@ targets:
         UIUserInterfaceStyle: Dark
         LSApplicationQueriesSchemes:
           - tg
+        NSSupportsLiveActivities: true
         CFBundleURLTypes:
           - CFBundleURLName: ru.oxion.app
             CFBundleURLSchemes:
@@ -81,6 +82,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ru.oxion.app.widget
         PRODUCT_NAME: OxionWidget
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: WIDGET_EXT
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: OxionWidget/Info.plist
         CODE_SIGN_ENTITLEMENTS: OxionWidget/OxionWidget.entitlements

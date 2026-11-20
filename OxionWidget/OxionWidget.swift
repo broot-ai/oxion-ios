@@ -267,5 +267,6 @@ struct OxionWidget: Widget {
 struct OxionWidgetBundle: WidgetBundle {
     var body: some Widget {
         OxionWidget()
+        WorkoutLiveActivity()
     }
 }
