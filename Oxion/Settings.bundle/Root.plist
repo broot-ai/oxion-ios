@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Type</key><string>PSGroupSpecifier</string>
+			<key>Title</key><string>Приложение</string>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSToggleSwitchSpecifier</string>
+			<key>Title</key><string>Тактильный отклик</string>
+			<key>Key</key><string>haptics</string>
+			<key>DefaultValue</key><true/>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSToggleSwitchSpecifier</string>
+			<key>Title</key><string>Автозагрузка фото в ленте</string>
+			<key>Key</key><string>autoload_photos</string>
+			<key>DefaultValue</key><true/>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSMultiValueSpecifier</string>
+			<key>Title</key><string>Лента при запуске</string>
+			<key>Key</key><string>start_feed</string>
+			<key>DefaultValue</key><string>foryou</string>
+			<key>Titles</key>
+			<array><string>Для вас</string><string>Подписки</string><string>Мой город</string></array>
+			<key>Values</key>
+			<array><string>foryou</string><string>following</string><string>city</string></array>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSGroupSpecifier</string>
+			<key>Title</key><string>Сервер</string>
+			<key>FooterText</key><string>Меняйте, только если поддержка Oxion попросила. После изменения перезапустите приложение.</string>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSTextFieldSpecifier</string>
+			<key>Title</key><string>Адрес</string>
+			<key>Key</key><string>server_url</string>
+			<key>DefaultValue</key><string>https://fit-app.brootai.workers.dev</string>
+			<key>KeyboardType</key><string>URL</string>
+			<key>AutocapitalizationType</key><string>None</string>
+			<key>AutocorrectionType</key><string>No</string>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSGroupSpecifier</string>
+			<key>Title</key><string>О приложении</string>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSTitleValueSpecifier</string>
+			<key>Title</key><string>Версия</string>
+			<key>Key</key><string>app_version</string>
+			<key>DefaultValue</key><string>1.0.0</string>
+		</dict>
+	</array>
+</dict>
+</plist>

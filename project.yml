@@ -1,0 +1,56 @@
+name: Oxion
+options:
+  bundleIdPrefix: ru.oxion
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Manual
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  Oxion:
+    type: application
+    platform: iOS
+    scheme: {}
+    sources:
+      - path: Oxion
+        excludes:
+          - "Settings.bundle"
+          - "Info.plist"
+      - path: Oxion/Settings.bundle
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.oxion.app
+        PRODUCT_NAME: Oxion
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Oxion/Info.plist
+        ENABLE_PREVIEWS: YES
+    info:
+      path: Oxion/Info.plist
+      properties:
+        CFBundleDisplayName: Oxion
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: ru
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageRespectsSafeAreaInsets: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIUserInterfaceStyle: Dark
+        LSApplicationQueriesSchemes:
+          - tg
+        NSCameraUsageDescription: Oxion использует камеру, чтобы снимать фото и видео для ленты и профиля.
+        NSPhotoLibraryUsageDescription: Oxion открывает галерею, чтобы вы могли загрузить фото и видео.
+        NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.

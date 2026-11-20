@@ -1,0 +1,139 @@
+import SwiftUI
+
+struct SplashView: View {
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 20) {
+                FlameMark(size: 90)
+                ProgressView()
+            }
+        }
+    }
+}
+
+struct FlameMark: View {
+    var size: CGFloat = 80
+    var body: some View {
+        Image(systemName: "flame.fill")
+            .font(.system(size: size))
+            .foregroundStyle(
+                LinearGradient(colors: [Color.lime, Color(red: 0.25, green: 0.7, blue: 0.1)],
+                               startPoint: .top, endPoint: .bottom)
+            )
+            .shadow(color: Color.lime.opacity(0.55), radius: size * 0.3)
+    }
+}
+
+struct ErrorStateView: View {
+    let message: String
+    var retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
+            Text(message)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Button("Повторить", action: retry)
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct Avatar: View {
+    let url: URL?
+    let name: String
+    var size: CGFloat = 40
+
+    var body: some View {
+        AsyncImage(url: url) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            ZStack {
+                Circle().fill(Color.lime.opacity(0.18))
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.lime)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
+struct RemoteImage: View {
+    let url: URL?
+    var icon: String = "photo"
+
+    var body: some View {
+        AsyncImage(url: url) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            ZStack {
+                Rectangle().fill(Color.white.opacity(0.06))
+                Image(systemName: icon)
+                    .font(.title)
+                    .foregroundStyle(Color.lime.opacity(0.7))
+            }
+        }
+    }
+}
+
+struct Chip: View {
+    let text: String
+    var selected = false
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .foregroundStyle(selected ? Color.black : Color.primary)
+            .background(selected ? Color.lime : Color.white.opacity(0.08), in: Capsule())
+    }
+}
+
+struct NotRegisteredView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            FlameMark(size: 70)
+            Text("Почти готово")
+                .font(.title.bold())
+            Text("Завершите регистрацию в Telegram-боте Oxion: выберите роль, город и цель. Потом вернитесь сюда.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if let bot = model.meta?.botUsername, !bot.isEmpty,
+               let url = URL(string: "https://t.me/\(bot.replacingOccurrences(of: "@", with: ""))") {
+                Button {
+                    openURL(url)
+                } label: {
+                    Label("Открыть бота", systemImage: "paperplane.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+            }
+            Button("Я зарегистрировался, проверить") {
+                Task { await model.loadMe() }
+            }
+            .buttonStyle(.glass)
+            .controlSize(.large)
+            Button("Выйти", role: .destructive) {
+                Task { await model.logout() }
+            }
+            .padding(.top, 4)
+        }
+        .padding(24)
+    }
+}
