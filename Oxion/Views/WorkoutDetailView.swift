@@ -148,7 +148,7 @@ struct WorkoutDetailView: View {
                 Task { await deleteWorkout() }
             }
         }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
         .toast($toast)
     }

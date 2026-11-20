@@ -149,7 +149,7 @@ struct ShopView: View {
             }
         }
         .navigationDestination(isPresented: $showOrders) { OrdersView() }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { if home == nil { await load() } }
     }
 

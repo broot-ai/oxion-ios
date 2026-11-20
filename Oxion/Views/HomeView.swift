@@ -60,7 +60,7 @@ struct HomeView: View {
                 case .ecosystem: EcosystemView()
                 }
             }
-            .refreshable { await load() }
+            .oxRefreshable { await load() }
             .task { await load() }
         }
     }

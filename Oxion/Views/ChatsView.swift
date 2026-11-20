@@ -199,7 +199,7 @@ struct ChatsView: View {
                 }
             }
             .searchable(text: $query, prompt: "Поиск по чатам")
-            .refreshable { await store.load() }
+            .oxRefreshable { await store.load() }
             .task { await store.load() }
         }
     }

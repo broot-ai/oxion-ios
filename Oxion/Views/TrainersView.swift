@@ -119,7 +119,7 @@ struct TrainersView: View {
             .onChange(of: store.sort) {
                 Task { await store.load(reset: true) }
             }
-            .refreshable { await store.load(reset: true) }
+            .oxRefreshable { await store.load(reset: true) }
             .task {
                 if !model.trainerQuery.isEmpty { takeQuery() }
                 if store.items.isEmpty { await store.load(reset: true) }

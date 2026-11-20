@@ -111,7 +111,7 @@ struct DiaryView: View {
                     Task { await load() }
                 }
             }
-            .refreshable { await load() }
+            .oxRefreshable { await load() }
             .task {
                 if stats == nil { await load() }
             }

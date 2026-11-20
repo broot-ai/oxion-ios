@@ -20,9 +20,7 @@ struct EcosystemView: View {
             }
 
             Section("OXION OS 2.0") {
-                nav("3D-модель мышц", "Вращение, выбор мышцы, упражнения и тренеры", "figure.arms.open", .works) { BodyExplorerView() }
                 nav("Прогресс тела", "Фото, замеры, вес, Progress Replay", "chart.line.uptrend.xyaxis", .works) { ProgressHubView() }
-                nav("Голосовой тренер", "Подсказки, счёт повторов, AirPods, команды", "person.wave.2.fill", .works) { AudioCoachSettingsView() }
             }
 
             Section("Тренировка") {

@@ -134,6 +134,10 @@ struct FeedView: View {
             .background(Color.oxBg)
             .navigationTitle("Лента")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { compose = ComposeRequest() } label: { Image(systemName: "square.and.pencil") }
+                        .accessibilityLabel("Новая публикация")
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { path.append(.coach) } label: { Image(systemName: "sparkles") }
                     Button { path.append(.search) } label: { Image(systemName: "magnifyingglass") }
@@ -142,9 +146,12 @@ struct FeedView: View {
             }
             .navigationDestination(for: FeedRoute.self) { FeedDestination(route: $0) }
             .sheet(item: $compose) { req in
-                ComposerView(request: req) { _ in Task { await store.load(reset: true) } }
+                ComposerView(request: req) { id in
+                    if req.parent == nil { path.append(.post(id)) }
+                    Task { await store.load(reset: true) }
+                }
             }
-            .refreshable { await store.load(reset: true) }
+            .oxRefreshable { await store.load(reset: true) }
             .task { if store.items.isEmpty { await store.load(reset: true) } }
             .onChange(of: store.tab) {
                 Haptic.tap(.soft)

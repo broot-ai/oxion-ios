@@ -21,7 +21,6 @@ struct OxionApp: App {
 
     init() {
         AppSettings.register()
-        AudioCoach.shared.attach()
     }
 
     var body: some Scene {
@@ -89,7 +88,7 @@ final class AppModel {
     var showVision = false
 
     enum AppSheet: String, Identifiable {
-        case qr, compose, progress, body, permissions
+        case qr, compose, progress, permissions
         var id: String { rawValue }
     }
 
@@ -111,7 +110,6 @@ final class AppModel {
             selectedTab = .feed
             sheet = .compose
         case "progress": sheet = .progress
-        case "body": sheet = .body
         case "permissions": sheet = .permissions
         case "vision": showVision = true
         case "trainer":
@@ -254,7 +252,6 @@ struct MainTabView: View {
             case .qr: MyCardSheet()
             case .compose: ComposerView(request: ComposeRequest()) { _ in }
             case .progress: NavigationStack { ProgressHubView() }
-            case .body: NavigationStack { BodyExplorerView() }
             case .permissions: NavigationStack { PermissionsView() }
             }
         }

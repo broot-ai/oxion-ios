@@ -60,8 +60,6 @@ struct ProfileView: View {
                 }
                 Section("Тренировки") {
                     nav("Прогресс тела", "chart.line.uptrend.xyaxis", Color.lime) { ProgressHubView() }
-                    nav("3D-модель мышц", "figure.arms.open", Color(hex: 0x58F670)) { BodyExplorerView() }
-                    nav("Голосовой тренер", "person.wave.2.fill", Color(hex: 0x3FD6C9)) { AudioCoachSettingsView() }
                     nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
                     nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
                     nav("Цели", "target", Color(hex: 0xFF5A4E)) { GoalsView() }
@@ -152,7 +150,7 @@ struct ProfileView: View {
                 }
             }
             .navigationTitle("Профиль")
-            .refreshable { await model.loadMe() }
+            .oxRefreshable { await model.loadMe() }
             .onChange(of: confirmLogout) {
                 if confirmLogout {
                     confirmLogout = false

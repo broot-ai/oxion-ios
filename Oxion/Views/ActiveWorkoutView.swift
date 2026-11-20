@@ -101,8 +101,6 @@ struct ActiveWorkoutView: View {
     @State private var reps = 0
     @State private var weight: Double?
     @State private var vision = false
-    @State private var coach = AudioCoach.shared
-    @State private var voice = VoiceCommands.shared
 
     var body: some View {
         ZStack {
@@ -130,7 +128,6 @@ struct ActiveWorkoutView: View {
             if !Task.isCancelled, engine.state?.phase == .resting { OxHaptics.play(.restOver) }
         }
         .onAppear { syncInputs() }
-        .onDisappear { voice.stop() }
         .onChange(of: engine.state?.current) { syncInputs() }
         .onChange(of: engine.state?.items[safe: engine.state?.current ?? 0]?.doneSets) { syncInputs() }
     }
@@ -163,32 +160,7 @@ struct ActiveWorkoutView: View {
                         .foregroundStyle(paused ? Color.oxHint : Color.lime)
                 }
                 Spacer()
-                Menu {
-                    Toggle(isOn: $coach.enabled) { Label("Голосовые подсказки", systemImage: "person.wave.2.fill") }
-                    Button {
-                        Task { await voice.toggle() }
-                    } label: {
-                        Label(voice.listening ? "Выключить голосовые команды" : "Голосовые команды", systemImage: voice.listening ? "mic.slash.fill" : "mic.fill")
-                    }
-                    Button { coach.sayRestLeft() } label: { Label("Сказать, что сейчас", systemImage: "speaker.wave.2.fill") }
-                } label: {
-                    Image(systemName: voice.listening ? "mic.fill" : coach.enabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                        .font(.headline)
-                        .foregroundStyle(voice.listening ? Color.black : Color.white)
-                        .frame(width: 40, height: 40)
-                        .symbolEffect(.variableColor.iterative, isActive: coach.speaking)
-                }
-                .glassEffect(voice.listening ? .regular.tint(Color.lime).interactive() : .regular.interactive(), in: .circle)
-            }
-            if voice.listening {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform").foregroundStyle(Color.lime).symbolEffect(.variableColor.iterative)
-                    Text(voice.lastCommand.isEmpty ? (voice.lastHeard.isEmpty ? "Скажите: «готово», «дальше», «пауза», «сколько»" : "«\(voice.lastHeard)»") : "✓ \(voice.lastCommand)")
-                        .font(.caption).lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .glassEffect(.regular.tint(Color.lime.opacity(0.12)), in: .capsule)
+                Image("ox-logo").resizable().scaledToFit().frame(width: 30, height: 40)
             }
 
             VStack(spacing: 6) {

@@ -78,7 +78,7 @@ struct UserProfileView: View {
             }
         }
         .onChange(of: tab) { Task { await loadPosts() } }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -212,7 +212,7 @@ struct ActivityView: View {
         }
         .navigationTitle("Активность")
         .navigationDestination(item: $route) { FeedDestination(route: $0) }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 

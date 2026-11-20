@@ -72,7 +72,7 @@ struct PostDetailView: View {
             }
         }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await load() } } }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -442,12 +442,12 @@ struct ComposerView: View {
                 chain.append(["text": t, "photos": k])
             }
             if !chain.isEmpty { body["chain"] = chain }
-            let r: Post = try await API.call("/feed/posts", method: "POST", body: body)
+            let r: IdResponse = try await API.call("/feed/posts", method: "POST", body: body)
             Haptic.success()
             onPosted(r.id)
             dismiss()
         } catch {
-            OxAlert.error(error.localizedDescription)
+            OxAlert.error("Публикация не отправлена: \(error.localizedDescription)")
         }
     }
 }

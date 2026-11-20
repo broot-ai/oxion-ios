@@ -380,7 +380,7 @@ struct RecordsView: View {
         }
         .background(Color.oxBg)
         .navigationTitle("Рекорды")
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -421,7 +421,7 @@ struct ChallengesView: View {
         }
         .background(Color.oxBg)
         .navigationTitle("Челленджи")
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -576,7 +576,7 @@ struct GoalsView: View {
         }
         .background(Color.oxBg)
         .navigationTitle("Цели")
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -679,7 +679,7 @@ struct MyCoachView: View {
         .background(Color.oxBg)
         .navigationTitle("Мой тренер")
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -760,7 +760,7 @@ struct ClientsView: View {
         .navigationTitle("Мои клиенты")
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
         .sheet(isPresented: $showQR) { MyCardSheet() }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -846,7 +846,7 @@ struct HealthView: View {
         }
         .background(Color.oxBg)
         .navigationTitle("Здоровье")
-        .refreshable { await hk.refreshAndSync() }
+        .oxRefreshable { await hk.refreshAndSync() }
         .task {
             if hk.enabled { await hk.refreshAndSync() }
         }
@@ -1021,7 +1021,7 @@ struct OrdersView: View {
         }
         .background(Color.oxBg)
         .navigationTitle("Мои заказы")
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 
@@ -1270,7 +1270,7 @@ struct PlatformView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .task { await load() }
     }
 

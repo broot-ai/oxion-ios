@@ -5,7 +5,6 @@ import Contacts
 import CoreLocation
 import LocalAuthentication
 import UserNotifications
-import Speech
 import Network
 import CoreTelephony
 
@@ -35,7 +34,7 @@ enum PermState: Equatable {
 }
 
 enum PermKind: String, CaseIterable, Identifiable {
-    case notifications, location, contacts, photos, camera, microphone, speech, faceID, localNetwork, backgroundRefresh, cellular
+    case notifications, location, contacts, photos, camera, microphone, faceID, localNetwork, backgroundRefresh, cellular
     var id: String { rawValue }
 
     var title: String {
@@ -46,7 +45,6 @@ enum PermKind: String, CaseIterable, Identifiable {
         case .photos: return "Фото"
         case .camera: return "Камера"
         case .microphone: return "Микрофон"
-        case .speech: return "Распознавание речи"
         case .faceID: return "Face ID"
         case .localNetwork: return "Локальная сеть"
         case .backgroundRefresh: return "Обновление контента"
@@ -61,7 +59,6 @@ enum PermKind: String, CaseIterable, Identifiable {
         case .photos: return "photo.fill.on.rectangle.fill"
         case .camera: return "camera.fill"
         case .microphone: return "mic.fill"
-        case .speech: return "waveform"
         case .faceID: return "faceid"
         case .localNetwork: return "network"
         case .backgroundRefresh: return "arrow.clockwise.circle.fill"
@@ -75,7 +72,6 @@ enum PermKind: String, CaseIterable, Identifiable {
         case .contacts: return Color(hex: 0x8E8E93)
         case .photos: return Color(hex: 0xF0A030)
         case .camera, .microphone: return Color(hex: 0x636366)
-        case .speech: return Color(hex: 0x3FD6C9)
         case .faceID: return Color(hex: 0x58F670)
         case .localNetwork: return Color(hex: 0x0A84FF)
         case .backgroundRefresh: return Color(hex: 0x8E7CFF)
@@ -89,8 +85,7 @@ enum PermKind: String, CaseIterable, Identifiable {
         case .contacts: return "Пригласить друзей из контактов в OXION. Контакты не загружаются на сервер"
         case .photos: return "Сохранять карточки прогресса и итогов тренировки в «Фото»"
         case .camera: return "Подсчёт повторов (Vision), фото прогресса, видеозвонки"
-        case .microphone: return "Голосовые команды, голосовые сообщения и звонки"
-        case .speech: return "Команды «готово», «дальше», «пауза» — распознаются на iPhone"
+        case .microphone: return "Голосовые сообщения, кружки и звонки"
         case .faceID: return "Закрыть фото прогресса тела"
         case .localNetwork: return "Найти экраны и устройства в вашей Wi‑Fi сети для тренировки (Apple TV, тренажёры)"
         case .backgroundRefresh: return "Обновлять виджеты и счётчик сообщений, пока OXION закрыт"
@@ -139,11 +134,6 @@ final class PermissionCenter {
         states[.microphone] = { () -> PermState in switch AVAudioApplication.shared.recordPermission {
         case .undetermined: return .notAsked
         case .denied: return .denied
-        default: return .granted
-        } }()
-        states[.speech] = { () -> PermState in switch SFSpeechRecognizer.authorizationStatus() {
-        case .notDetermined: return .notAsked
-        case .denied, .restricted: return .denied
         default: return .granted
         } }()
         let ctx = LAContext()
@@ -197,8 +187,6 @@ final class PermissionCenter {
             _ = await AVCaptureDevice.requestAccess(for: .video)
         case .microphone:
             _ = await AVAudioApplication.requestRecordPermission()
-        case .speech:
-            _ = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
         case .faceID:
             if ProgressStore.shared.faceLock {
                 ProgressStore.shared.faceLock = false
@@ -224,7 +212,7 @@ final class PermissionCenter {
 
     /// Все ещё не запрошенные — по очереди
     func requestAll() async {
-        for k in [PermKind.notifications, .location, .camera, .microphone, .photos, .contacts, .speech, .localNetwork] where states[k] == .notAsked {
+        for k in [PermKind.notifications, .location, .camera, .microphone, .photos, .contacts, .localNetwork] where states[k] == .notAsked {
             await request(k)
             try? await Task.sleep(for: .milliseconds(400))
         }
