@@ -67,6 +67,10 @@ struct Meta: Decodable {
     let supportTg: String?
     let supportEmail: String?
     let cities: [String]?
+    let directions: [String]?
+    let formats: [String]?
+    let subPrice: Int?
+    let subDays: Int?
 }
 
 // MARK: - Лента
@@ -96,7 +100,71 @@ struct Post: Decodable, Identifiable {
     let canReply: Bool?
     let replyToName: String?
     let parentId: Int?
+    var poll: PostPoll?
+    let workout: JSONValue?
+    let product: JSONValue?
+    let quote: JSONValue?
+    let chainCount: Int?
+    let chainOf: Int?
+    let edited: Bool?
+    let status: String?
+    var quotes: Int?
+    var replyTo: String?
+    let trainerAnswer: Bool?
 }
+
+struct PollOption: Decodable, Hashable { let text: String; let votes: Int? }
+struct PostPoll: Decodable, Hashable {
+    let options: [PollOption]
+    let total: Int?
+    let mine: Int?
+    let closed: Bool?
+}
+
+struct FUser: Decodable {
+    let id: Int
+    let name: String?
+    let photo: String?
+    let city: String?
+    let bio: String?
+    let link: String?
+    let followers: Int?
+    let following: Int?
+    let posts: Int?
+    var isFollowing: Bool?
+    let followsMe: Bool?
+    var muted: Bool?
+    var blocked: Bool?
+    let trainer: Bool?
+    let me: Bool?
+    let streak: Int?
+    let monthWorkouts: Int?
+    let pinned: Post?
+}
+
+struct FPerson: Decodable, Identifiable {
+    let id: Int
+    let name: String?
+    let photo: String?
+    let city: String?
+    let bio: String?
+    let trainer: Bool?
+    var isFollowing: Bool?
+}
+
+struct FSearch: Decodable { let users: [FPerson]?; let posts: [Post]? }
+struct FPeople: Decodable { let items: [FPerson] }
+
+struct ActivityItem: Decodable, Identifiable {
+    let id: Int
+    let kind: String
+    let at: Double?
+    let unread: Bool?
+    let actor: FPerson
+    let post: ActivityPost?
+}
+struct ActivityPost: Decodable { let id: Int; let open: Int?; let text: String?; let photo: String? }
+struct ActivityResponse: Decodable { let items: [ActivityItem]; let next: FlexString? }
 
 struct RepostBy: Decodable { let id: Int; let name: String? }
 
@@ -199,6 +267,7 @@ struct Workout: Decodable, Identifiable {
     let calories: Int?
     let exCount: Int?
     let note: String?
+    let groups: [String]?
 }
 
 struct WorkoutsResponse: Decodable { let items: [Workout] }

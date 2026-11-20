@@ -1,0 +1,475 @@
+import SwiftUI
+
+// MARK: - Профиль человека в ленте
+
+struct UserProfileView: View {
+    let userId: Int
+    @Environment(AppModel.self) private var model
+    @State private var u: FUser?
+    @State private var tab = "posts"
+    @State private var posts: [FeedItem] = []
+    @State private var errorText: String?
+    @State private var route: FeedRoute?
+    @State private var chat: ChatRef?
+    @State private var compose: ComposeRequest?
+    @State private var showCard = false
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if let u {
+                    header(u)
+                    Picker("", selection: $tab) {
+                        Text("Ветки").tag("posts")
+                        Text("Ответы").tag("replies")
+                        Text("Медиа").tag("media")
+                        Text("Репосты").tag("reposts")
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(16)
+                    if let pin = u.pinned, tab == "posts" {
+                        Label("Закреплено", systemImage: "pin.fill").font(.caption).foregroundStyle(Color.oxHint).padding(.horizontal, 16)
+                        ThreadPost(post: pin, onOpen: { route = .post(pin.id) }, onUser: { _ in }, onCompose: { compose = $0 })
+                        Divider().overlay(Color.white.opacity(0.06))
+                    }
+                    if posts.isEmpty {
+                        Text("Пока ничего нет").foregroundStyle(Color.oxHint).frame(maxWidth: .infinity).padding(40)
+                    }
+                    ForEach(posts) { item in
+                        ThreadPost(post: item.post,
+                                   onOpen: { route = .post(item.post.chainOf ?? item.post.id) },
+                                   onUser: { if $0 != userId { route = .user($0) } },
+                                   onChange: { change in
+                                       for i in posts.indices where posts[i].post.id == item.post.id { change(&posts[i].post) }
+                                   },
+                                   onRemove: { posts.removeAll { $0.post.id == item.post.id } },
+                                   onCompose: { compose = $0 })
+                        Divider().overlay(Color.white.opacity(0.06))
+                    }
+                } else {
+                    LoadingOrError(error: errorText) { Task { await load() } }
+                }
+            }
+        }
+        .background(Color.oxBg)
+        .navigationTitle(u?.name ?? "")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $route) { FeedDestination(route: $0) }
+        .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
+        .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await loadPosts() } } }
+        .sheet(isPresented: $showCard) { MyCardSheet() }
+        .toolbar {
+            if let u, u.me != true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { Task { await toggle("notify", true) } } label: { Label("Уведомлять о новых ветках", systemImage: "bell") }
+                        Button { Task { await toggle("mute", !(u.muted ?? false)) } } label: {
+                            Label(u.muted == true ? "Показывать в ленте" : "Скрыть из ленты", systemImage: "speaker.slash")
+                        }
+                        Button(role: .destructive) {
+                            OxAlert.confirm(icon: "hand.raised.fill", title: u.blocked == true ? "Разблокировать?" : "Заблокировать \(u.name ?? "")?",
+                                            action: u.blocked == true ? "Разблокировать" : "Заблокировать", destructive: u.blocked != true) {
+                                Task { await toggle("block", !(u.blocked ?? false)) }
+                            }
+                        } label: { Label(u.blocked == true ? "Разблокировать" : "Заблокировать", systemImage: "hand.raised") }
+                        ShareLink(item: AppSettings.serverURL.absoluteString + "/#u/\(u.id)") { Label("Поделиться профилем", systemImage: "square.and.arrow.up") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+            }
+        }
+        .onChange(of: tab) { Task { await loadPosts() } }
+        .refreshable { await load() }
+        .task { await load() }
+    }
+
+    private func header(_ u: FUser) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(u.name ?? "").font(.title.bold())
+                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.lime) }
+                    }
+                    if let c = u.city { Label(c, systemImage: "mappin").font(.subheadline).foregroundStyle(Color.oxHint) }
+                }
+                Spacer()
+                Avatar(url: API.media(u.photo), name: u.name ?? "?", size: 76)
+            }
+            if let b = u.bio, !b.isEmpty { Text(b) }
+            HStack(spacing: 16) {
+                Text("\(u.followers ?? 0)").bold() + Text(" подписчиков").foregroundColor(Color.oxHint)
+                Text("\(u.following ?? 0)").bold() + Text(" подписок").foregroundColor(Color.oxHint)
+                if let s = u.streak, s > 0 { Text("🔥 \(s) нед.").foregroundStyle(Color.lime) }
+            }
+            .font(.subheadline)
+            if u.me == true {
+                HStack(spacing: 10) {
+                    Button { showCard = true } label: {
+                        Label("Моя визитка", systemImage: "qrcode").frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                    ShareLink(item: AppSettings.serverURL.absoluteString + "/#u/\(u.id)") {
+                        Label("Поделиться", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await toggle("follow", !(u.isFollowing ?? false)) }
+                    } label: {
+                        Text(u.isFollowing == true ? "Вы подписаны" : (u.followsMe == true ? "Подписаться в ответ" : "Подписаться"))
+                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(u.isFollowing == true ? Color.white.opacity(0.2) : Color.lime)
+                    Button {
+                        Task { await openChat(u) }
+                    } label: {
+                        Text("Написать").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                }
+                .controlSize(.large)
+            }
+        }
+        .padding(16)
+    }
+
+    private func load() async {
+        do {
+            u = try await API.call("/feed/users/\(userId)") as FUser
+            await loadPosts()
+        } catch { errorText = error.localizedDescription }
+    }
+
+    private func loadPosts() async {
+        if let r: FeedResponse = try? await API.call("/feed/users/\(userId)/posts", query: ["tab": tab]) { posts = r.items }
+    }
+
+    private func toggle(_ what: String, _ on: Bool) async {
+        do {
+            let _: OK = try await API.call("/feed/users/\(userId)/\(what)", method: on ? "POST" : "DELETE")
+            Haptic.success()
+            u = try? await API.call("/feed/users/\(userId)") as FUser
+        } catch { OxAlert.error(error.localizedDescription) }
+    }
+
+    private func openChat(_ u: FUser) async {
+        do {
+            let r: IdResponse = try await API.call("/chats/open", method: "POST", body: ["user_id": u.id])
+            chat = ChatRef(id: r.id, name: u.name ?? "Чат")
+        } catch { OxAlert.error(error.localizedDescription) }
+    }
+}
+
+// MARK: - Активность (лайки, ответы, подписки)
+
+struct ActivityView: View {
+    @State private var items: [ActivityItem] = []
+    @State private var loaded = false
+    @State private var route: FeedRoute?
+
+    var body: some View {
+        List {
+            ForEach(items) { a in
+                Button {
+                    if let p = a.post { route = .post(p.open ?? p.id) } else { route = .user(a.actor.id) }
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack(alignment: .bottomTrailing) {
+                            Avatar(url: API.media(a.actor.photo), name: a.actor.name ?? "?", size: 44)
+                            Image(systemName: icon(a.kind))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 20, height: 20)
+                                .background(color(a.kind), in: Circle())
+                                .overlay(Circle().stroke(Color.oxBg, lineWidth: 2))
+                                .offset(x: 4, y: 4)
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            (Text(a.actor.name ?? "").bold() + Text(" " + title(a.kind)).foregroundColor(Color.oxHint))
+                                .font(.subheadline)
+                            if let t = a.post?.text, !t.isEmpty {
+                                Text(t).font(.subheadline).lineLimit(2)
+                            }
+                            if let at = a.at { Text(FeedTime.ago(at)).font(.caption).foregroundStyle(Color.oxHint) }
+                        }
+                        Spacer()
+                        if a.unread == true { Circle().fill(Color.lime).frame(width: 8, height: 8) }
+                    }
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .background(Color.oxBg)
+        .overlay {
+            if loaded && items.isEmpty {
+                ContentUnavailableView("Пока тихо", systemImage: "heart", description: Text("Здесь будут лайки, ответы и новые подписчики"))
+            } else if !loaded { ProgressView() }
+        }
+        .navigationTitle("Активность")
+        .navigationDestination(item: $route) { FeedDestination(route: $0) }
+        .refreshable { await load() }
+        .task { await load() }
+    }
+
+    private func load() async {
+        if let r: ActivityResponse = try? await API.call("/feed/activity") { items = r.items }
+        loaded = true
+        let _: OK? = try? await API.call("/feed/activity/read", method: "POST")
+    }
+
+    private func icon(_ k: String) -> String {
+        switch k {
+        case "like": return "heart.fill"
+        case "reply": return "arrowshape.turn.up.left.fill"
+        case "follow": return "person.fill"
+        case "repost": return "arrow.2.squarepath"
+        case "quote": return "quote.opening"
+        case "vote": return "chart.bar.fill"
+        default: return "bell.fill"
+        }
+    }
+    private func color(_ k: String) -> Color {
+        switch k {
+        case "like": return Color(hex: 0xFF3B5C)
+        case "reply": return Color(hex: 0x3FD6C9)
+        case "follow": return Color(hex: 0x8E7CFF)
+        case "repost", "quote": return Color.lime
+        default: return Color(hex: 0xF0A030)
+        }
+    }
+    private func title(_ k: String) -> String {
+        switch k {
+        case "like": return "оценил(а) вашу ветку"
+        case "reply": return "ответил(а)"
+        case "follow": return "подписался(лась) на вас"
+        case "repost": return "сделал(а) репост"
+        case "quote": return "процитировал(а)"
+        case "vote": return "проголосовал(а) в опросе"
+        case "mention": return "упомянул(а) вас"
+        default: return ""
+        }
+    }
+}
+
+// MARK: - Поиск по ленте
+
+struct FeedSearchView: View {
+    @State private var q = ""
+    @State private var result: FSearch?
+    @State private var suggest: [FPerson] = []
+    @State private var route: FeedRoute?
+
+    var body: some View {
+        List {
+            if result == nil && !suggest.isEmpty {
+                Section("Кого почитать") {
+                    ForEach(suggest) { u in personRow(u) }
+                }
+            }
+            if let r = result {
+                if let us = r.users, !us.isEmpty {
+                    Section("Люди") { ForEach(us) { u in personRow(u) } }
+                }
+                if let ps = r.posts, !ps.isEmpty {
+                    Section("Ветки") {
+                        ForEach(ps) { p in
+                            ThreadPost(post: p, onOpen: { route = .post(p.id) }, onUser: { route = .user($0) })
+                                .listRowInsets(EdgeInsets())
+                        }
+                    }
+                }
+                if (r.users ?? []).isEmpty && (r.posts ?? []).isEmpty {
+                    ContentUnavailableView.search(text: q)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .background(Color.oxBg)
+        .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .always), prompt: "Люди и ветки")
+        .onSubmit(of: .search) { Task { await search() } }
+        .navigationTitle("Поиск")
+        .navigationDestination(item: $route) { FeedDestination(route: $0) }
+        .task {
+            if let r: FPeople = try? await API.call("/feed/suggest") { suggest = r.items }
+        }
+    }
+
+    private func personRow(_ u: FPerson) -> some View {
+        Button { route = .user(u.id) } label: {
+            HStack(spacing: 12) {
+                Avatar(url: API.media(u.photo), name: u.name ?? "?", size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(u.name ?? "").font(.subheadline.bold())
+                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.lime) }
+                    }
+                    Text(u.bio ?? u.city ?? "").font(.caption).foregroundStyle(Color.oxHint).lineLimit(1)
+                }
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+    }
+
+    private func search() async {
+        let t = q.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { result = nil; return }
+        result = try? await API.call("/feed/search", query: ["q": t]) as FSearch
+    }
+}
+
+// MARK: - ИИ-тренер
+
+struct AICoachView: View {
+    @State private var items: [AIMessage] = []
+    @State private var text = ""
+    @State private var sending = false
+    @State private var enabled = true
+    @State private var left: Int?
+
+    private let hints = ["Составь тренировку на сегодня", "Как накачать грудь дома?", "Сколько белка мне нужно?", "Разбери мою неделю"]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    VStack(spacing: 10) {
+                        Circle()
+                            .fill(AngularGradient(colors: [Color.lime, Color(hex: 0x3FD6C9), Color(hex: 0x58F670), Color.lime], center: .center))
+                            .frame(width: 84, height: 84)
+                            .blur(radius: 2)
+                            .shadow(color: Color.lime.opacity(0.5), radius: 20)
+                        Text("ИИ-тренер").font(.title2.bold())
+                        Text("Составит тренировку на сегодня и ответит на вопросы о питании и технике")
+                            .font(.subheadline).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+
+                    if items.isEmpty {
+                        FlowLayout(spacing: 8) {
+                            ForEach(hints, id: \.self) { h in
+                                Button { text = h; Task { await send() } } label: { Chip(text: h) }.buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    ForEach(items) { m in
+                        HStack {
+                            if m.role == "user" { Spacer(minLength: 50) }
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(m.content)
+                                if let plan = m.plan, m.role != "user" {
+                                    AIPlanCard(plan: plan)
+                                }
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .foregroundStyle(m.role == "user" ? Color.oxBg : Color.primary)
+                            .background(m.role == "user" ? Color.lime : Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            if m.role != "user" { Spacer(minLength: 30) }
+                        }
+                        .id(m.id)
+                    }
+                    if sending {
+                        HStack(spacing: 8) { ProgressView(); Text("Думаю…").foregroundStyle(Color.oxHint) }
+                    }
+                }
+                .padding(16)
+            }
+            .onChange(of: items.count) { if let id = items.last?.id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
+        }
+        .background(Color.oxBg)
+        .navigationTitle("ИИ-тренер")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    OxAlert.confirm(icon: "trash.fill", title: "Очистить переписку?", action: "Очистить", destructive: true) {
+                        Task {
+                            let _: OK? = try? await API.call("/ai/messages", method: "DELETE")
+                            items = []
+                        }
+                    }
+                } label: { Image(systemName: "trash") }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 4) {
+                if let left { Text("Осталось вопросов сегодня: \(left)").font(.caption2).foregroundStyle(Color.oxHint) }
+                HStack(spacing: 8) {
+                    TextField(enabled ? "Спросите тренера…" : "ИИ-тренер пока не подключён", text: $text, axis: .vertical)
+                        .lineLimit(1...5)
+                        .padding(.horizontal, 16).padding(.vertical, 11)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                    Button { Task { await send() } } label: {
+                        Image(systemName: "arrow.up").font(.headline).frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty || sending)
+                }
+            }
+            .padding(.horizontal, 12).padding(.bottom, 6)
+        }
+        .task {
+            if let r: AIMessages = try? await API.call("/ai/messages") {
+                items = r.items
+                enabled = r.enabled ?? true
+            }
+        }
+    }
+
+    private func send() async {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        if !enabled { OxAlert.soon("ИИ-тренер"); return }
+        text = ""
+        items.append(AIMessage(id: -Int(Date().timeIntervalSince1970), role: "user", content: t, plan: nil, createdAt: nil))
+        sending = true
+        defer { sending = false }
+        do {
+            let r: AIReply = try await API.call("/ai/chat", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
+            items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt))
+            left = r.left
+            Haptic.success()
+        } catch { OxAlert.error(error.localizedDescription) }
+    }
+}
+
+struct AIPlanCard: View {
+    let plan: JSONValue
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(plan["title"]?.string ?? "План тренировки", systemImage: "list.bullet.clipboard.fill")
+                .font(.headline).foregroundStyle(Color.lime)
+            ForEach(Array((plan["exercises"]?.array ?? []).enumerated()), id: \.offset) { _, e in
+                HStack {
+                    Text(e["name"]?.string ?? "").font(.subheadline)
+                    Spacer()
+                    Text([e["sets"]?.string.map { "\($0)×" }, e["reps"]?.string].compactMap { $0 }.joined())
+                        .font(.caption).foregroundStyle(Color.oxHint)
+                }
+            }
+            Button {
+                Task {
+                    do {
+                        let _: OK = try await API.call("/ai/apply", method: "POST", body: ["date": RU.dayFormatter.string(from: Date())])
+                        Haptic.success()
+                        OxAlert.show(icon: "checkmark.circle.fill", title: "Добавлено в дневник", message: "Тренировка появилась на сегодня")
+                    } catch { OxAlert.error(error.localizedDescription) }
+                }
+            } label: {
+                Label("В дневник на сегодня", systemImage: "calendar.badge.plus").font(.subheadline.bold())
+            }
+            .buttonStyle(.glass)
+        }
+        .padding(12)
+        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}

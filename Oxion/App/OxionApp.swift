@@ -128,7 +128,10 @@ struct RootView: View {
                 }
             }
         }
-        .task { await model.start() }
+        .task {
+            AlertWindow.attach()
+            await model.start()
+        }
     }
 }
 
@@ -140,6 +143,7 @@ enum AppTab: Hashable {
 struct MainTabView: View {
     @Environment(AppModel.self) private var model
     @State private var chats = ChatsStore()
+    @State private var showCard = false
 
     var body: some View {
         @Bindable var model = model
@@ -164,6 +168,12 @@ struct MainTabView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         .environment(chats)
         .onChange(of: model.selectedTab) { Haptic.tap(.soft) }
+        .onReceive(NotificationCenter.default.publisher(for: .oxionShake)) { _ in
+            guard AppSettings.shakeCard, !showCard else { return }
+            Haptic.success()
+            showCard = true
+        }
+        .sheet(isPresented: $showCard) { MyCardSheet() }
         .task {
             // счётчик непрочитанных на вкладке «Чаты»
             while !Task.isCancelled {

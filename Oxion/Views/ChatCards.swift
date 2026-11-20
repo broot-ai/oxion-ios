@@ -6,21 +6,35 @@ struct ChatCard: View {
     let kind: String
     let card: JSONValue?
     let mine: Bool
+    /// внутри сообщения с текстом — без собственного фона
+    var embedded = false
 
-    private var fg: Color { mine ? .black : .primary }
-    private var sub: Color { mine ? Color.black.opacity(0.6) : Color.oxHint }
+    private var onLime: Bool { mine && embedded }
+    private var fg: Color { onLime ? Color.oxBg : .primary }
+    private var sub: Color { onLime ? Color.oxBg.opacity(0.6) : Color.oxHint }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(Kinds.label[kind] ?? "Карточка")
-                .font(.caption.bold())
-                .foregroundStyle(sub)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(String((Kinds.label[kind] ?? "📎").prefix(2)))
+                    .font(.system(size: 16))
+                    .frame(width: 30, height: 30)
+                    .background((onLime ? Color.oxBg.opacity(0.12) : Color.lime.opacity(0.16)), in: Circle())
+                Text(String((Kinds.label[kind] ?? "Карточка").dropFirst(2)).trimmingCharacters(in: .whitespaces))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(sub)
+                    .textCase(.uppercase)
+            }
             content
         }
-        .padding(12)
-        .frame(minWidth: 200, alignment: .leading)
-        .background((mine ? Color.white.opacity(0.35) : Color.white.opacity(0.06)),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(embedded ? 4 : 14)
+        .frame(width: embedded ? nil : 250, alignment: .leading)
+        .background {
+            if !embedded {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(LinearGradient(colors: [Color.oxCard2, Color.oxCard], startPoint: .top, endPoint: .bottom))
+            }
+        }
     }
 
     @ViewBuilder
@@ -84,7 +98,7 @@ struct ChatCard: View {
                     if let b = c?["best"]?.string { metric(b, "лучший") }
                 }
                 if pts.count > 1 {
-                    Sparkline(values: pts, color: mine ? .black : Color.lime)
+                    Sparkline(values: pts, color: onLime ? Color.oxBg : Color.lime)
                         .frame(height: 44)
                 }
             }

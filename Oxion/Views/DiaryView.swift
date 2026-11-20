@@ -217,10 +217,7 @@ struct WorkoutRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: "dumbbell.fill")
-                .foregroundStyle(Color.lime)
-                .frame(width: 44, height: 44)
-                .background(Color.lime.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            MuscleThumb(key: w.groups?.first, size: 52)
             VStack(alignment: .leading, spacing: 3) {
                 Text((w.title?.isEmpty == false ? w.title : nil) ?? "Тренировка")
                     .font(.headline)
@@ -262,14 +259,52 @@ struct NewWorkoutSheet: View {
     @State private var hasTime = false
     @State private var time = Date()
     @State private var calories = ""
+    @State private var groups: [String] = []
     @State private var saving = false
     @State private var errorText: String?
+
+    private let pick: [(String, String, [String])] = [
+        ("shoulders", "Дельты", ["shoulders"]), ("chest", "Грудь", ["chest"]), ("arms", "Руки", ["biceps", "triceps"]),
+        ("abs", "Пресс", ["abs"]), ("back", "Спина", ["back"]), ("legs", "Ноги", ["legs"]),
+        ("glutes", "Ягодицы", ["glutes"]), ("cardio", "Кардио", ["cardio"])
+    ]
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Название (например, «Грудь и трицепс»)", text: $title)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(pick, id: \.0) { item in
+                                let on = item.2.contains { groups.contains($0) }
+                                Button {
+                                    if on { groups.removeAll { item.2.contains($0) } } else { groups += item.2.filter { !groups.contains($0) } }
+                                    Haptic.tap(.soft)
+                                } label: {
+                                    VStack(spacing: 6) {
+                                        MuscleFigure(key: item.0, height: 120)
+                                            .opacity(on ? 1 : 0.55)
+                                        Text(item.1).font(.subheadline.bold())
+                                    }
+                                    .frame(width: 92)
+                                    .padding(.vertical, 10)
+                                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .stroke(on ? Color.lime : Color.white.opacity(0.07), lineWidth: on ? 2 : 1))
+                                    .shadow(color: on ? Color.lime.opacity(0.35) : .clear, radius: 10)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+                    .listRowBackground(Color.clear)
+                } header: {
+                    Text("Что тренируете")
+                }
+                Section {
+                    TextField("Название (например, «День ног»)", text: $title)
                     DatePicker("Дата", selection: $date, displayedComponents: .date)
                     Toggle("Указать время", isOn: $hasTime)
                     if hasTime {
@@ -300,7 +335,7 @@ struct NewWorkoutSheet: View {
     private func save() async {
         saving = true
         defer { saving = false }
-        var body: [String: Any] = ["date": RU.dayFormatter.string(from: date), "title": title, "groups": [String]()]
+        var body: [String: Any] = ["date": RU.dayFormatter.string(from: date), "title": title, "groups": groups]
         if hasTime {
             let f = DateFormatter()
             f.dateFormat = "HH:mm"

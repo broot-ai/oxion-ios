@@ -9,8 +9,7 @@ struct ProfileView: View {
     @State private var confirmLogout = false
     @State private var notifText = ""
     @State private var editing = false
-    @State private var web: WebTarget?
-    @State private var deleteInfo = false
+    @State private var showCard = false
 
     var body: some View {
         if embedded {
@@ -55,50 +54,32 @@ struct ProfileView: View {
                     }
                 }
 
-                Section {
-                    Button { web = WebTarget(path: "") } label: {
-                        Label("Полная версия Oxion", systemImage: "square.grid.2x2.fill")
+                Section("Тренировки") {
+                    nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
+                    nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
+                    nav("Цели", "target", Color(hex: 0xFF5A4E)) { GoalsView() }
+                    nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }
+                    nav("Здоровье", "heart.text.square.fill", Color(hex: 0xFF3B5C)) { HealthView() }
+                    nav("ИИ-тренер", "sparkles", Color.lime) { AICoachView() }
+                }
+                Section("Покупки") {
+                    nav("Магазин спортпита", "bag.fill", Color(hex: 0xF0A030)) { ShopView() }
+                    nav("Мои заказы", "shippingbox.fill", Color(hex: 0x3FD6C9)) { OrdersView() }
+                }
+                if model.me?.mode == "trainer" || model.me?.hasTrainer == true {
+                    Section("Для тренера") {
+                        nav("Моя анкета тренера", "person.text.rectangle.fill", Color.lime) { TrainerEditView() }
+                        nav("Мои клиенты", "person.2.fill", Color(hex: 0x58F670)) { ClientsView() }
+                        nav("PRO-размещение", "crown.fill", Color(hex: 0xF0A030)) { SubscriptionView() }
                     }
-                    NavigationLink {
-                        ShopView()
-                    } label: {
-                        Label("Магазин спортпита", systemImage: "cart.fill")
-                    }
-                    Button { web = WebTarget(path: "/#morders") } label: {
-                        Label("Мои заказы", systemImage: "shippingbox.fill")
-                    }
-                    Button { web = WebTarget(path: "/#goals") } label: {
-                        Label("Цели", systemImage: "target")
-                    }
-                    Button { web = WebTarget(path: "/#records") } label: {
-                        Label("Рекорды", systemImage: "trophy.fill")
-                    }
-                    Button { web = WebTarget(path: "/#challenges") } label: {
-                        Label("Челленджи", systemImage: "flag.checkered")
-                    }
-                    Button { web = WebTarget(path: "/#mycoach") } label: {
-                        Label("Мой тренер", systemImage: "person.crop.circle.badge.checkmark")
-                    }
-                    if model.me?.mode == "trainer" || model.me?.hasTrainer == true {
-                        Button { web = WebTarget(path: "/#myprofile") } label: {
-                            Label("Моя анкета тренера", systemImage: "person.text.rectangle.fill")
-                        }
-                        Button { web = WebTarget(path: "/#cclients") } label: {
-                            Label("Мои клиенты", systemImage: "person.2.fill")
-                        }
-                    }
-                    Button { web = WebTarget(path: "/#work") } label: {
-                        Label("Работа в Oxion", systemImage: "briefcase.fill")
-                    }
+                }
+                Section("Ещё") {
+                    nav("Мой профиль в ленте", "person.crop.square.fill", Color(hex: 0x8E7CFF)) { UserProfileView(userId: model.me?.id ?? 0) }
+                    Button { showCard = true } label: { row("Моя визитка и QR", "qrcode", Color.lime) }
+                    nav("Работа в Oxion", "briefcase.fill", Color(hex: 0x3FD6C9)) { WorkView() }
                     if model.me?.admin == true {
-                        Button { web = WebTarget(path: "/#phome") } label: {
-                            Label("Панель платформы", systemImage: "shield.lefthalf.filled")
-                        }
+                        nav("Панель платформы", "shield.lefthalf.filled", Color(hex: 0xFF5A4E)) { PlatformView() }
                     }
-                } header: {
-                    Text("Ещё в Oxion")
-                } footer: {
-                    Text("Эти разделы пока открываются в веб-версии внутри приложения. Вход сохраняется автоматически.")
                 }
 
                 Section {
@@ -150,7 +131,10 @@ struct ProfileView: View {
                         Label("Выйти", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                     Button(role: .destructive) {
-                        deleteInfo = true
+                        OxAlert.show(icon: "person.crop.circle.badge.xmark", tint: Color(hex: 0xFF5A4E), title: "Удаление аккаунта",
+                                     message: "Аккаунт и все данные будут удалены. В тестовой версии удаление делает поддержка.",
+                                     buttons: [OxAlertButton(title: "Написать в поддержку", role: .destructive) { if let u = supportURL { openURL(u) } },
+                                               OxAlertButton(title: "Отмена", role: .cancel)])
                     } label: {
                         Label("Удалить аккаунт", systemImage: "person.crop.circle.badge.xmark")
                     }
@@ -162,26 +146,37 @@ struct ProfileView: View {
             }
             .navigationTitle("Профиль")
             .refreshable { await model.loadMe() }
-            .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmLogout, titleVisibility: .visible) {
-                Button("Выйти", role: .destructive) {
-                    Task { await model.logout() }
+            .onChange(of: confirmLogout) {
+                if confirmLogout {
+                    confirmLogout = false
+                    OxAlert.confirm(icon: "rectangle.portrait.and.arrow.right", title: "Выйти из аккаунта?", message: "Войти снова можно через Telegram-бота",
+                                    action: "Выйти", destructive: true) { Task { await model.logout() } }
                 }
-            }
-            .alert("Удаление аккаунта", isPresented: $deleteInfo) {
-                if let url = supportURL {
-                    Button("Написать в поддержку") { openURL(url) }
-                }
-                Button("Закрыть", role: .cancel) {}
-            } message: {
-                Text("Напишите в поддержку — аккаунт и все данные удалят. Скоро это можно будет сделать прямо здесь одной кнопкой.")
             }
             .sheet(isPresented: $editing) {
                 EditProfileSheet()
             }
-            .fullScreenCover(item: $web) { t in
-                WebAppView(path: t.path)
-            }
+            .sheet(isPresented: $showCard) { MyCardSheet() }
             .task { await refreshNotifText() }
+    }
+
+    private func row(_ title: String, _ icon: String, _ tint: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(width: 30, height: 30)
+                .background(tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(title).foregroundStyle(.primary)
+        }
+    }
+
+    private func nav<D: View>(_ title: String, _ icon: String, _ tint: Color, @ViewBuilder dest: @escaping () -> D) -> some View {
+        NavigationLink {
+            dest()
+        } label: {
+            row(title, icon, tint)
+        }
     }
 
     private var supportURL: URL? {
@@ -213,10 +208,6 @@ struct ProfileView: View {
     }
 }
 
-struct WebTarget: Identifiable {
-    let id = UUID()
-    let path: String
-}
 
 struct EditProfileSheet: View {
     @Environment(AppModel.self) private var model

@@ -155,7 +155,7 @@ struct ChatView: View {
     @State private var photoPick: PhotosPickerItem?
     @State private var loaded = false
     @State private var attaching = false
-    @State private var callWeb: WebTarget?
+    @State private var call: CallRequest?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -227,30 +227,17 @@ struct ChatView: View {
                     }
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        callWeb = WebTarget(path: "/#chat/\(chatId)")
-                    } label: {
-                        Label("Аудиозвонок", systemImage: "phone.fill")
-                    }
-                    Button {
-                        callWeb = WebTarget(path: "/#chat/\(chatId)")
-                    } label: {
-                        Label("Видеозвонок", systemImage: "video.fill")
-                    }
-                    Button {
-                        callWeb = WebTarget(path: "/#chat/\(chatId)")
-                    } label: {
-                        Label("Открыть чат в полной версии", systemImage: "square.grid.2x2")
-                    }
-                } label: {
-                    Image(systemName: "phone.fill")
-                }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: false)
+                } label: { Image(systemName: "phone.fill") }
+                Button {
+                    call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: true)
+                } label: { Image(systemName: "video.fill") }
             }
         }
         .toolbar(.hidden, for: .tabBar)
-        .fullScreenCover(item: $callWeb) { t in WebAppView(path: t.path) }
+        .fullScreenCover(item: $call) { CallScreen(req: $0) }
         .sheet(isPresented: $attaching) {
             AttachSheet(chatId: chatId) { m in
                 if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
@@ -431,54 +418,21 @@ struct Bubble: View {
     let m: Message
     var read: Bool
 
-    var body: some View {
-        HStack {
-            if m.mine { Spacer(minLength: 50) }
-            VStack(alignment: m.mine ? .trailing : .leading, spacing: 4) {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let r = m.reply {
-                        HStack(spacing: 6) {
-                            Rectangle().fill(m.mine ? Color.black.opacity(0.5) : Color.lime).frame(width: 2)
-                            Text(r.text ?? "")
-                                .font(.caption)
-                                .lineLimit(2)
-                                .opacity(0.8)
-                        }
-                    }
-                    if m.deleted == true {
-                        Text("Сообщение удалено")
-                            .italic()
-                            .opacity(0.6)
-                    } else {
-                        if let p = API.media(m.photo) {
-                            RemoteImage(url: p)
-                                .frame(width: 220, height: 260)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        if let k = m.kind {
-                            ChatCard(kind: k, card: m.card, mine: m.mine)
-                        }
-                        if let t = m.text, !t.isEmpty {
-                            Text(t)
-                        }
-                    }
-                    HStack(spacing: 3) {
-                        if m.edited == true { Text("изм.") }
-                        Text(ChatTime.time(m.at))
-                        if m.mine {
-                            Image(systemName: read ? "checkmark.circle.fill" : "checkmark")
-                        }
-                    }
-                    .font(.caption2)
-                    .opacity(0.6)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .foregroundStyle(m.mine ? Color.black : Color.primary)
-                .background(m.mine ? Color.lime : Color.white.opacity(0.09),
-                            in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true }
 
+    var body: some View {
+        HStack(alignment: .bottom) {
+            if m.mine { Spacer(minLength: 56) }
+            VStack(alignment: m.mine ? .trailing : .leading, spacing: 4) {
+                if isCardOnly, let k = m.kind {
+                    // карточка без лишней «обёртки» сообщения
+                    VStack(alignment: .trailing, spacing: 4) {
+                        ChatCard(kind: k, card: m.card, mine: m.mine)
+                        meta.padding(.trailing, 6)
+                    }
+                } else {
+                    bubble
+                }
                 if let rs = m.reactions, !rs.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(rs, id: \.self) { r in
@@ -486,13 +440,152 @@ struct Bubble: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .glassEffect(r.mine == true ? .regular.tint(Color.lime.opacity(0.4)) : .regular, in: .capsule)
+                                .background(r.mine == true ? Color.lime.opacity(0.3) : Color.white.opacity(0.1), in: Capsule())
                         }
                     }
                 }
             }
-            .frame(maxWidth: 300, alignment: m.mine ? .trailing : .leading)
-            if !m.mine { Spacer(minLength: 50) }
+            if !m.mine { Spacer(minLength: 56) }
+        }
+    }
+
+    private var bubble: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let r = m.reply {
+                HStack(spacing: 6) {
+                    Capsule().fill(m.mine ? Color.black.opacity(0.45) : Color.lime).frame(width: 3)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(r.mine == true ? "Вы" : "Ответ").font(.caption.bold())
+                        Text(r.text ?? "").font(.caption).lineLimit(2)
+                    }
+                    .opacity(0.85)
+                }
+                .padding(.vertical, 2)
+            }
+            if m.deleted == true {
+                Text("Сообщение удалено").italic().opacity(0.6)
+            } else {
+                if let p = API.media(m.photo) {
+                    RemoteImage(url: p)
+                        .frame(width: 230, height: 270)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.horizontal, -8)
+                }
+                if let k = m.kind {
+                    ChatCard(kind: k, card: m.card, mine: m.mine, embedded: true)
+                        .padding(.horizontal, -6)
+                }
+                if let t = m.text, !t.isEmpty {
+                    Text(t).font(.system(size: 16))
+                }
+            }
+            meta.frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .foregroundStyle(m.mine ? Color.oxBg : Color.primary)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: m.mine ? 20 : 6,
+                                   bottomTrailingRadius: m.mine ? 6 : 20, topTrailingRadius: 20, style: .continuous)
+                .fill(m.mine ? Color.lime : Color.white.opacity(0.08))
+        )
+        .overlay(
+            UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: m.mine ? 20 : 6,
+                                   bottomTrailingRadius: m.mine ? 6 : 20, topTrailingRadius: 20, style: .continuous)
+                .stroke(m.mine ? Color.clear : Color.white.opacity(0.07))
+        )
+        .frame(maxWidth: 300, alignment: m.mine ? .trailing : .leading)
+    }
+
+    private var meta: some View {
+        HStack(spacing: 3) {
+            if m.edited == true { Text("изм.") }
+            Text(ChatTime.time(m.at))
+            if m.mine {
+                Image(systemName: read ? "checkmark.circle.fill" : "checkmark")
+            }
+        }
+        .font(.caption2)
+        .opacity(0.55)
+    }
+}
+
+// MARK: - Экран звонка (родной вид; соединение появится вместе с аккаунтом Apple и пушами)
+
+struct CallRequest: Identifiable {
+    let id = UUID()
+    let name: String
+    let photo: String?
+    let video: Bool
+}
+
+struct CallScreen: View {
+    let req: CallRequest
+    @Environment(\.dismiss) private var dismiss
+    @State private var muted = false
+    @State private var speaker = false
+    @State private var camera = true
+    @State private var status = "Вызов…"
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(hex: 0x1B2A10), Color.oxBg, Color.black], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+            VStack(spacing: 18) {
+                Spacer().frame(height: 40)
+                ZStack {
+                    Circle().stroke(Color.lime.opacity(0.25), lineWidth: 2)
+                        .frame(width: 170, height: 170)
+                        .scaleEffect(pulse ? 1.25 : 1)
+                        .opacity(pulse ? 0 : 1)
+                    Avatar(url: API.media(req.photo), name: req.name, size: 140)
+                }
+                Text(req.name).font(.title.bold())
+                Text(req.video ? "Видеозвонок · \(status)" : status)
+                    .foregroundStyle(Color.oxHint)
+                Spacer()
+                HStack(spacing: 22) {
+                    callButton(muted ? "mic.slash.fill" : "mic.fill", "Звук", on: muted) { muted.toggle() }
+                    if req.video {
+                        callButton(camera ? "video.fill" : "video.slash.fill", "Камера", on: !camera) { camera.toggle() }
+                    }
+                    callButton("speaker.wave.3.fill", "Динамик", on: speaker) { speaker.toggle() }
+                }
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "phone.down.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                        .frame(width: 76, height: 76)
+                        .background(Color(hex: 0xFF3B30), in: Circle())
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 40)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulse = true }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(2.5))
+            status = "Нет соединения"
+            OxAlert.show(icon: "phone.badge.waveform.fill", title: "Звонки в тестовой версии",
+                         message: "Экран звонка уже готов. Само соединение заработает после подключения аккаунта разработчика Apple — тогда звонки будут приходить даже при закрытом приложении.")
+        }
+    }
+
+    private func callButton(_ icon: String, _ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 6) {
+            Button(action: { action(); Haptic.tap() }) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(on ? Color.black : Color.white)
+                    .frame(width: 66, height: 66)
+            }
+            .glassEffect(on ? .regular.tint(Color.white.opacity(0.9)).interactive() : .regular.interactive(), in: .circle)
+            Text(title).font(.caption).foregroundStyle(Color.oxHint)
         }
     }
 }

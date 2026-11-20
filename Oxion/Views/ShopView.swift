@@ -12,7 +12,7 @@ struct ShopView: View {
     @State private var openProduct: Int?
     @State private var showCart = false
     @State private var cartCount = 0
-    @State private var web: WebTarget?
+    @State private var showOrders = false
 
     private let grid = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -54,7 +54,7 @@ struct ShopView: View {
                     } else {
                         if (h.activeOrders ?? 0) > 0 {
                             Button {
-                                web = WebTarget(path: "/#morders")
+                                showOrders = true
                             } label: {
                                 HStack {
                                     Image(systemName: "shippingbox.fill")
@@ -145,11 +145,10 @@ struct ShopView: View {
         }
         .sheet(isPresented: $showCart) {
             CartView { n in cartCount = n } onCheckout: {
-                showCart = false
-                web = WebTarget(path: "/#mcart")
+                OxAlert.paymentsOff()
             }
         }
-        .fullScreenCover(item: $web) { t in WebAppView(path: t.path) }
+        .navigationDestination(isPresented: $showOrders) { OrdersView() }
         .refreshable { await load() }
         .task { if home == nil { await load() } }
     }

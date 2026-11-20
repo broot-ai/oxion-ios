@@ -10,6 +10,7 @@ enum AppSettings {
             "haptics": true,
             "autoload_photos": true,
             "start_feed": "foryou",
+            "shake_card": true,
             "server_url": defaultServer
         ])
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -28,6 +29,7 @@ enum AppSettings {
 
     static var haptics: Bool { UserDefaults.standard.bool(forKey: "haptics") }
     static var autoloadPhotos: Bool { UserDefaults.standard.bool(forKey: "autoload_photos") }
+    static var shakeCard: Bool { UserDefaults.standard.bool(forKey: "shake_card") }
     static var startFeed: String { UserDefaults.standard.string(forKey: "start_feed") ?? "foryou" }
     static var version: String { UserDefaults.standard.string(forKey: "app_version") ?? "1.0" }
 }

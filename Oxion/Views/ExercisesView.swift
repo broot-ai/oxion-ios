@@ -26,18 +26,21 @@ struct ExercisesView: View {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            Button {
-                                muscle = nil
-                                Haptic.tap(.soft)
-                            } label: {
-                                Chip(text: "Все", selected: muscle == nil)
-                            }
                             ForEach(muscleKeys, id: \.self) { key in
                                 Button {
                                     muscle = (muscle == key) ? nil : key
                                     Haptic.tap(.soft)
                                 } label: {
-                                    Chip(text: model.muscleName(key), selected: muscle == key)
+                                    VStack(spacing: 6) {
+                                        MuscleFigure(key: key, height: 110)
+                                            .opacity(muscle == nil || muscle == key ? 1 : 0.5)
+                                        Text(model.muscleName(key)).font(.caption.bold())
+                                    }
+                                    .frame(width: 84)
+                                    .padding(.vertical, 10)
+                                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .stroke(muscle == key ? Color.lime : Color.white.opacity(0.07), lineWidth: muscle == key ? 2 : 1))
                                 }
                             }
                         }
@@ -62,9 +65,13 @@ struct ExercisesView: View {
                     ForEach(filtered) { e in
                         NavigationLink(value: e) {
                             HStack(spacing: 12) {
-                                RemoteImage(url: API.media(e.image), icon: "dumbbell")
-                                    .frame(width: 52, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                if e.image != nil {
+                                    RemoteImage(url: API.media(e.image), icon: "dumbbell")
+                                        .frame(width: 52, height: 52)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                } else {
+                                    MuscleThumb(key: e.muscle, size: 52)
+                                }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(e.name)
                                         .font(.body.weight(.medium))
@@ -127,6 +134,11 @@ struct ExerciseDetailView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 260)
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                } else {
+                    MuscleFigure(key: e.muscle, height: 240)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
                 }
                 HStack(spacing: 10) {
                     StatPill(icon: "figure.strengthtraining.traditional", text: model.muscleName(e.muscle))

@@ -8,7 +8,7 @@ struct HomeView: View {
     @State private var featured: Trainer?
     @State private var todayWorkouts: [Workout] = []
     @State private var search = ""
-    @State private var web: WebTarget?
+    @State private var push: HomeRoute?
     @State private var openTrainer: Int?
     @State private var openWorkout: Int?
     @State private var showProfile = false
@@ -48,7 +48,15 @@ struct HomeView: View {
                     Task { await load(); openWorkout = id }
                 }
             }
-            .fullScreenCover(item: $web) { t in WebAppView(path: t.path) }
+            .navigationDestination(item: $push) { r in
+                switch r {
+                case .pro: SubscriptionView()
+                case .coach: AICoachView()
+                case .health: HealthView()
+                case .challenges: ChallengesView()
+                case .records: RecordsView()
+                }
+            }
             .refreshable { await load() }
             .task { await load() }
         }
@@ -77,7 +85,7 @@ struct HomeView: View {
             Spacer()
             if model.me?.mode == "trainer" {
                 Button {
-                    web = WebTarget(path: "/#subscription")
+                    push = .pro
                 } label: {
                     Label("PRO", systemImage: "crown.fill")
                         .font(.subheadline.bold())
@@ -280,7 +288,7 @@ struct HomeView: View {
 
     private var coachCard: some View {
         Button {
-            web = WebTarget(path: "/#coach")
+            push = .coach
         } label: {
             HStack(spacing: 14) {
                 Circle()
@@ -316,11 +324,19 @@ struct HomeView: View {
                 }
             }
             HStack(spacing: 12) {
+                QuickCard(icon: "flag.checkered", tint: Color(hex: 0x8E7CFF), title: "Челленджи", sub: "Соревнования с призами") {
+                    push = .challenges
+                }
+                QuickCard(icon: "trophy.fill", tint: Color(hex: 0xFFD60A), title: "Рекорды", sub: "Лучшие веса и награды") {
+                    push = .records
+                }
+            }
+            HStack(spacing: 12) {
                 QuickCard(icon: "bag.fill", tint: Color(hex: 0xF0A030), title: "Магазин", sub: "Спортпит с доставкой") {
                     showShop = true
                 }
                 QuickCard(icon: "heart.text.square.fill", tint: Color(hex: 0xFF5A4E), title: "Здоровье", sub: "Шаги, сон, пульс") {
-                    web = WebTarget(path: "/#health")
+                    push = .health
                 }
             }
         }
@@ -375,6 +391,8 @@ struct HomeView: View {
         }
     }
 }
+
+enum HomeRoute: Hashable { case pro, coach, health, challenges, records }
 
 // MARK: - Элементы главной
 

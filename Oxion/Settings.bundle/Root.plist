@@ -16,6 +16,12 @@
 		</dict>
 		<dict>
 			<key>Type</key><string>PSToggleSwitchSpecifier</string>
+			<key>Title</key><string>Встряхнуть — визитка с QR</string>
+			<key>Key</key><string>shake_card</string>
+			<key>DefaultValue</key><true/>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSToggleSwitchSpecifier</string>
 			<key>Title</key><string>Автозагрузка фото в ленте</string>
 			<key>Key</key><string>autoload_photos</string>
 			<key>DefaultValue</key><true/>

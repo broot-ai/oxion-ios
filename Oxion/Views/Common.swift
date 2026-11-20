@@ -15,12 +15,10 @@ struct SplashView: View {
 struct FlameMark: View {
     var size: CGFloat = 80
     var body: some View {
-        Image(systemName: "flame.fill")
-            .font(.system(size: size))
-            .foregroundStyle(
-                LinearGradient(colors: [Color.lime, Color(red: 0.25, green: 0.7, blue: 0.1)],
-                               startPoint: .top, endPoint: .bottom)
-            )
+        Image("ox-logo")
+            .resizable()
+            .scaledToFit()
+            .frame(height: size * 1.3)
             .shadow(color: Color.lime.opacity(0.55), radius: size * 0.3)
     }
 }
