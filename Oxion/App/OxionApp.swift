@@ -42,7 +42,10 @@ struct OxionApp: App {
                 }
                 .onChange(of: scenePhase) {
                     // свернули приложение — обновляем виджет свежими данными
-                    if scenePhase == .background, model.me != nil { Task { await WidgetSync.refresh() } }
+                    if scenePhase == .background, model.me != nil {
+                        Task { await WidgetSync.refresh() }
+                        if HealthKitManager.shared.enabled { Task { await HealthKitManager.shared.refreshAndSync() } }
+                    }
                 }
         }
     }

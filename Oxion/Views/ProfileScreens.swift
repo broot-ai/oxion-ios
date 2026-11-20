@@ -778,78 +778,199 @@ struct ClientsView: View {
     }
 }
 
-// MARK: - Здоровье
+// MARK: - Здоровье (Apple Health напрямую)
 
 struct HealthView: View {
-    @State private var data: HealthResponse?
-    @State private var errorText: String?
+    @State private var hk = HealthKitManager.shared
+    @State private var server: HealthResponse?
+    @State private var asking = false
+    @State private var metric = 0
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if let d = data {
-                    let today = d.items.last
-                    if d.connected != true {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                IconBubble(icon: "heart.text.square.fill", tint: Color(hex: 0xFF5A4E), size: 48)
-                                Text("Подключите «Здоровье» iPhone").font(.headline)
-                            }
-                            Text("Шаги, калории, сон и пульс будут видны здесь и в дневнике. В тестовой версии подключение настраивается через команду «Здоровье • Oxion».")
-                                .font(.subheadline).foregroundStyle(Color.oxHint)
-                            Button {
-                                OxAlert.soon("Прямое подключение «Здоровья»")
-                            } label: {
-                                Text("Подключить").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
-                            }
-                            .buttonStyle(.glassProminent)
-                            .controlSize(.large)
-                        }
-                        .padding(16)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                        healthTile("figure.walk", "Шаги", today?.steps.map(String.init) ?? "—", Color.lime)
-                        healthTile("flame.fill", "Ккал", today?.kcal.map { String(Int($0)) } ?? "—", Color(hex: 0xF0A030))
-                        healthTile("bed.double.fill", "Сон", today?.sleepMin.map { "\($0 / 60) ч \($0 % 60) м" } ?? "—", Color(hex: 0x8E7CFF))
-                        healthTile("heart.fill", "Пульс покоя", today?.restHr.map { "\($0)" } ?? "—", Color(hex: 0xFF5A4E))
-                    }
-                    let steps = d.items.compactMap { $0.steps.map(Double.init) }
-                    if steps.count > 1 {
-                        SectionCard(title: "Шаги за неделю") {
-                            Sparkline(values: steps).frame(height: 80)
-                                .padding(16)
-                                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        }
-                    }
+                if !hk.enabled {
+                    connectCard
                 } else {
-                    LoadingOrError(error: errorText) { Task { await load() } }
+                    let today = hk.days.last
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                        tile("figure.walk", "Шаги сегодня", today?.steps.map { String(Int($0)) } ?? "—", Color.lime)
+                        tile("flame.fill", "Активные ккал", today?.kcal.map { String(Int($0)) } ?? "—", Color(hex: 0xF0A030))
+                        tile("bed.double.fill", "Сон", sleepText(today?.sleepMin), Color(hex: 0x8E7CFF))
+                        tile("heart.fill", "Пульс покоя", today?.restHr.map { "\(Int($0)) уд/мин" } ?? "—", Color(hex: 0xFF5A4E))
+                        tile("figure.run", "Дистанция", today?.distanceKm.map { String(format: "%.1f км", $0) } ?? "—", Color(hex: 0x3FD6C9))
+                        tile("scalemass.fill", "Вес", hk.weight.map { String(format: "%.1f кг", $0) } ?? "—", Color(hex: 0x58F670))
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("", selection: $metric) {
+                            Text("Шаги").tag(0)
+                            Text("Ккал").tag(1)
+                            Text("Сон").tag(2)
+                        }
+                        .pickerStyle(.segmented)
+                        WeekBars(values: hk.days.map { d in
+                            metric == 0 ? (d.steps ?? 0) : metric == 1 ? (d.kcal ?? 0) : (d.sleepMin ?? 0) / 60
+                        }, dates: hk.days.map(\.date), color: metric == 0 ? Color.lime : metric == 1 ? Color(hex: 0xF0A030) : Color(hex: 0x8E7CFF),
+                           unit: metric == 2 ? "ч" : "")
+                        .frame(height: 170)
+                    }
+                    .padding(16)
+                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                    HStack {
+                        Image(systemName: "checkmark.icloud.fill").foregroundStyle(Color.lime)
+                        Text(hk.lastSync.map { "Отправлено в Oxion \($0.formatted(date: .omitted, time: .shortened)) — тренер видит ваши данные" }
+                             ?? "Данные отправляются в Oxion автоматически")
+                            .font(.caption)
+                            .foregroundStyle(Color.oxHint)
+                    }
+                    Button {
+                        Task {
+                            await hk.refreshAndSync()
+                            Haptic.success()
+                        }
+                    } label: {
+                        HStack {
+                            if hk.loading { ProgressView() }
+                            Text("Обновить сейчас")
+                        }
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.large)
+                    Text("Доступ можно изменить: Настройки iPhone → Здоровье → Доступ к данным → Oxion.")
+                        .font(.caption)
+                        .foregroundStyle(Color.oxHint)
                 }
             }
             .padding(16)
         }
         .background(Color.oxBg)
         .navigationTitle("Здоровье")
-        .task { await load() }
+        .refreshable { await hk.refreshAndSync() }
+        .task {
+            if hk.enabled { await hk.refreshAndSync() }
+        }
     }
 
-    private func healthTile(_ icon: String, _ title: String, _ value: String, _ tint: Color) -> some View {
+    private var connectCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .background(LinearGradient(colors: [Color(hex: 0xFF5A7A), Color(hex: 0xFF2D55)], startPoint: .top, endPoint: .bottom),
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Подключите «Здоровье»").font(.title3.bold())
+                    Text("Apple Health").font(.subheadline).foregroundStyle(Color.oxHint)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Шаги, активные калории и дистанция", systemImage: "figure.walk")
+                Label("Сон и пульс покоя", systemImage: "bed.double.fill")
+                Label("Вес — сразу в дневник", systemImage: "scalemass.fill")
+                Label("Тренер видит ваш прогресс", systemImage: "person.2.fill")
+            }
+            .font(.subheadline)
+            .labelStyle(TintedIconLabel(tint: Color.lime))
+            Text("Oxion только читает данные и ничего не меняет в «Здоровье».")
+                .font(.caption)
+                .foregroundStyle(Color.oxHint)
+            Button {
+                Task { await connect() }
+            } label: {
+                HStack {
+                    if asking { ProgressView() }
+                    Text("Разрешить доступ")
+                }
+                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .disabled(asking || !hk.available)
+            if !hk.available {
+                Text("«Здоровье» недоступно на этом устройстве").font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .padding(18)
+        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private func connect() async {
+        asking = true
+        defer { asking = false }
+        do {
+            try await hk.requestAccess()
+            await hk.refreshAndSync()
+            Haptic.success()
+            if hk.days.allSatisfy({ $0.steps == nil && $0.kcal == nil }) {
+                OxAlert.show(icon: "heart.text.square.fill", tint: Color(hex: 0xFF5A4E), title: "Данных пока нет",
+                             message: "Если вы не разрешили доступ, включите его: Настройки → Здоровье → Доступ к данным → Oxion.")
+            }
+        } catch {
+            OxAlert.show(icon: "heart.slash.fill", tint: Color(hex: 0xFF5A4E), title: "Не удалось подключить «Здоровье»",
+                         message: error.localizedDescription + "\n\nВ тестовой версии доступ может зависеть от того, как приложение установлено через Sideloadly.")
+        }
+    }
+
+    private func sleepText(_ m: Double?) -> String {
+        guard let m, m > 0 else { return "—" }
+        return "\(Int(m) / 60) ч \(Int(m) % 60) м"
+    }
+
+    private func tile(_ icon: String, _ title: String, _ value: String, _ tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             IconBubble(icon: icon, tint: tint, size: 38)
-            Text(value).font(.title2.bold())
+            Text(value).font(.title3.bold()).lineLimit(1).minimumScaleFactor(0.6)
             Text(title).font(.caption).foregroundStyle(Color.oxHint)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
+}
 
-    private func load() async {
-        let f = RU.dayFormatter
-        let to = Date()
-        let from = Calendar.current.date(byAdding: .day, value: -6, to: to) ?? to
-        do { data = try await API.call("/health", query: ["from": f.string(from: from), "to": f.string(from: to)]) as HealthResponse }
-        catch { errorText = error.localizedDescription }
+/// Столбики за неделю
+struct WeekBars: View {
+    let values: [Double]
+    let dates: [Date]
+    let color: Color
+    var unit = ""
+
+    var body: some View {
+        let mx = max(values.max() ?? 1, 1)
+        HStack(alignment: .bottom, spacing: 8) {
+            ForEach(Array(values.enumerated()), id: \.offset) { i, v in
+                VStack(spacing: 6) {
+                    Text(v >= 1000 ? String(format: "%.1fк", v / 1000) : (unit == "ч" ? String(format: "%.1f", v) : String(Int(v))))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.oxHint)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    GeometryReader { g in
+                        VStack {
+                            Spacer(minLength: 0)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(i == values.count - 1 ? color : color.opacity(0.45))
+                                .frame(height: max(4, g.size.height * v / mx))
+                        }
+                    }
+                    Text(i < dates.count ? dayName(dates[i]) : "")
+                        .font(.caption2)
+                        .foregroundStyle(Color.oxHint)
+                }
+            }
+        }
+    }
+
+    private func dayName(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "EE"
+        return f.string(from: d).capitalized
     }
 }
 
