@@ -14,6 +14,11 @@ final class WorkoutEngine {
     private(set) var state: WorkoutState?
     var lastError: String?
 
+    /// События тренировки для голосового тренера, статистики и т.п. (подписывается приложение; в виджете пусто)
+    enum Event { case started, setDone, restSkipped, paused, resumed, finished }
+    static var onEvent: (@MainActor (Event, WorkoutState) -> Void)?
+    private func emit(_ e: Event) { if let s = state { Self.onEvent?(e, s) } }
+
     private let key = "oxion_active_workout"
     private let restNotificationId = "oxion-rest-end"
 
@@ -56,6 +61,7 @@ final class WorkoutEngine {
         persist()
         requestNotificationPermission()
         Task { await startActivity() }
+        emit(.started)
     }
 
     /// «Завершить подход»: сохраняем подход, запускаем отдых или переходим к следующему упражнению
@@ -91,6 +97,7 @@ final class WorkoutEngine {
         state = s
         persist()
         afterChange()
+        emit(.setDone)
     }
 
     /// «Следующий подход» / «Пропустить отдых»
@@ -102,6 +109,7 @@ final class WorkoutEngine {
         persist()
         cancelRestNotification()
         afterChange()
+        emit(.restSkipped)
     }
 
     func skipRest() { nextSet() }
@@ -116,6 +124,7 @@ final class WorkoutEngine {
         persist()
         cancelRestNotification()
         afterChange()
+        emit(.paused)
     }
 
     func resume() {
@@ -136,6 +145,7 @@ final class WorkoutEngine {
         state = s
         persist()
         afterChange()
+        emit(.resumed)
     }
 
     /// «Завершить тренировку»
@@ -149,6 +159,7 @@ final class WorkoutEngine {
         persist()
         cancelRestNotification()
         afterChange()
+        emit(.finished)
     }
 
     /// Убрать завершённую тренировку (после экрана итогов)

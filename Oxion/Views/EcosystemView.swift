@@ -19,6 +19,12 @@ struct EcosystemView: View {
                 .listRowBackground(Color.clear)
             }
 
+            Section("OXION OS 2.0") {
+                nav("3D-модель мышц", "Вращение, выбор мышцы, упражнения и тренеры", "figure.arms.open", .works) { BodyExplorerView() }
+                nav("Прогресс тела", "Фото, замеры, вес, Progress Replay", "chart.line.uptrend.xyaxis", .works) { ProgressHubView() }
+                nav("Голосовой тренер", "Подсказки, счёт повторов, AirPods, команды", "person.wave.2.fill", .works) { AudioCoachSettingsView() }
+            }
+
             Section("Тренировка") {
                 item("Dynamic Island и экран блокировки", "Запустите тренировку в дневнике", "platter.filled.top.iphone", .works)
                 nav("OXION Vision — подсчёт повторов", "Камера, скелет, приседания, отжимания", "camera.viewfinder", .works) { VisionCoachView() }

@@ -20,6 +20,7 @@ struct OxionApp: App {
 
     init() {
         AppSettings.register()
+        AudioCoach.shared.attach()
     }
 
     var body: some Scene {

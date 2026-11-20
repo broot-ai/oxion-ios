@@ -146,6 +146,23 @@ struct ExerciseDetailView: View {
                         StatPill(icon: "slider.horizontal.3", text: t)
                     }
                 }
+                if let m = e.muscle, BodyMuscles.keys.contains(m) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Работают мышцы").font(.headline)
+                            Spacer()
+                            NavigationLink { BodyExplorerView(initial: m) } label: {
+                                Label("3D", systemImage: "rotate.3d").font(.subheadline.bold())
+                            }
+                        }
+                        BodySceneView(selected: m, heat: nil, back: BodyMuscles.backSide.contains(m), zoom: false)
+                            .frame(height: 300)
+                            .background(RadialGradient(colors: [Color.lime.opacity(0.15), Color.oxCard], center: .center, startRadius: 5, endRadius: 220),
+                                        in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        Text("Вращайте пальцем · нажмите «3D», чтобы открыть подбор упражнений и тренеров")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 if let tech = e.technique, !tech.isEmpty {
                     Text("Техника")
                         .font(.headline)

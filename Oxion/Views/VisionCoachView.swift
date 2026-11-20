@@ -308,6 +308,17 @@ struct VisionCoachView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { pc.rule = rule; pc.start(front: front) }
+        .onChange(of: pc.reps) { _, n in
+            guard n > 0 else { return }
+            let target: Int? = engine.isActive && engine.state?.phase == .exercising ? engine.state?.currentItem?.reps : nil
+            AudioCoach.shared.repCounted(n, target: target)
+            // камера досчитала до цели → записываем подход сами (если включено)
+            if let target, n >= target, AudioCoach.shared.autoRecord {
+                engine.completeSet(reps: n)
+                OxHaptics.play(.setDone)
+                pc.reset()
+            }
+        }
         .onDisappear { pc.stop() }
         .statusBarHidden()
     }
