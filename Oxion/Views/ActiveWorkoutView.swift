@@ -259,10 +259,11 @@ struct ActiveWorkoutView: View {
             }
 
             if !engine.liveActivitiesEnabled {
-                Text("Live Activities выключены — включите: Настройки → Oxion → Live Activities")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .multilineTextAlignment(.center)
+                Button { PermPrompt.show(.liveActivities, denied: true) } label: {
+                    Label("Live Activities выключены — как включить", systemImage: "platter.filled.top.iphone")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.orange)
+                }
             }
         }
         .padding(.horizontal, 18)

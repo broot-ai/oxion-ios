@@ -301,9 +301,15 @@ struct VisionCoachView: View {
             }
             .padding(16)
             if pc.denied {
-                ContentUnavailableView("Нет доступа к камере", systemImage: "camera.fill",
-                                       description: Text("Разрешите: Настройки → Oxion → Камера"))
-                    .background(Color.black)
+                ContentUnavailableView {
+                    Label("Нет доступа к камере", systemImage: "camera.fill")
+                } description: {
+                    Text("Камера нужна, чтобы считать повторы")
+                } actions: {
+                    Button("Как включить") { PermPrompt.show(.camera, denied: true) }.buttonStyle(.glassProminent)
+                }
+                .background(Color.black)
+                .onAppear { PermPrompt.show(.camera, denied: true) }
             }
         }
         .preferredColorScheme(.dark)

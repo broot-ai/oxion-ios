@@ -19,6 +19,8 @@ struct OxAlertData: Identifiable {
     var title: String
     var message: String = ""
     var buttons: [OxAlertButton] = [OxAlertButton(title: "Понятно", role: .primary)]
+    /// Картинка-подсказка: мини-iPhone с экраном настроек (как в TikTok)
+    var art: SettingsArt? = nil
 }
 
 @MainActor
@@ -90,6 +92,10 @@ struct OxAlertOverlay: View {
                     .onTapGesture {
                         if a.buttons.contains(where: { $0.role == .cancel }) || a.buttons.count == 1 { center.dismiss() }
                     }
+                if let art = a.art {
+                    PromptCard(a: a, art: art) { center.dismiss() }
+                        .transition(.scale(scale: 0.86).combined(with: .opacity))
+                } else {
                 VStack(spacing: 14) {
                     Image(systemName: a.icon)
                         .font(.system(size: 30, weight: .semibold))
@@ -128,6 +134,7 @@ struct OxAlertOverlay: View {
                 .glassEffect(.regular, in: .rect(cornerRadius: 34))
                 .shadow(color: .black.opacity(0.35), radius: 30, y: 10)
                 .transition(.scale(scale: 0.86).combined(with: .opacity))
+                }
             }
         }
     }

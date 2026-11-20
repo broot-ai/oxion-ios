@@ -1060,8 +1060,7 @@ struct ReplayPlayerView: View {
         guard let img = shareUI else { return }
         let st = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard st == .authorized || st == .limited else {
-            OxAlert.show(icon: "photo.badge.exclamationmark", tint: Color(hex: 0xF0A030), title: "Нет доступа к Фото",
-                         message: "Разрешите: Настройки → Oxion → Фото.")
+            PermPrompt.show(.photos, denied: true)
             return
         }
         do {

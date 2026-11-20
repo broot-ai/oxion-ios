@@ -7,6 +7,7 @@ import LocalAuthentication
 import UserNotifications
 import Network
 import CoreTelephony
+import ActivityKit
 
 // MARK: - Доступы OXION: каждое разрешение привязано к настоящей функции.
 // iOS показывает строку в «Настройки → Oxion» только после того, как приложение один раз запросило доступ.
@@ -34,12 +35,13 @@ enum PermState: Equatable {
 }
 
 enum PermKind: String, CaseIterable, Identifiable {
-    case notifications, location, contacts, photos, camera, microphone, faceID, localNetwork, backgroundRefresh, cellular
+    case notifications, liveActivities, location, contacts, photos, camera, microphone, faceID, localNetwork, backgroundRefresh, cellular
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .notifications: return "Уведомления"
+        case .liveActivities: return "Live Activities"
         case .location: return "Геопозиция"
         case .contacts: return "Контакты"
         case .photos: return "Фото"
@@ -54,6 +56,7 @@ enum PermKind: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .notifications: return "bell.badge.fill"
+        case .liveActivities: return "platter.filled.top.iphone"
         case .location: return "location.fill"
         case .contacts: return "person.crop.circle.fill"
         case .photos: return "photo.fill.on.rectangle.fill"
@@ -68,6 +71,7 @@ enum PermKind: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .notifications: return Color(hex: 0xFF5A4E)
+        case .liveActivities: return Color(hex: 0x1C1C1E)
         case .location: return Color(hex: 0x0A84FF)
         case .contacts: return Color(hex: 0x8E8E93)
         case .photos: return Color(hex: 0xF0A030)
@@ -80,6 +84,7 @@ enum PermKind: String, CaseIterable, Identifiable {
     }
     var purpose: String {
         switch self {
+        case .liveActivities: return "Тренировка и синхронизация в Dynamic Island и на экране блокировки"
         case .notifications: return "Баннеры, звуки и наклейка с числом непрочитанных: сообщения, отдых окончен, план тренировок"
         case .location: return "Определить ваш город для каталога тренеров и ленты «Мой город»"
         case .contacts: return "Пригласить друзей из контактов в OXION. Контакты не загружаются на сервер"
@@ -147,6 +152,7 @@ final class PermissionCenter {
             states[.faceID] = ProgressStore.shared.faceLock ? PermState.granted : PermState.notAsked
         }
         if states[.localNetwork] == nil { states[.localNetwork] = .notAsked }
+        states[.liveActivities] = ActivityAuthorizationInfo().areActivitiesEnabled ? .granted : .denied
         states[.backgroundRefresh] = { () -> PermState in switch UIApplication.shared.backgroundRefreshStatus {
         case .available: return .granted
         case .denied: return .denied
@@ -167,17 +173,30 @@ final class PermissionCenter {
         }
     }
 
-    /// Запросить доступ. Если уже запрашивали — открываем настройки OXION в iPhone.
+    /// Нажатие на доступ: сначала окно с картинкой-подсказкой, потом системный запрос или настройки
     func request(_ k: PermKind) async {
-        if states[k] != .notAsked && k != .faceID && k != .localNetwork && k != .location {
-            openSettings(k)
-            return
+        let st = states[k] ?? .notAsked
+        switch k {
+        case .faceID, .localNetwork:
+            await systemRequest(k)
+        default:
+            if st == .denied || ((k == .backgroundRefresh || k == .cellular || k == .liveActivities) && st != .granted) {
+                PermPrompt.show(k, denied: true)
+            } else if st == .notAsked {
+                PermPrompt.show(k, denied: false) { Task { await self.systemRequest(k) } }
+            } else {
+                openSettings(k)
+            }
         }
+    }
+
+    /// Системный запрос доступа
+    func systemRequest(_ k: PermKind) async {
         switch k {
         case .notifications:
             _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
         case .location:
-            if states[.location] == .denied { openSettings(k); return }
+            if states[.location] == .denied { PermPrompt.show(.location, denied: true); return }
             if await location.ask() { city = await location.city() }
         case .contacts:
             _ = try? await CNContactStore().requestAccess(for: .contacts)
@@ -199,7 +218,7 @@ final class PermissionCenter {
             }
         case .localNetwork:
             scanNetwork()
-        case .backgroundRefresh, .cellular:
+        case .backgroundRefresh, .cellular, .liveActivities:
             openSettings(k)
         }
         await refresh()
@@ -213,7 +232,7 @@ final class PermissionCenter {
     /// Все ещё не запрошенные — по очереди
     func requestAll() async {
         for k in [PermKind.notifications, .location, .camera, .microphone, .photos, .contacts, .localNetwork] where states[k] == .notAsked {
-            await request(k)
+            await systemRequest(k)
             try? await Task.sleep(for: .milliseconds(400))
         }
     }
@@ -430,7 +449,7 @@ struct ContactsInviteView: View {
                     } description: {
                         Text("Разрешите: Настройки → Oxion → Контакты. Или просто поделитесь ссылкой.")
                     } actions: {
-                        Button("Открыть настройки") { PermissionCenter.shared.openSettings() }
+                        Button("Как включить") { PermPrompt.show(.contacts, denied: true) }
                     }
                 }
                 Section {
@@ -466,7 +485,7 @@ struct ContactsInviteView: View {
             _ = try? await store.requestAccess(for: .contacts)
         }
         let st = CNContactStore.authorizationStatus(for: .contacts)
-        guard st == .authorized || st == .limited else { denied = true; return }
+        guard st == .authorized || st == .limited else { denied = true; PermPrompt.show(.contacts, denied: true); return }
         let list: [(String, String)] = await Task.detached {
             var out: [(String, String)] = []
             let keys = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactPhoneNumbersKey] as [CNKeyDescriptor]
