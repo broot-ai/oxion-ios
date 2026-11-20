@@ -38,10 +38,12 @@ jobs:
           node -e '
             const fs=require("fs");
             const c=JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
-            c.server.url=process.env.APP_URL;
             c.server.allowNavigation=[new URL(process.env.APP_URL).host];
             fs.writeFileSync("capacitor.config.json", JSON.stringify(c,null,2));
+            fs.writeFileSync("www/config.js", "window.OXION_URL=" + JSON.stringify(process.env.APP_URL) + ";\n");
           '
+          cp assets/icon-1024.png www/icon.png
+          cat www/config.js
           cat capacitor.config.json
 
       - name: Установить Capacitor

@@ -4,13 +4,14 @@
   "webDir": "www",
   "backgroundColor": "#000000",
   "server": {
-    "url": "https://ЗАМЕНИТСЯ-ПРИ-СБОРКЕ",
+    "allowNavigation": [
+      "*.workers.dev"
+    ],
     "cleartext": false
   },
   "ios": {
     "contentInset": "never",
     "backgroundColor": "#000000",
-    "scheme": "Oxion",
     "allowsLinkPreview": false
   }
 }
