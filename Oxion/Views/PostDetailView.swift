@@ -203,6 +203,11 @@ struct ComposerView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isReply ? "Ответить" : "Опубликовать") { Task { await send() } }
+                        .bold()
+                        .disabled(sending)
+                }
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
             .photosPicker(isPresented: $showPicker, selection: $picks, maxSelectionCount: 4, matching: .images)
@@ -379,7 +384,7 @@ struct ComposerView: View {
             }
             .buttonStyle(.glassProminent)
             .controlSize(.large)
-            .disabled(!canSend)
+            .disabled(sending)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -410,6 +415,11 @@ struct ComposerView: View {
     }
 
     private func send() async {
+        guard canSend else {
+            OxAlert.show(icon: "square.and.pencil", title: "Ветка пустая", message: "Напишите текст, добавьте фото, опрос или тренировку.")
+            return
+        }
+        focused = nil
         sending = true
         defer { sending = false }
         do {

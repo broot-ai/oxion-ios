@@ -38,7 +38,7 @@ final class AlertCenter {
         withAnimation(.spring(duration: 0.25)) { current = nil }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
-            if self.current == nil { AlertWindow.window?.isHidden = true }
+            if self.current == nil { AlertWindow.hide() }
         }
     }
 }
@@ -157,5 +157,16 @@ enum AlertWindow {
         w.backgroundColor = .clear
         w.isHidden = true
         window = w
+    }
+
+    /// Прячем окно сообщений и возвращаем ввод (клавиатуру, нажатия) основному окну приложения
+    static func hide() {
+        window?.isHidden = true
+        window?.resignKey()
+        let main = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0 !== window && $0.windowLevel == .normal }
+        main?.makeKey()
     }
 }
