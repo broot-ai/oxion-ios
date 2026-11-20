@@ -2,8 +2,15 @@ import SwiftUI
 import Observation
 
 extension Color {
-    /// Фирменный лаймовый цвет Oxion
-    static let lime = Color(red: 0.651, green: 1.0, blue: 0.227)
+    init(hex: UInt32) {
+        self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+    /// Цвета как в PWA Oxion (app.css)
+    static let lime = Color(hex: 0xB2EE37)
+    static let oxBg = Color(hex: 0x0F1012)
+    static let oxCard = Color(hex: 0x18191C)
+    static let oxCard2 = Color(hex: 0x202124)
+    static let oxHint = Color(hex: 0x8A8A83)
 }
 
 @main
@@ -40,6 +47,8 @@ final class AppModel {
     var phase: Phase = .loading
     var me: Me?
     var meta: Meta?
+    var selectedTab: AppTab = .home
+    var trainerQuery = ""
 
     func start() async {
         if API.token == nil {
@@ -124,35 +133,37 @@ struct RootView: View {
 }
 
 enum AppTab: Hashable {
-    case feed, trainers, chats, diary, profile
+    case home, trainers, feed, diary, chats
 }
 
+/// Вкладки как в PWA Oxion: Главная, Тренеры, Лента, Дневник, Чаты (Магазин и Профиль — с Главной).
 struct MainTabView: View {
-    @State private var tab: AppTab = .feed
+    @Environment(AppModel.self) private var model
     @State private var chats = ChatsStore()
 
     var body: some View {
-        TabView(selection: $tab) {
-            Tab("Лента", systemImage: "flame.fill", value: AppTab.feed) {
-                FeedView()
+        @Bindable var model = model
+        TabView(selection: $model.selectedTab) {
+            Tab("Главная", systemImage: "house.fill", value: AppTab.home) {
+                HomeView()
             }
             Tab("Тренеры", systemImage: "figure.strengthtraining.traditional", value: AppTab.trainers) {
                 TrainersView()
+            }
+            Tab("Лента", systemImage: "flame.fill", value: AppTab.feed) {
+                FeedView()
+            }
+            Tab("Дневник", systemImage: "calendar", value: AppTab.diary) {
+                DiaryView()
             }
             Tab("Чаты", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
                 ChatsView()
             }
             .badge(chats.unread)
-            Tab("Дневник", systemImage: "chart.bar.fill", value: AppTab.diary) {
-                DiaryView()
-            }
-            Tab("Профиль", systemImage: "person.crop.circle.fill", value: AppTab.profile) {
-                ProfileView()
-            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .environment(chats)
-        .onChange(of: tab) { Haptic.tap(.soft) }
+        .onChange(of: model.selectedTab) { Haptic.tap(.soft) }
         .task {
             // счётчик непрочитанных на вкладке «Чаты»
             while !Task.isCancelled {

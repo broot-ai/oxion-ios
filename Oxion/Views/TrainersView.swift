@@ -43,6 +43,7 @@ final class TrainersStore {
 }
 
 struct TrainersView: View {
+    @Environment(AppModel.self) private var model
     @State private var store = TrainersStore()
 
     private let sorts: [(String, String)] = [
@@ -114,9 +115,21 @@ struct TrainersView: View {
             }
             .refreshable { await store.load(reset: true) }
             .task {
+                if !model.trainerQuery.isEmpty { takeQuery() }
                 if store.items.isEmpty { await store.load(reset: true) }
             }
+            .onChange(of: model.trainerQuery) {
+                if !model.trainerQuery.isEmpty {
+                    takeQuery()
+                    Task { await store.load(reset: true) }
+                }
+            }
         }
+    }
+
+    private func takeQuery() {
+        store.query = model.trainerQuery
+        model.trainerQuery = ""
     }
 }
 

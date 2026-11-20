@@ -3,6 +3,7 @@ import UIKit
 import UserNotifications
 
 struct ProfileView: View {
+    var embedded = false
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var confirmLogout = false
@@ -12,7 +13,14 @@ struct ProfileView: View {
     @State private var deleteInfo = false
 
     var body: some View {
-        NavigationStack {
+        if embedded {
+            content
+        } else {
+            NavigationStack { content }
+        }
+    }
+
+    private var content: some View {
             List {
                 if let me = model.me {
                     Section {
@@ -151,7 +159,6 @@ struct ProfileView: View {
                 WebAppView(path: t.path)
             }
             .task { await refreshNotifText() }
-        }
     }
 
     private var supportURL: URL? {

@@ -1,0 +1,474 @@
+import SwiftUI
+
+/// «Главная» — как в PWA Oxion: приветствие, поиск тренеров, цель недели, кольца, тренер для вас,
+/// ИИ-тренер, здоровье, быстрые разделы и сегодняшние тренировки.
+struct HomeView: View {
+    @Environment(AppModel.self) private var model
+    @State private var stats: Stats?
+    @State private var featured: Trainer?
+    @State private var todayWorkouts: [Workout] = []
+    @State private var search = ""
+    @State private var web: WebTarget?
+    @State private var openTrainer: Int?
+    @State private var openWorkout: Int?
+    @State private var showProfile = false
+    @State private var newWorkout = false
+    @State private var showExercises = false
+
+    private var goal: Int { max(1, model.me?.weekGoal ?? 3) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    header
+                    searchBar
+                    weekBlock
+                    ringsCard
+                    if model.me?.mode != "trainer" { featuredBlock }
+                    coachCard
+                    quickCards
+                    todayBlock
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 30)
+            }
+            .background(Color.oxBg)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $openTrainer) { id in TrainerDetailView(id: id) }
+            .navigationDestination(item: $openWorkout) { id in
+                WorkoutDetailView(workoutId: id) { Task { await load() } }
+            }
+            .navigationDestination(isPresented: $showProfile) { ProfileView(embedded: true) }
+            .navigationDestination(isPresented: $showExercises) { ExercisesView() }
+            .sheet(isPresented: $newWorkout) {
+                NewWorkoutSheet { id in
+                    Task { await load(); openWorkout = id }
+                }
+            }
+            .fullScreenCover(item: $web) { t in WebAppView(path: t.path) }
+            .refreshable { await load() }
+            .task { await load() }
+        }
+    }
+
+    // MARK: блоки
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Button {
+                showProfile = true
+            } label: {
+                HStack(spacing: 12) {
+                    Avatar(url: API.media(model.me?.photoUrl), name: model.me?.displayName ?? "?", size: 50)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(greeting)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.oxHint)
+                        Text(model.me?.displayName ?? "")
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            if model.me?.mode == "trainer" {
+                Button {
+                    web = WebTarget(path: "/#subscription")
+                } label: {
+                    Label("PRO", systemImage: "crown.fill")
+                        .font(.subheadline.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                .glassEffect(.regular.tint(Color.lime.opacity(0.3)).interactive(), in: .capsule)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private var greeting: String {
+        let h = Calendar.current.component(.hour, from: Date())
+        switch h {
+        case 5..<12: return "Доброе утро"
+        case 12..<18: return "Добрый день"
+        case 18..<23: return "Добрый вечер"
+        default: return "Доброй ночи"
+        }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Color.oxHint)
+            TextField("Поиск тренеров…", text: $search)
+                .submitLabel(.search)
+                .onSubmit { model.trainerQuery = search; model.selectedTab = .trainers }
+            Button {
+                model.trainerQuery = search
+                model.selectedTab = .trainers
+            } label: {
+                Image(systemName: "arrow.right")
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .frame(width: 40, height: 40)
+                    .background(Color.lime, in: Circle())
+            }
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+    }
+
+    private var weekBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Цель на неделю")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Text("\(stats?.workouts ?? 0)")
+                    .foregroundStyle(Color.lime)
+                    .font(.headline)
+                + Text("/\(goal)")
+                    .font(.headline)
+            }
+            WeekPills(done: Set(stats?.daysDone ?? []))
+            HStack(spacing: 8) {
+                Image(systemName: "flame.fill")
+                    .foregroundStyle(Color.lime)
+                Text(motivation)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.oxHint)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    private var motivation: String {
+        guard let s = stats else { return "Загружаем вашу неделю…" }
+        let w = s.workouts ?? 0
+        let left = goal - w
+        if w == 0 { return "Пусть сегодня начнётся ваша трансформация — запланируйте первую тренировку!" }
+        if left > 0 { return "Осталось \(left) \(RU.plural(left, "тренировка", "тренировки", "тренировок")) до цели недели. Вы справитесь!" }
+        return "Цель недели выполнена. Отличная работа! 🔥"
+    }
+
+    private var ringsCard: some View {
+        let w = stats?.workouts ?? 0
+        let sets = stats?.today?.sets ?? 0
+        let kcal = stats?.today?.calories ?? 0
+        let rings: [RingData] = [
+            RingData(value: Double(w), max: Double(goal), color: Color(hex: 0xB2EE37), label: "Тренировки за неделю", text: "\(w) / \(goal)"),
+            RingData(value: Double(sets), max: 20, color: Color(hex: 0x58F670), label: "Подходы сегодня", text: "\(sets) / 20"),
+            RingData(value: Double(kcal), max: 500, color: Color(hex: 0x3FD6C9), label: "Ккал сегодня", text: "\(kcal) / 500")
+        ]
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Сегодня")
+                .font(.title3.weight(.medium))
+            Text("Закройте кольца")
+                .font(.subheadline)
+                .foregroundStyle(Color.oxHint)
+            HStack(spacing: 18) {
+                ActivityRings(rings: rings)
+                    .frame(width: 140, height: 140)
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(rings) { r in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(r.label)
+                                .font(.caption)
+                                .foregroundStyle(Color.oxHint)
+                            Text(r.text)
+                                .font(.headline)
+                        }
+                        .padding(.leading, 8)
+                        .overlay(alignment: .leading) {
+                            Capsule().fill(r.color).frame(width: 3)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 10)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var featuredBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Тренер для вас")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Label("Под вашу цель", systemImage: "sparkles")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .glassEffect(.regular.tint(Color.lime.opacity(0.25)), in: .capsule)
+            }
+            if let t = featured {
+                Button {
+                    openTrainer = t.userId
+                } label: {
+                    HStack(alignment: .top, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(t.name ?? "Тренер")
+                                .font(.title3.bold())
+                            Text((t.directions ?? []).joined(separator: " · "))
+                                .font(.subheadline)
+                                .foregroundStyle(Color.oxHint)
+                                .lineLimit(2)
+                            HStack(spacing: 10) {
+                                Label("\(t.experience ?? 0) \(RU.plural(t.experience ?? 0, "год", "года", "лет"))", systemImage: "clock")
+                                if let r = t.rating, (t.reviewsCount ?? 0) > 0 {
+                                    Label(String(format: "%.1f", r), systemImage: "star.fill")
+                                        .foregroundStyle(.yellow)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(Color.oxHint)
+                            if let p = t.price {
+                                (Text("\(p) ₽").font(.headline) + Text(" / занятие").font(.caption).foregroundColor(Color.oxHint))
+                                    .padding(.top, 2)
+                            }
+                            Spacer(minLength: 6)
+                            Text("Смотреть анкету")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Color.lime, in: Capsule())
+                        }
+                        .padding(16)
+                        Spacer(minLength: 0)
+                        RemoteImage(url: API.media(t.cover), icon: "person.fill")
+                            .frame(width: 130)
+                            .frame(maxHeight: .infinity)
+                            .clipped()
+                    }
+                    .frame(height: 210)
+                    .background(Color.oxCard)
+                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.lime.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    model.selectedTab = .trainers
+                } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Найдите своего тренера")
+                            .font(.title3.bold())
+                        Text("Каталог тренеров вашего города")
+                            .foregroundStyle(Color.oxHint)
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var coachCard: some View {
+        Button {
+            web = WebTarget(path: "/#coach")
+        } label: {
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(AngularGradient(colors: [Color.lime, Color(hex: 0x3FD6C9), Color(hex: 0x58F670), Color.lime], center: .center))
+                    .frame(width: 46, height: 46)
+                    .blur(radius: 1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ИИ-тренер")
+                        .font(.headline)
+                    Text("Составит тренировку на сегодня и ответит на вопросы")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.oxHint)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.oxHint)
+            }
+            .padding(16)
+            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var quickCards: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                QuickCard(icon: "book.fill", tint: Color.lime, title: "Справочник", sub: "9 групп мышц и техника") {
+                    showExercises = true
+                }
+                QuickCard(icon: "chart.line.uptrend.xyaxis", tint: Color(hex: 0x3FD6C9), title: "Прогресс", sub: "Вес тела и статистика") {
+                    model.selectedTab = .diary
+                }
+            }
+            HStack(spacing: 12) {
+                QuickCard(icon: "bag.fill", tint: Color(hex: 0xF0A030), title: "Магазин", sub: "Спортпит с доставкой") {
+                    web = WebTarget(path: "/#shop")
+                }
+                QuickCard(icon: "heart.text.square.fill", tint: Color(hex: 0xFF5A4E), title: "Здоровье", sub: "Шаги, сон, пульс") {
+                    web = WebTarget(path: "/#health")
+                }
+            }
+        }
+    }
+
+    private var todayBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Сегодня в дневнике")
+                .font(.title3.weight(.semibold))
+            if todayWorkouts.isEmpty {
+                Button {
+                    newWorkout = true
+                } label: {
+                    Label("Запланировать тренировку", systemImage: "plus")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.glass)
+                .controlSize(.large)
+            } else {
+                ForEach(todayWorkouts) { w in
+                    Button {
+                        openWorkout = w.id
+                    } label: {
+                        WorkoutRow(w: w)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: загрузка
+
+    private func load() async {
+        let cal = Calendar(identifier: .iso8601)
+        let now = Date()
+        let ws = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let we = cal.date(byAdding: .day, value: 6, to: ws) ?? now
+        let f = RU.dayFormatter
+        let today = f.string(from: now)
+        if let s: Stats = try? await API.call("/stats", query: ["from": f.string(from: ws), "to": f.string(from: we), "today": today]) {
+            stats = s
+        }
+        if let w: WorkoutsResponse = try? await API.call("/workouts", query: ["from": today, "to": today]) {
+            todayWorkouts = w.items
+        }
+        if model.me?.mode != "trainer",
+           let t: TrainersResponse = try? await API.call("/trainers", query: ["sort": "match"]) {
+            featured = t.items.first
+        }
+    }
+}
+
+// MARK: - Элементы главной
+
+struct WeekPills: View {
+    let done: Set<String>
+
+    var body: some View {
+        let cal = Calendar(identifier: .iso8601)
+        let now = Date()
+        let start = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+        HStack(spacing: 6) {
+            ForEach(0..<7, id: \.self) { i in
+                let d = cal.date(byAdding: .day, value: i, to: start) ?? now
+                let key = RU.dayFormatter.string(from: d)
+                let isToday = cal.isDateInToday(d)
+                let isDone = done.contains(key)
+                VStack(spacing: 4) {
+                    Text(names[i])
+                        .font(.caption2)
+                        .foregroundStyle(isDone ? Color.black.opacity(0.7) : Color.oxHint)
+                    Text("\(cal.component(.day, from: d))")
+                        .font(.headline)
+                        .foregroundStyle(isDone ? Color.black : Color.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(isDone ? Color.lime : Color.oxCard, in: Capsule())
+                .overlay(Capsule().stroke(isToday ? Color.lime : Color.clear, lineWidth: 1.5))
+            }
+        }
+    }
+}
+
+struct RingData: Identifiable {
+    let id = UUID()
+    let value: Double
+    let max: Double
+    let color: Color
+    let label: String
+    let text: String
+}
+
+struct ActivityRings: View {
+    let rings: [RingData]
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            let line = size * 0.11
+            ZStack {
+                ForEach(Array(rings.enumerated()), id: \.offset) { i, r in
+                    let inset = CGFloat(i) * (line + 4)
+                    let p = r.max > 0 ? min(1, r.value / r.max) : 0
+                    Circle()
+                        .stroke(r.color.opacity(0.18), lineWidth: line)
+                        .padding(inset + line / 2)
+                    Circle()
+                        .trim(from: 0, to: max(0.001, p))
+                        .stroke(r.color, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .padding(inset + line / 2)
+                        .animation(.spring(duration: 0.9), value: p)
+                }
+            }
+            .frame(width: size, height: size)
+        }
+    }
+}
+
+struct QuickCard: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let sub: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: icon)
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .frame(width: 38, height: 38)
+                    .background(tint, in: Circle())
+                Text(title)
+                    .font(.headline)
+                Text(sub)
+                    .font(.caption)
+                    .foregroundStyle(Color.oxHint)
+                    .lineLimit(2)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
+            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
