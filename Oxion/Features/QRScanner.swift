@@ -122,7 +122,7 @@ private final class PreviewUIView: UIView {
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 }
 
-private struct CameraPreview: UIViewRepresentable {
+private struct QRCameraPreview: UIViewRepresentable {
     let cam: QRCamera
     func makeUIView(context: Context) -> PreviewUIView {
         let v = PreviewUIView()
@@ -182,7 +182,7 @@ struct QRScanScreen: View {
             ZStack {
                 Color.black
                 if !cam.denied {
-                    CameraPreview(cam: cam)
+                    QRCameraPreview(cam: cam)
                         .opacity(appear ? 1 : 0)
                 }
                 // затемнение с «окном»
