@@ -20,14 +20,7 @@ struct AIOrb: View {
                     .blur(radius: size * 0.12)
                 // плавающие пятна цвета — «блоб»
                 ForEach(0..<4, id: \.self) { i in
-                    let k = Double(i)
-                    Circle()
-                        .fill(colors[(i * 2 + 1) % colors.count])
-                        .frame(width: size * 0.62, height: size * 0.62)
-                        .offset(x: cos(t * (0.9 + k * 0.23) + k * 1.7) * size * 0.26,
-                                y: sin(t * (1.1 + k * 0.19) + k * 2.3) * size * 0.26)
-                        .blendMode(.plusLighter)
-                        .opacity(0.75)
+                    blob(i, t: t)
                 }
                 .blur(radius: size * 0.14)
             }
@@ -56,5 +49,19 @@ struct AIOrb: View {
         .shadow(color: Color.lime.opacity(active ? 0.55 : 0.3), radius: size * (active ? 0.4 : 0.22))
         .animation(.easeInOut(duration: 0.4), value: active)
         .accessibilityLabel("ИИ-тренер")
+    }
+
+    private func blob(_ i: Int, t: Double) -> some View {
+        let k = Double(i)
+        let r = Double(size) * 0.26
+        let dx = cos(t * (0.9 + k * 0.23) + k * 1.7) * r
+        let dy = sin(t * (1.1 + k * 0.19) + k * 2.3) * r
+        let d = size * 0.62
+        return Circle()
+            .fill(colors[(i * 2 + 1) % colors.count])
+            .frame(width: d, height: d)
+            .offset(x: CGFloat(dx), y: CGFloat(dy))
+            .blendMode(.plusLighter)
+            .opacity(0.75)
     }
 }
