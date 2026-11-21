@@ -220,8 +220,7 @@ struct TWallpaperView: View {
     var animate = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !(animate || engine.transitioning))) { _ in
-            let _ = (animate || engine.transitioning) ? engine.step() : ()
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !(animate || engine.transitioning))) { tl in
             let _ = engine.version
             ZStack {
                 if mask && pattern != .none {
@@ -237,6 +236,10 @@ struct TWallpaperView: View {
                             .opacity(opacity)
                     }
                 }
+            }
+            // шаг анимации — после отрисовки кадра, а не во время
+            .onChange(of: tl.date) {
+                if animate || engine.transitioning { engine.step() }
             }
         }
         .allowsHitTesting(false)
