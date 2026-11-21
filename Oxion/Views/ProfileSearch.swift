@@ -64,7 +64,7 @@ enum OxSearch {
             else if token.count >= 3, w.contains(token) { best = max(best, 45 * weight) }
             else if token.count >= 4, w.count >= 4 {
                 // корень слова: «видосы» ~ «видео», «тренеровка» ~ «тренировка»
-                let stem = String(token.prefix(max(3, token.count - 2)))
+                let stem = String(token.prefix(max(4, token.count - 2)))
                 if w.hasPrefix(stem) { best = max(best, 30 * weight) }
                 else if distance(token, String(w.prefix(token.count + 1)), limit: 1) <= 1 || distance(token, w, limit: 1) <= 1 {
                     best = max(best, 22 * weight)
