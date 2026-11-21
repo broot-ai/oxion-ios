@@ -14,126 +14,113 @@ struct UserProfileView: View {
     @State private var compose: ComposeRequest?
     @State private var showCard = false
 
+    private func statusLine(_ u: FUser) -> String {
+        var parts: [String] = []
+        if u.trainer == true { parts.append("тренер") }
+        if let c = u.city, !c.isEmpty { parts.append(c) }
+        if parts.isEmpty { parts.append("\(u.followers ?? 0) подписчиков") }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if let u {
-                    header(u)
-                    Picker("", selection: $tab) {
-                        Text("Ветки").tag("posts")
-                        Text("Ответы").tag("replies")
-                        Text("Медиа").tag("media")
-                        Text("Репосты").tag("reposts")
+        Group {
+            if let u {
+                TGProfileScaffold(name: u.name ?? "Без имени", status: statusLine(u), photo: API.media(u.photo), verified: u.trainer == true) {
+                    actionTiles(u)
+                } content: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        infoCard(u).padding(.horizontal, 16).padding(.top, 16)
+                        Picker("", selection: $tab) {
+                            Text("Ветки").tag("posts")
+                            Text("Ответы").tag("replies")
+                            Text("Медиа").tag("media")
+                            Text("Репосты").tag("reposts")
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(16)
+                        if let pin = u.pinned, tab == "posts" {
+                            Label("Закреплено", systemImage: "pin.fill").font(.caption).foregroundStyle(Color.oxHint).padding(.horizontal, 16)
+                            ThreadPost(post: pin, onOpen: { route = .post(pin.id) }, onUser: { _ in }, onCompose: { compose = $0 })
+                            Divider().overlay(Color.white.opacity(0.06))
+                        }
+                        if posts.isEmpty {
+                            Text("Пока ничего нет").foregroundStyle(Color.oxHint).frame(maxWidth: .infinity).padding(40)
+                        }
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(posts) { item in
+                                ThreadPost(post: item.post,
+                                           onOpen: { route = .post(item.post.chainOf ?? item.post.id) },
+                                           onUser: { if $0 != userId { route = .user($0) } },
+                                           onChange: { change in
+                                               for i in posts.indices where posts[i].post.id == item.post.id { change(&posts[i].post) }
+                                           },
+                                           onRemove: { posts.removeAll { $0.post.id == item.post.id } },
+                                           onCompose: { compose = $0 })
+                                Divider().overlay(Color.white.opacity(0.06))
+                            }
+                        }
+                        .padding(.bottom, 40)
                     }
-                    .pickerStyle(.segmented)
-                    .padding(16)
-                    if let pin = u.pinned, tab == "posts" {
-                        Label("Закреплено", systemImage: "pin.fill").font(.caption).foregroundStyle(Color.oxHint).padding(.horizontal, 16)
-                        ThreadPost(post: pin, onOpen: { route = .post(pin.id) }, onUser: { _ in }, onCompose: { compose = $0 })
-                        Divider().overlay(Color.white.opacity(0.06))
-                    }
-                    if posts.isEmpty {
-                        Text("Пока ничего нет").foregroundStyle(Color.oxHint).frame(maxWidth: .infinity).padding(40)
-                    }
-                    ForEach(posts) { item in
-                        ThreadPost(post: item.post,
-                                   onOpen: { route = .post(item.post.chainOf ?? item.post.id) },
-                                   onUser: { if $0 != userId { route = .user($0) } },
-                                   onChange: { change in
-                                       for i in posts.indices where posts[i].post.id == item.post.id { change(&posts[i].post) }
-                                   },
-                                   onRemove: { posts.removeAll { $0.post.id == item.post.id } },
-                                   onCompose: { compose = $0 })
-                        Divider().overlay(Color.white.opacity(0.06))
-                    }
-                } else {
-                    LoadingOrError(error: errorText) { Task { await load() } }
+                    .background(Color.oxBg)
                 }
+            } else {
+                LoadingOrError(error: errorText) { Task { await load() } }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.oxBg)
             }
         }
-        .background(Color.oxBg)
-        .navigationTitle(u?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $route) { FeedDestination(route: $0) }
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await loadPosts() } } }
         .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
-        .toolbar {
-            if let u, u.me != true {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { Task { await toggle("notify", true) } } label: { Label("Уведомлять о новых ветках", systemImage: "bell") }
-                        Button { Task { await toggle("mute", !(u.muted ?? false)) } } label: {
-                            Label(u.muted == true ? "Показывать в ленте" : "Скрыть из ленты", systemImage: "speaker.slash")
-                        }
-                        Button(role: .destructive) {
-                            OxAlert.confirm(icon: "hand.raised.fill", title: u.blocked == true ? "Разблокировать?" : "Заблокировать \(u.name ?? "")?",
-                                            action: u.blocked == true ? "Разблокировать" : "Заблокировать", destructive: u.blocked != true) {
-                                Task { await toggle("block", !(u.blocked ?? false)) }
-                            }
-                        } label: { Label(u.blocked == true ? "Разблокировать" : "Заблокировать", systemImage: "hand.raised") }
-                        ShareLink(item: AppSettings.serverURL.absoluteString + "/#u/\(u.id)") { Label("Поделиться профилем", systemImage: "square.and.arrow.up") }
-                    } label: { Image(systemName: "ellipsis.circle") }
-                }
-            }
-        }
         .onChange(of: tab) { Task { await loadPosts() } }
-        .oxRefreshable { await load() }
         .task { await load() }
     }
 
-    private func header(_ u: FUser) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(u.name ?? "").font(.title.bold())
-                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.lime) }
-                    }
-                    if let c = u.city { Label(c, systemImage: "mappin").font(.subheadline).foregroundStyle(Color.oxHint) }
-                }
-                Spacer()
-                Avatar(url: API.media(u.photo), name: u.name ?? "?", size: 76)
-            }
-            if let b = u.bio, !b.isEmpty { Text(b) }
-            HStack(spacing: 16) {
-                Text("\(u.followers ?? 0)").bold() + Text(" подписчиков").foregroundColor(Color.oxHint)
-                Text("\(u.following ?? 0)").bold() + Text(" подписок").foregroundColor(Color.oxHint)
-                if let s = u.streak, s > 0 { Text("🔥 \(s) нед.").foregroundStyle(Color.lime) }
-            }
-            .font(.subheadline)
+    @ViewBuilder
+    private func actionTiles(_ u: FUser) -> some View {
+        let share = AppSettings.serverURL.absoluteString + "/#u/\(u.id)"
+        HStack(spacing: 8) {
             if u.me == true {
-                HStack(spacing: 10) {
-                    Button { showCard = true } label: {
-                        Label("Моя визитка", systemImage: "qrcode").frame(maxWidth: .infinity).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.glass)
-                    ShareLink(item: AppSettings.serverURL.absoluteString + "/#u/\(u.id)") {
-                        Label("Поделиться", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.glass)
-                }
+                TGActionTile(title: "визитка", icon: "qrcode") { showCard = true }
+                ShareLink(item: share) { TGActionTile(title: "поделиться", icon: "square.and.arrow.up").tileLabel }
+                    .buttonStyle(TGTileStyle())
             } else {
-                HStack(spacing: 10) {
-                    Button {
-                        Task { await toggle("follow", !(u.isFollowing ?? false)) }
-                    } label: {
-                        Text(u.isFollowing == true ? "Вы подписаны" : (u.followsMe == true ? "Подписаться в ответ" : "Подписаться"))
-                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(u.isFollowing == true ? Color.white.opacity(0.2) : Color.lime)
-                    Button {
-                        Task { await openChat(u) }
-                    } label: {
-                        Text("Написать").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.glass)
+                TGActionTile(title: "написать", icon: "bubble.left.fill") { Task { await openChat(u) } }
+                TGActionTile(title: u.isFollowing == true ? "подписаны" : "подписаться",
+                             icon: u.isFollowing == true ? "checkmark" : "plus",
+                             tint: u.isFollowing == true ? .white : Color.lime) {
+                    Task { await toggle("follow", !(u.isFollowing ?? false)) }
                 }
-                .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
+                TGActionTile(title: u.muted == true ? "показывать" : "звук", icon: u.muted == true ? "bell.slash.fill" : "bell.fill") {
+                    Task { await toggle("mute", !(u.muted ?? false)) }
+                }
+                Menu {
+                    Button { Task { await toggle("notify", true) } } label: { Label("Уведомлять о новых ветках", systemImage: "bell") }
+                    ShareLink(item: share) { Label("Поделиться профилем", systemImage: "square.and.arrow.up") }
+                    Button(role: .destructive) {
+                        OxAlert.confirm(icon: "hand.raised.fill", title: u.blocked == true ? "Разблокировать?" : "Заблокировать \(u.name ?? "")?",
+                                        action: u.blocked == true ? "Разблокировать" : "Заблокировать", destructive: u.blocked != true) {
+                            Task { await toggle("block", !(u.blocked ?? false)) }
+                        }
+                    } label: { Label(u.blocked == true ? "Разблокировать" : "Заблокировать", systemImage: "hand.raised") }
+                } label: {
+                    TGActionTile(title: "ещё", icon: "ellipsis").tileLabel
+                }
             }
         }
-        .padding(16)
+    }
+
+    private func infoCard(_ u: FUser) -> some View {
+        var rows: [TGInfoCard.Row] = []
+        if let b = u.bio, !b.isEmpty { rows.append(.init(label: "о себе", value: b)) }
+        if let c = u.city, !c.isEmpty { rows.append(.init(label: "город", value: c, icon: "mappin")) }
+        rows.append(.init(label: "подписчики и подписки", value: "\(u.followers ?? 0) подписчиков · \(u.following ?? 0) подписок"))
+        if let s = u.streak, s > 0 { rows.append(.init(label: "серия", value: "🔥 \(s) нед. без пропусков")) }
+        if let m = u.monthWorkouts, m > 0 { rows.append(.init(label: "тренировок за месяц", value: "\(m)", icon: "dumbbell.fill")) }
+        if u.followsMe == true { rows.append(.init(label: "", value: "Подписан(а) на вас", icon: "person.fill.checkmark")) }
+        return TGInfoCard(rows: rows)
     }
 
     private func load() async {
