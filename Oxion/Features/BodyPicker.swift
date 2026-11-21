@@ -1,5 +1,6 @@
 import SwiftUI
 import SceneKit
+import CoreMotion
 
 // «Что качаем сегодня?» — 3D-фигура на весь экран.
 // Пользователь нажимает на мышцы прямо на фигуре: выбранные загораются неоново-зелёным,
@@ -122,7 +123,33 @@ final class BodyStage {
     var selected: Set<String> = []
     var onTap: ((String) -> Void)?
     var onSkinTap: (() -> Void)?
+    var dragging = false
+    private let motion = CMMotionManager()
+    private var lastTick: TimeInterval = 0
 
+    /// Наклон телефона вправо — фигура крутится вправо, влево — влево
+    func startTilt() {
+        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
+        motion.deviceMotionUpdateInterval = 1.0 / 60
+        lastTick = 0
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
+            guard let self, let m else { return }
+            let now = m.timestamp
+            let dt = self.lastTick == 0 ? 0 : min(0.05, now - self.lastTick)
+            self.lastTick = now
+            guard !self.dragging, self.body.action(forKey: "spin") == nil else { return }
+            let gx = m.gravity.x
+            let dead = 0.07
+            guard abs(gx) > dead else { return }
+            let speed = (gx - (gx > 0 ? dead : -dead)) * 4.5   // рад/с
+            self.body.eulerAngles.y += Float(speed * dt)
+        }
+    }
+
+    func stopTilt() { motion.stopDeviceMotionUpdates() }
+
+    /// Фиксированный кадр: фигура целиком между верхними кнопками и нижней панелью
+    static let camPos = SCNVector3(0, -0.1, 5.1)
     static let skin = UIColor(red: 0.91, green: 0.72, blue: 0.60, alpha: 1)
     static let neon = UIColor(red: 0xB2 / 255, green: 0xEE / 255, blue: 0x37 / 255, alpha: 1)
 
@@ -163,12 +190,9 @@ final class BodyStage {
         cam.fieldOfView = 30
         cam.zNear = 0.1
         cam.zFar = 50
-        cam.wantsHDR = true
-        cam.bloomIntensity = 0.6
-        cam.bloomThreshold = 0.75
-        cam.bloomBlurRadius = 10
+        cam.wantsHDR = false
         camera.camera = cam
-        camera.position = SCNVector3(0, -0.12, 4.6)
+        camera.position = Self.camPos
         scene.rootNode.addChildNode(camera)
 
         // свет: мягкий общий + основной сверху-спереди + контровой
@@ -182,20 +206,10 @@ final class BodyStage {
             n.eulerAngles = euler
             scene.rootNode.addChildNode(n)
         }
-        light(.ambient, 420, .white, SCNVector3Zero)
-        light(.directional, 1250, .white, SCNVector3(-0.55, -0.45, 0))
-        light(.directional, 520, UIColor(white: 0.95, alpha: 1), SCNVector3(-0.2, 0.9, 0))
-        light(.directional, 900, UIColor(red: 0.75, green: 1, blue: 0.6, alpha: 1), SCNVector3(-0.3, .pi, 0))
-
-        // мягкое «дыхание» подсветки выбранных мышц
-        let pulse = SCNAction.customAction(duration: 2.4) { [weak self] _, t in
-            let k = 0.32 + 0.22 * sin(Double(t) / 2.4 * 2 * .pi)
-            DispatchQueue.main.async {
-                guard let self else { return }
-                for key in self.selected { self.materials[key]?.emission.intensity = k }
-            }
-        }
-        root.runAction(.repeatForever(pulse))
+        light(.ambient, 260, .white, SCNVector3Zero)
+        light(.directional, 750, .white, SCNVector3(-0.55, -0.45, 0))
+        light(.directional, 260, .white, SCNVector3(-0.2, 0.9, 0))
+        light(.directional, 320, .white, SCNVector3(-0.3, .pi, 0))
 
         // появление
         body.opacity = 0
@@ -222,9 +236,8 @@ final class BodyStage {
         for (key, m) in materials where key != "skin" {
             let on = sel.contains(key)
             m.diffuse.contents = on ? Self.neon : Self.skin
-            m.emission.contents = on ? Self.neon : UIColor.black
-            m.emission.intensity = on ? 0.35 : 0
-            m.roughness.contents = on ? 0.4 : 0.62
+            m.emission.contents = UIColor.black
+            m.roughness.contents = 0.62
         }
         SCNTransaction.commit()
     }
@@ -254,7 +267,7 @@ final class BodyStage {
         if let cam = camera.camera {
             SCNTransaction.begin(); SCNTransaction.animationDuration = 0.4
             cam.fieldOfView = 30
-            camera.position = SCNVector3(0, -0.12, 4.6)
+            camera.position = Self.camPos
             SCNTransaction.commit()
         }
     }
@@ -275,16 +288,14 @@ final class BodyStage {
         guard let view else { return }
         switch g.state {
         case .began:
+            dragging = true
             body.removeAction(forKey: "spin")
         case .changed:
             let t = g.translation(in: view)
             body.eulerAngles.y += Float(t.x) * 0.011
-            // лёгкий наклон камеры вверх-вниз
-            var p = camera.position
-            p.y = max(-0.55, min(0.35, p.y - Float(t.y) * 0.002))
-            camera.position = p
             g.setTranslation(.zero, in: view)
         case .ended, .cancelled:
+            dragging = false
             let vx = g.velocity(in: view).x
             let a = SCNAction.rotateBy(x: 0, y: CGFloat(vx) * 0.0028, z: 0, duration: 0.9)
             a.timingMode = .easeOut
@@ -293,11 +304,6 @@ final class BodyStage {
         }
     }
 
-    @objc func pinch(_ g: UIPinchGestureRecognizer) {
-        guard let cam = camera.camera else { return }
-        cam.fieldOfView = max(12, min(34, cam.fieldOfView / g.scale))
-        g.scale = 1
-    }
 }
 
 struct BodySceneView: UIViewRepresentable {
@@ -324,8 +330,8 @@ struct BodySceneView: UIViewRepresentable {
         v.addGestureRecognizer(tap)
         v.addGestureRecognizer(dbl)
         v.addGestureRecognizer(UIPanGestureRecognizer(target: stage, action: #selector(BodyStage.pan(_:))))
-        v.addGestureRecognizer(UIPinchGestureRecognizer(target: stage, action: #selector(BodyStage.pinch(_:))))
         stage.apply(selected, animated: false)
+        stage.startTilt()
         return v
     }
 
@@ -345,9 +351,7 @@ struct MusclePickerView: View {
     @State private var parts: [BodyPart]?
     @State private var failed = false
     @State private var selected: Set<String> = []
-    @State private var toast: String?
     @State private var aiPrompt: PromptBox?
-    @State private var hintShown = true
 
     struct PromptBox: Identifiable { let id = UUID(); let text: String }
 
@@ -374,28 +378,10 @@ struct MusclePickerView: View {
 
             VStack(spacing: 0) {
                 topBar
-                if let toast {
-                    Text(toast)
-                        .font(.subheadline.bold())
-                        .padding(.horizontal, 16).padding(.vertical, 9)
-                        .glassEffect(.regular.tint(Color.lime.opacity(0.25)), in: .capsule)
-                        .padding(.top, 10)
-                        .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.85)))
-                }
                 Spacer()
-                if hintShown && selected.isEmpty && parts != nil {
-                    Label("Нажми на мышцу · крути фигуру пальцем · двойной тап — повернуть", systemImage: "hand.tap.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .glassEffect(.regular, in: .capsule)
-                        .padding(.bottom, 10)
-                        .transition(.opacity)
-                }
                 panel
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: toast)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selected)
         .animation(.easeInOut(duration: 0.3), value: parts == nil)
         .task {
@@ -403,6 +389,7 @@ struct MusclePickerView: View {
             stage.onSkinTap = { Haptic.tap() }
             if let p = await BodyMeshLoader.load() { parts = p } else { failed = true }
         }
+        .onDisappear { stage.stopTilt() }
         .sheet(item: $aiPrompt) { p in
             NavigationStack {
                 AICoachView(initial: p.text)
@@ -435,13 +422,6 @@ struct MusclePickerView: View {
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive(), in: .circle)
 
-            Spacer()
-            VStack(spacing: 2) {
-                Text("Что качаем сегодня?").font(.title3.bold())
-                Text(selected.isEmpty ? "Выбери мышцы на фигуре" : "Выбрано: \(selected.count)")
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-            }
             Spacer()
 
             Menu {
@@ -520,25 +500,13 @@ struct MusclePickerView: View {
     }
 
     private func toggle(_ key: String, fromModel: Bool) {
-        hintShown = false
         if selected.contains(key) {
             selected.remove(key)
             Haptic.tap()
-            show("\(model.muscleName(key)) — убрано")
         } else {
             selected.insert(key)
             OxHaptics.play(.select)
-            show("\(model.muscleName(key)) ✓")
             if !fromModel && key != "cardio" { stage.face(back: BodyZone.backSide.contains(key)) }
-        }
-    }
-
-    private func show(_ text: String) {
-        toast = text
-        let t = text
-        Task {
-            try? await Task.sleep(for: .seconds(1.3))
-            if toast == t { toast = nil }
         }
     }
 
