@@ -924,7 +924,7 @@ struct Bubble: View {
                         InlineButtonsRow(buttons: buttons, radius: max(8, style.radius * 0.7), onTap: onAction)
                     }
                 }
-                .fixedSize(horizontal: true, vertical: false)
+                .frame(width: isCardOnly ? 294 : nil)
                 if let rs = m.reactions, !rs.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(rs, id: \.self) { r in
@@ -947,7 +947,7 @@ struct Bubble: View {
     // карточка (товар, звонок, тренировка…) в пузыре
     private func cardBubble(_ k: String) -> some View {
         ChatCard(kind: k, card: m.card, mine: false, embedded: true)
-            .frame(maxWidth: 270, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .padding(.bottom, 12)
             .overlay(alignment: .bottomTrailing) { meta(on: false).padding(.trailing, 12).padding(.bottom, 7) }
