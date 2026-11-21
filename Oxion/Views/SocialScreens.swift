@@ -341,7 +341,7 @@ struct AICoachView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     VStack(spacing: 10) {
-                        AIOrb(size: 92, active: sending)
+                        AIOrb(size: 92, active: sending, interactive: true)
                             .padding(.bottom, 6)
                         Text("ИИ-тренер").font(.title2.bold())
                         Text("Составит тренировку на сегодня и ответит на вопросы о питании и технике")
