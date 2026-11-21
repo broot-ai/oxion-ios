@@ -545,10 +545,7 @@ struct ChatView: View {
                         } else {
                         Bubble(m: m, read: m.mine && m.id <= peerReadId)
                             .id(m.id)
-                            .transition(UserDefaults.standard.object(forKey: "anim_messages") as? Bool ?? true
-                                        ? .asymmetric(insertion: .scale(scale: 0.6, anchor: m.mine ? .bottomTrailing : .bottomLeading).combined(with: .opacity),
-                                                      removal: .opacity)
-                                        : .identity)
+                            .transition(Self.bubbleTransition(mine: m.mine))
                             .contextMenu {
                                 Section {
                                     ForEach(Kinds.reactions, id: \.self) { e in
@@ -803,6 +800,12 @@ struct ChatView: View {
                         ? "Собеседник включил защиту: на снимке переписка не видна, а он получил уведомление о снимке."
                         : "На снимке переписка не видна. Собеседник получил уведомление о снимке.")
         await load(initial: false)
+    }
+
+    static func bubbleTransition(mine: Bool) -> AnyTransition {
+        guard UserDefaults.standard.object(forKey: "anim_messages") as? Bool ?? true else { return .identity }
+        let anchor: UnitPoint = mine ? .bottomTrailing : .bottomLeading
+        return .asymmetric(insertion: .scale(scale: 0.6, anchor: anchor).combined(with: .opacity), removal: .opacity)
     }
 
     private func send() async {
