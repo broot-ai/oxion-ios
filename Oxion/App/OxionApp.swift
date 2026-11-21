@@ -464,7 +464,7 @@ struct MainTabView: View {
             }
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
-        .fullScreenCover(isPresented: $model.showMuscles) { MusclePickerView() }
+        .fullScreenCover(isPresented: $model.showMuscles) { Body3DScreen() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
         .sheet(item: $model.bookTrainer) { b in BookingSheet(trainerId: b.id, trainerName: model.bookTrainerName) }
