@@ -31,8 +31,13 @@ struct WorkoutLiveActivity: Widget {
                             .font(.system(size: 24, weight: .bold, design: .rounded).monospacedDigit())
                             .foregroundStyle(context.state.phase == "resting" ? Color.oxLime : .white)
                             .multilineTextAlignment(.trailing)
-                        Text(phaseTitle(context.state, stale: context.isStale))
-                            .font(.caption2.bold()).foregroundStyle(Color.oxLime)
+                        HStack(spacing: 4) {
+                            if let hr = context.state.heartRate {
+                                Label("\(hr)", systemImage: "heart.fill").font(.caption2.bold()).foregroundStyle(Color(red: 1, green: 0.23, blue: 0.36))
+                            }
+                            Text(phaseTitle(context.state, stale: context.isStale))
+                                .font(.caption2.bold()).foregroundStyle(Color.oxLime)
+                        }
                     }
                     .frame(maxWidth: 96, alignment: .trailing)
                     .padding(.trailing, 6)
@@ -94,6 +99,12 @@ struct LockScreenWorkout: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 6)
+                if let hr = st.heartRate {
+                    VStack(spacing: 0) {
+                        Image(systemName: "heart.fill").font(.caption).foregroundStyle(Color(red: 1, green: 0.23, blue: 0.36))
+                        Text("\(hr)").font(.system(size: 17, weight: .bold, design: .rounded).monospacedDigit())
+                    }
+                }
                 BigTimer(st: st, stale: context.isStale)
                     .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(st.phase == "resting" ? Color.oxLime : .white)

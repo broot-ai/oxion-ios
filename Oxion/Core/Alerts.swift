@@ -158,6 +158,7 @@ enum AlertWindow {
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1
+        w.overrideUserInterfaceStyle = OxTheme.current.uiStyle
         let host = UIHostingController(rootView: OxAlertOverlay().modifier(OxThemeModifier()).dynamicTypeSize(...DynamicTypeSize.large))
         host.view.backgroundColor = .clear
         w.rootViewController = host

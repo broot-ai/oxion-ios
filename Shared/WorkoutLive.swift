@@ -25,6 +25,8 @@ struct OxionWorkoutAttributes: ActivityAttributes {
         /// при паузе: сколько секунд было на часах и сколько отдыха осталось
         var pausedElapsed: Int?
         var pausedRestLeft: Int?
+        /// пульс с датчика по Bluetooth (если подключён)
+        var heartRate: Int? = nil
 
         var progress: Double { setsTotalAll > 0 ? Double(setsDoneAll) / Double(setsTotalAll) : 0 }
         var setsLeft: Int { max(0, setsTotal - setIndex + 1) }

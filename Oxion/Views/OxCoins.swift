@@ -275,14 +275,15 @@ struct OxCoinsCard<Label: View>: View {
                                startPoint: UnitPoint(x: 0.1 + px * 0.6, y: 0), endPoint: UnitPoint(x: 0.7 + px * 0.6, y: 1))
                     .blendMode(.plusLighter)
                     .allowsHitTesting(false)
-                label()
-                    .padding(.top, 34)
-                    .offset(x: px * 8, y: -py * 6)
-                    .shadow(color: .black.opacity(0.35), radius: 10, y: 6)
-                    .allowsHitTesting(false)
             }
             .rotation3DEffect(.degrees(Double(-py) * 4), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
             .rotation3DEffect(.degrees(Double(px) * 4), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+        }
+        // «жидкое стекло» поверх — вне 3D-поворота, чтобы стекло преломляло живые жетоны
+        .overlay(alignment: .top) {
+            label()
+                .padding(.top, 34)
+                .allowsHitTesting(false)
         }
         .frame(height: height)
         .frame(maxWidth: .infinity)

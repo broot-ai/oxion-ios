@@ -201,7 +201,9 @@ final class WorkoutEngine {
             return
         }
         do {
-            let content = ActivityContent(state: s.liveState, staleDate: s.restEndsAt)
+            var ls = s.liveState
+            ls.heartRate = liveHeartRate
+            let content = ActivityContent(state: ls, staleDate: s.restEndsAt)
             _ = try Activity.request(attributes: OxionWorkoutAttributes(title: s.title, workoutId: s.workoutId),
                                      content: content, pushType: nil)
         } catch {
@@ -209,9 +211,23 @@ final class WorkoutEngine {
         }
     }
 
+    /// пульс для Live Activity (обновляется не чаще раза в 5 секунд)
+    var liveHeartRate: Int?
+    private var lastHeartPush = Date.distantPast
+
+    func setHeartRate(_ bpm: Int?) {
+        let changed = liveHeartRate != bpm
+        liveHeartRate = bpm
+        guard changed, state != nil, Date().timeIntervalSince(lastHeartPush) > 5 else { return }
+        lastHeartPush = Date()
+        Task { await syncActivity() }
+    }
+
     func syncActivity() async {
         guard let s = state else { return }
-        let content = ActivityContent(state: s.liveState, staleDate: s.phase == .resting ? s.restEndsAt : nil)
+        var ls = s.liveState
+        ls.heartRate = liveHeartRate
+        let content = ActivityContent(state: ls, staleDate: s.phase == .resting ? s.restEndsAt : nil)
         if s.phase == .finished {
             for a in Activity<OxionWorkoutAttributes>.activities {
                 await a.end(content, dismissalPolicy: .after(Date().addingTimeInterval(15 * 60)))

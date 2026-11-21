@@ -327,7 +327,7 @@ struct MyCardSheet: View {
             .navigationDestination(item: $openUser) { id in UserProfileView(userId: id) }
         }
         .tint(.white)
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .onAppear {
             withAnimation(.spring(duration: 0.7, bounce: 0.35).delay(0.08)) { cardIn = true }
         }

@@ -278,5 +278,9 @@ struct OxionWidgetBundle: WidgetBundle {
         RestTimerControl()
         FavoritesControl()
         ActivityControl()
+        DevicesWidget()
+        HeartControl()
+        DevicesControl()
+        Rest90Control()
     }
 }

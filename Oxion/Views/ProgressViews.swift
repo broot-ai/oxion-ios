@@ -533,7 +533,7 @@ struct PhotoViewer: View {
                 Spacer()
             }
         }
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -612,7 +612,7 @@ struct BeforeAfterView: View {
             }
             .padding(.bottom, 10)
         }
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .onAppear {
             before = store.photos.first
             after = store.photos.last
@@ -922,7 +922,7 @@ struct ReplayPlayerView: View {
             .padding(.top, 90).padding(.bottom, 120)
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.25).onChanged { _ in paused = true }.onEnded { _ in paused = false })
         }
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .statusBarHidden()
         .task(id: index) {
             progress = 0

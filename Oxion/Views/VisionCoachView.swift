@@ -312,7 +312,7 @@ struct VisionCoachView: View {
                 .onAppear { PermPrompt.show(.camera, denied: true) }
             }
         }
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .onAppear { pc.rule = rule; pc.start(front: front) }
         .onDisappear { pc.stop() }
         .statusBarHidden()

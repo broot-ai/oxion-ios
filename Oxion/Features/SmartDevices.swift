@@ -3,6 +3,7 @@ import CoreBluetooth
 import AVKit
 import MediaPlayer
 import CoreMotion
+import WidgetKit
 
 // MARK: - Умные устройства по Bluetooth
 // Работает по стандартным профилям Bluetooth LE:
@@ -29,6 +30,11 @@ final class BLEHub: NSObject {
     var heartRate = 0
     var heartAt: Date?
     var battery: [UUID: Int] = [:]
+    var hrDevice: UUID?
+    /// последние значения пульса — для графика
+    var hrHistory: [Int] = []
+    private var lastPublish = Date.distantPast
+    private var lastWidgetReload = Date.distantPast
 
     private var central: CBCentralManager?
     private var peripherals: [UUID: CBPeripheral] = [:]
@@ -78,6 +84,22 @@ final class BLEHub: NSObject {
         connected[id] = nil
     }
 
+    /// Сохранить состояние для виджета на экране блокировки и Пункта управления
+    func publish(force: Bool = false) {
+        guard force || Date().timeIntervalSince(lastPublish) > 3 else { return }
+        lastPublish = Date()
+        var snap = DeviceSnapshot()
+        snap.devices = connected.map { .init(name: $0.value, battery: battery[$0.key], heart: $0.key == hrDevice) }.sorted { $0.name < $1.name }
+        snap.heartRate = hrFresh ? heartRate : nil
+        snap.heartAt = heartAt
+        snap.save()
+        ControlCenter.shared.reloadControls(ofKind: DeviceSnapshot.heartControlKind)
+        if force || Date().timeIntervalSince(lastWidgetReload) > 60 {
+            lastWidgetReload = Date()
+            WidgetCenter.shared.reloadTimelines(ofKind: DeviceSnapshot.widgetKind)
+        }
+    }
+
     var hrFresh: Bool { (heartAt.map { Date().timeIntervalSince($0) < 8 } ?? false) && heartRate > 0 }
 
     fileprivate func reconnectSaved() {
@@ -122,6 +144,7 @@ extension BLEHub: CBCentralManagerDelegate, CBPeripheralDelegate {
         MainActor.assumeIsolated {
             connected[id] = name
             Haptic.success()
+            publish(force: true)
         }
         peripheral.discoverServices([CBUUID(string: "180D"), CBUUID(string: "180F")])
     }
@@ -130,6 +153,8 @@ extension BLEHub: CBCentralManagerDelegate, CBPeripheralDelegate {
         let id = peripheral.identifier
         MainActor.assumeIsolated {
             connected[id] = nil
+            if hrDevice == id { hrDevice = nil; WorkoutEngine.shared.setHeartRate(nil) }
+            publish(force: true)
             // если устройство сохранено — пробуем вернуться, когда оно снова будет рядом
             if saved.contains(id) { central.connect(peripheral) }
         }
@@ -157,26 +182,31 @@ extension BLEHub: CBCentralManagerDelegate, CBPeripheralDelegate {
             MainActor.assumeIsolated {
                 heartRate = bpm
                 heartAt = Date()
+                hrDevice = id
+                hrHistory.append(bpm)
+                if hrHistory.count > 60 { hrHistory.removeFirst(hrHistory.count - 60) }
+                WorkoutEngine.shared.setHeartRate(bpm)
+                publish()
             }
         } else if c.uuid == CBUUID(string: "2A19") {
             let lvl = Int(d[0])
-            MainActor.assumeIsolated { battery[id] = lvl }
+            MainActor.assumeIsolated { battery[id] = lvl; publish() }
         }
     }
 }
 
-// MARK: - Плитки панели
+// MARK: - Панель как «Пункт управления»: стеклянные модули, долгое нажатие раскрывает модуль
 
 enum PanelTile: String, CaseIterable, Identifiable, Codable {
-    case heartRate, audio, music, restTimer, devices, watch, startWorkout, torch
+    case devices, heartRate, music, audio, restTimer, watch, startWorkout, torch
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .devices: "Bluetooth"
         case .heartRate: "Пульс"
-        case .audio: "Звук и колонки"
-        case .music: "Музыка"
-        case .restTimer: "Таймер отдыха"
-        case .devices: "Устройства"
+        case .music: "Сейчас играет"
+        case .audio: "Звук"
+        case .restTimer: "Отдых"
         case .watch: "Apple Watch"
         case .startWorkout: "Тренировка"
         case .torch: "Фонарик"
@@ -184,18 +214,20 @@ enum PanelTile: String, CaseIterable, Identifiable, Codable {
     }
     var icon: String {
         switch self {
+        case .devices: "antenna.radiowaves.left.and.right"
         case .heartRate: "heart.fill"
-        case .audio: "hifispeaker.2.fill"
         case .music: "music.note"
+        case .audio: "hifispeaker.2.fill"
         case .restTimer: "timer"
-        case .devices: "dot.radiowaves.left.and.right"
         case .watch: "applewatch"
         case .startWorkout: "play.fill"
         case .torch: "flashlight.on.fill"
         }
     }
-    /// широкая плитка (на всю строку)
+    /// широкий модуль — на всю строку
     var wide: Bool { self == .heartRate || self == .music }
+    /// раскрывается долгим нажатием
+    var expandable: Bool { self == .devices || self == .heartRate || self == .restTimer }
 }
 
 @MainActor
@@ -203,233 +235,381 @@ enum PanelTile: String, CaseIterable, Identifiable, Codable {
 final class PanelLayout {
     static let shared = PanelLayout()
     var tiles: [PanelTile] {
-        didSet { UserDefaults.standard.set(tiles.map(\.rawValue), forKey: "panel_tiles") }
+        didSet { UserDefaults.standard.set(tiles.map(\.rawValue), forKey: "panel_tiles_v2") }
     }
     private init() {
-        let raw = UserDefaults.standard.stringArray(forKey: "panel_tiles")
-        tiles = raw?.compactMap(PanelTile.init) ?? [.heartRate, .audio, .restTimer, .music, .devices, .startWorkout]
+        let raw = UserDefaults.standard.stringArray(forKey: "panel_tiles_v2")
+        tiles = raw?.compactMap(PanelTile.init) ?? [.devices, .audio, .heartRate, .restTimer, .startWorkout, .music, .torch, .watch]
+    }
+
+    /// Ряды: широкий модуль — один в ряду, квадратные — по два
+    var rows: [[PanelTile]] {
+        var out: [[PanelTile]] = []
+        var pending: PanelTile?
+        for t in tiles {
+            if t.wide {
+                out.append([t])
+            } else if let p = pending {
+                out.append([p, t]); pending = nil
+            } else {
+                pending = t
+            }
+        }
+        if let p = pending { out.append([p]) }
+        return out
     }
 }
 
-// MARK: - Панель управления
+private let heartRed = Color(hex: 0xFF3B5C)
 
 struct DevicePanelView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
     @State private var hub = BLEHub.shared
     @State private var layout = PanelLayout.shared
     @State private var editing = false
-    @State private var devices = false
+    @State private var expanded: PanelTile?
+    @Namespace private var ns
+
+    private let gap: CGFloat = 12
+    private let side: CGFloat = 158
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(layout.tiles) { t in
-                    tile(t)
-                        .gridCellColumns(t.wide ? 2 : 1)
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+        ZStack {
+            backdrop
+            ScrollView {
+                VStack(spacing: gap) {
+                    statusHeader
+                    ForEach(Array(layout.rows.enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: gap) {
+                            ForEach(row) { t in
+                                module(t)
+                                    .frame(height: side)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            if row.count == 1 && !row[0].wide { Color.clear.frame(maxWidth: .infinity, maxHeight: side) }
+                        }
+                    }
+                    Text("Удерживайте модуль, чтобы раскрыть его — как в Пункте управления. Эти же модули можно вынести в Пункт управления iPhone и на экран блокировки: «Изменить» → «Добавить элемент управления» / «Добавить виджеты» → OXION.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 6)
                 }
+                .padding(16)
+                .padding(.bottom, 40)
+                .animation(.spring(duration: 0.45, bounce: 0.25), value: layout.tiles)
             }
-            .padding(16)
-            .animation(.spring(duration: 0.4, bounce: 0.25), value: layout.tiles)
+            .blur(radius: expanded == nil ? 0 : 14)
+            .allowsHitTesting(expanded == nil)
 
-            Text("Пульс — с нагрудных датчиков и часов, которые умеют «транслировать пульс» по Bluetooth. Колонки, в том числе с Алисой, подключите в настройках Bluetooth iPhone как обычную колонку — они появятся в плитке «Звук».")
-                .font(.footnote)
-                .foregroundStyle(Color.oxHint)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 30)
+            if let e = expanded {
+                expandedModule(e)
+                    .zIndex(2)
+            }
         }
-        .background(Color.oxBg)
-        .navigationTitle("Умные устройства")
+        .navigationTitle("Устройства")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Настроить") { editing = true }
+                Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
             }
         }
         .sheet(isPresented: $editing) { PanelEditor() }
-        .sheet(isPresented: $devices) { NavigationStack { DeviceScanView() } }
         .onAppear { hub.start() }
     }
 
-    @ViewBuilder
-    private func tile(_ t: PanelTile) -> some View {
-        switch t {
-        case .heartRate: HeartTile { devices = true }
-        case .audio: AudioTile()
-        case .music: MusicTile()
-        case .restTimer: RestTile()
-        case .devices: SmallTile(t: t, value: hub.connected.isEmpty ? "не подключены" : "\(hub.connected.count) подключено") { devices = true }
-        case .watch: WatchTile()
-        case .startWorkout: SmallTile(t: t, value: WorkoutEngine.shared.isActive ? "идёт" : "начать", accent: true) { model.handle(route: "workout") }
-        case .torch: TorchTile()
+    // фон: мягкие цветные пятна, чтобы стекло «играло»
+    private var backdrop: some View {
+        ZStack {
+            Color.oxBg
+            Circle().fill(Color.lime.opacity(scheme == .dark ? 0.22 : 0.35)).frame(width: 320).blur(radius: 90).offset(x: -120, y: -220)
+            Circle().fill(Color(hex: 0x3FD6C9).opacity(scheme == .dark ? 0.18 : 0.3)).frame(width: 300).blur(radius: 100).offset(x: 140, y: 80)
+            Circle().fill(heartRed.opacity(hub.hrFresh ? 0.2 : 0.06)).frame(width: 260).blur(radius: 90).offset(x: -60, y: 320)
         }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.8), value: hub.hrFresh)
     }
-}
 
-private struct TileBox<C: View>: View {
-    var accent = false
-    @ViewBuilder var content: () -> C
-    var body: some View {
-        content()
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
-            .background(accent ? Color.lime : Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.primary.opacity(0.06)))
-            .foregroundStyle(accent ? Color.onLime : Color.primary)
+    private var statusHeader: some View {
+        HStack(spacing: 10) {
+            Image(systemName: hub.connected.isEmpty ? "antenna.radiowaves.left.and.right.slash" : "antenna.radiowaves.left.and.right")
+                .font(.title3)
+                .foregroundStyle(hub.connected.isEmpty ? Color.secondary : Color.limeInk)
+                .symbolEffect(.variableColor.iterative, isActive: hub.scanning)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(hub.connected.isEmpty ? "Нет подключений" : hub.connected.values.sorted().joined(separator: ", "))
+                    .font(.subheadline.bold()).lineLimit(1)
+                Text(hub.hrFresh ? "пульс \(hub.heartRate) уд/мин" : (hub.state == .poweredOff ? "Bluetooth выключен" : "удерживайте Bluetooth, чтобы подключить"))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 6)
+        .padding(.bottom, 4)
     }
-}
 
-private struct SmallTile: View {
-    let t: PanelTile
-    let value: String
-    var accent = false
-    var action: () -> Void
-    var body: some View {
-        Button { Haptic.tap(); action() } label: {
-            TileBox(accent: accent) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: t.icon).font(.title2)
-                    Spacer(minLength: 0)
-                    Text(t.title).font(.subheadline.bold())
-                    Text(value).font(.caption).opacity(0.7)
-                }
+    // MARK: модули
+
+    @ViewBuilder
+    private func module(_ t: PanelTile) -> some View {
+        let content = Group {
+            switch t {
+            case .devices: BluetoothModule(onOpen: { open(t) })
+            case .heartRate: HeartModule(onConnect: { open(.devices) })
+            case .music: NowPlayingModule()
+            case .audio: AudioModule()
+            case .restTimer: RestModule()
+            case .watch: WatchModule()
+            case .startWorkout: WorkoutModule { model.handle(route: "workout") }
+            case .torch: TorchModule()
             }
         }
-        .buttonStyle(TileStyle())
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .glassEffect(t == .startWorkout ? .regular.tint(Color.lime).interactive() : .regular.interactive(), in: .rect(cornerRadius: 32))
+            .matchedGeometryEffect(id: t.id, in: ns, isSource: expanded != t)
+            .opacity(expanded == t ? 0 : 1)
+            .onLongPressGesture(minimumDuration: 0.35) {
+                if t.expandable { open(t) }
+            }
+    }
+
+    private func open(_ t: PanelTile) {
+        OxHaptics.play(.select)
+        if t == .devices { hub.scan() }
+        withAnimation(.spring(duration: 0.45, bounce: 0.2)) { expanded = t }
+    }
+
+    private func close() {
+        hub.stopScan()
+        withAnimation(.spring(duration: 0.4, bounce: 0.15)) { expanded = nil }
+    }
+
+    // MARK: раскрытый модуль
+
+    private func expandedModule(_ t: PanelTile) -> some View {
+        ZStack {
+            Color.black.opacity(0.25).ignoresSafeArea()
+                .onTapGesture { close() }
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: t.icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(t == .heartRate ? .white : Color.onLime)
+                        .frame(width: 48, height: 48)
+                        .background(t == .heartRate ? heartRed : Color.lime, in: Circle())
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(t.title).font(.title3.bold())
+                        Text(t == .restTimer ? "системный таймер" : (hub.connected.isEmpty ? "не подключено" : "подключено: \(hub.connected.count)"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                Divider()
+                switch t {
+                case .restTimer: RestChooser { close() }
+                case .heartRate: DeviceList(onlyHeart: true)
+                default: DeviceList(onlyHeart: false)
+                }
+                if t != .restTimer {
+                    Divider()
+                    Button {
+                        if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                    } label: {
+                        Text("Настройки Bluetooth…").font(.subheadline.weight(.semibold))
+                    }
+                    .tint(.primary)
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 360)
+            .glassEffect(.regular, in: .rect(cornerRadius: 36))
+            .matchedGeometryEffect(id: t.id, in: ns, isSource: true)
+            .padding(.horizontal, 20)
+        }
     }
 }
 
-struct TileStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
+// MARK: Модуль Bluetooth
+
+private struct BluetoothModule: View {
+    var onOpen: () -> Void
+    @State private var hub = BLEHub.shared
+
+    var body: some View {
+        let on = !hub.connected.isEmpty
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                Haptic.tap()
+                if hub.saved.isEmpty || on { onOpen() } else { hub.start(); hub.scan() }
+            } label: {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(on ? Color.onLime : .primary)
+                    .frame(width: 56, height: 56)
+                    .background(on ? Color.lime : Color.primary.opacity(0.1), in: Circle())
+                    .symbolEffect(.variableColor.iterative, isActive: hub.scanning)
+            }
+            .buttonStyle(TileStyle())
+            Spacer(minLength: 0)
+            Text("Bluetooth").font(.subheadline.bold())
+            Text(on ? hub.connected.values.sorted().joined(separator: ", ") : "удерживайте")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
-private struct HeartTile: View {
-    var connect: () -> Void
+// MARK: Модуль пульса
+
+private struct HeartModule: View {
+    var onConnect: () -> Void
     @State private var hub = BLEHub.shared
     @State private var beat = false
 
-    private var zone: (String, Color) {
-        let b = hub.heartRate
-        switch b {
-        case ..<100: return ("разминка", Color(hex: 0x3FD6C9))
-        case 100..<130: return ("жиросжигание", Color(hex: 0x58F670))
-        case 130..<155: return ("аэробная", Color(hex: 0xFFD25E))
-        case 155..<175: return ("анаэробная", Color(hex: 0xF0A030))
-        default: return ("максимум", Color(hex: 0xFF5A4E))
-        }
-    }
+    static let zones: [(String, Color, ClosedRange<Int>)] = [
+        ("разминка", Color(hex: 0x3FD6C9), 0...99), ("жиросжигание", Color(hex: 0x58F670), 100...129),
+        ("аэробная", Color(hex: 0xFFD25E), 130...154), ("анаэробная", Color(hex: 0xF0A030), 155...174), ("максимум", heartRed, 175...260),
+    ]
+    private var zone: Int { Self.zones.firstIndex { $0.2.contains(hub.heartRate) } ?? 0 }
 
     var body: some View {
-        TileBox {
-            HStack(spacing: 16) {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 38))
-                    .foregroundStyle(hub.hrFresh ? zone.1 : Color.oxHint)
-                    .scaleEffect(beat ? 1.15 : 1)
-                    .animation(.easeOut(duration: 0.15), value: beat)
-                VStack(alignment: .leading, spacing: 2) {
-                    if hub.hrFresh {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(hub.heartRate)").font(.system(size: 40, weight: .bold, design: .rounded)).contentTransition(.numericText())
-                            Text("уд/мин").font(.subheadline).foregroundStyle(Color.oxHint)
-                        }
-                        Text("зона: \(zone.0)").font(.caption.bold()).foregroundStyle(zone.1)
-                    } else {
-                        Text("Пульс").font(.headline)
-                        Text("Подключите датчик или часы").font(.caption).foregroundStyle(Color.oxHint)
-                    }
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(hub.hrFresh ? heartRed : Color.secondary)
+                        .scaleEffect(beat ? 1.22 : 1)
+                    Text("Пульс").font(.subheadline.bold())
                 }
-                Spacer()
-                if !hub.hrFresh {
-                    Button("Подключить", action: connect).buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(Color.onLime)
+                if hub.hrFresh {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(hub.heartRate)")
+                            .font(.system(size: 46, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText(value: Double(hub.heartRate)))
+                        Text("уд/мин").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text(Self.zones[zone].0).font(.caption.bold()).foregroundStyle(Self.zones[zone].1)
+                } else {
+                    Text("Датчик не подключён").font(.caption).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Button("Подключить", action: onConnect)
+                        .font(.subheadline.bold())
+                        .buttonStyle(.glassProminent)
+                        .tint(Color.lime)
+                        .foregroundStyle(Color.onLime)
+                        .fixedSize()
+                }
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 10) {
+                Sparkline(values: hub.hrHistory.count > 1 ? hub.hrHistory.map(Double.init) : [70, 72, 71, 74, 73], color: hub.hrFresh ? heartRed : Color.secondary.opacity(0.4))
+                    .frame(width: 120, height: 50)
+                // шкала зон
+                HStack(spacing: 3) {
+                    ForEach(Array(Self.zones.enumerated()), id: \.offset) { i, z in
+                        Capsule().fill(z.1.opacity(hub.hrFresh && i == zone ? 1 : 0.28))
+                            .frame(width: 20, height: hub.hrFresh && i == zone ? 8 : 5)
+                    }
                 }
             }
         }
-        .animation(.snappy, value: hub.heartRate)
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .animation(.spring(duration: 0.35), value: hub.heartRate)
         .onChange(of: hub.heartAt) {
-            beat = true
-            Task { try? await Task.sleep(for: .milliseconds(160)); beat = false }
+            withAnimation(.easeOut(duration: 0.12)) { beat = true }
+            Task { try? await Task.sleep(for: .milliseconds(150)); withAnimation(.easeIn(duration: 0.2)) { beat = false } }
         }
     }
 }
 
-/// Системная кнопка выбора, куда выводить звук (AirPods, колонки, Яндекс Станция по Bluetooth, AirPlay)
+// MARK: Звук
+
+/// Системная кнопка выбора, куда выводить звук (AirPods, колонки, в т. ч. с Алисой по Bluetooth, AirPlay)
 struct RoutePicker: UIViewRepresentable {
+    var tint: UIColor = .label
     func makeUIView(context: Context) -> AVRoutePickerView {
         let v = AVRoutePickerView()
         v.activeTintColor = UIColor(Color.lime)
-        v.tintColor = .label
+        v.tintColor = tint
         v.prioritizesVideoDevices = false
         return v
     }
     func updateUIView(_ v: AVRoutePickerView, context: Context) {}
 }
 
-private struct AudioTile: View {
-    @State private var output = AudioTile.current()
+private struct AudioModule: View {
+    @State private var output = AudioModule.current()
 
     static func current() -> String {
         AVAudioSession.sharedInstance().currentRoute.outputs.first?.portName ?? "iPhone"
     }
 
     var body: some View {
-        TileBox {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "hifispeaker.2.fill").font(.title2)
-                    Spacer()
-                    RoutePicker().frame(width: 34, height: 34)
-                }
-                Spacer(minLength: 0)
-                Text("Звук").font(.subheadline.bold())
-                Text(output).font(.caption).opacity(0.7).lineLimit(1)
-            }
+        let external = output != "iPhone" && output != "Динамик" && output != "Speaker"
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: external ? "hifispeaker.2.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(external ? Color.onLime : .primary)
+                .frame(width: 56, height: 56)
+                .background(external ? Color.lime : Color.primary.opacity(0.1), in: Circle())
+            Spacer(minLength: 0)
+            Text("Звук").font(.subheadline.bold())
+            Text(output).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // вся плитка — системная кнопка выбора вывода звука
+        .overlay { RoutePicker(tint: .clear).opacity(0.02) }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
-            output = Self.current()
+            Task { @MainActor in output = Self.current() }
         }
     }
 }
 
-private struct MusicTile: View {
+private struct NowPlayingModule: View {
     @State private var title = "Ничего не играет"
+    @State private var artist = "Приложение «Музыка»"
+    @State private var art: UIImage?
     @State private var playing = false
     private let player = MPMusicPlayerController.systemMusicPlayer
 
     var body: some View {
-        TileBox {
-            HStack(spacing: 14) {
-                Image(systemName: "music.note")
-                    .font(.title2)
-                    .frame(width: 46, height: 46)
-                    .background(Color(hex: 0xFF3B5C).opacity(0.2), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Музыка").font(.subheadline.bold())
-                    Text(title).font(.caption).foregroundStyle(Color.oxHint).lineLimit(1)
-                }
-                Spacer()
-                HStack(spacing: 18) {
-                    Button { player.skipToPreviousItem(); refresh() } label: { Image(systemName: "backward.fill") }
+        HStack(spacing: 14) {
+            Group {
+                if let art { Image(uiImage: art).resizable().scaledToFill() }
+                else { Image(systemName: "music.note").font(.title).foregroundStyle(.secondary) }
+            }
+            .frame(width: 72, height: 72)
+            .background(Color.primary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.bold()).lineLimit(1)
+                Text(artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing: 26) {
+                    Button { player.skipToPreviousItem(); Haptic.tap() } label: { Image(systemName: "backward.fill") }
                     Button {
                         if playing { player.pause() } else { player.play() }
                         Haptic.tap()
-                        Task { try? await Task.sleep(for: .milliseconds(300)); refresh() }
                     } label: {
                         Image(systemName: playing ? "pause.fill" : "play.fill").font(.title2).contentTransition(.symbolEffect(.replace))
                     }
-                    Button { player.skipToNextItem(); refresh() } label: { Image(systemName: "forward.fill") }
+                    Button { player.skipToNextItem(); Haptic.tap() } label: { Image(systemName: "forward.fill") }
                 }
+                .font(.title3)
                 .buttonStyle(.plain)
+                .padding(.top, 6)
             }
+            Spacer(minLength: 0)
         }
-        .onAppear {
-            player.beginGeneratingPlaybackNotifications()
-            refresh()
-        }
+        .padding(18)
+        .overlay(alignment: .topTrailing) { RoutePicker().frame(width: 30, height: 30).padding(12) }
+        .onAppear { player.beginGeneratingPlaybackNotifications(); refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .MPMusicPlayerControllerNowPlayingItemDidChange)) { _ in refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .MPMusicPlayerControllerPlaybackStateDidChange)) { _ in refresh() }
     }
@@ -437,55 +617,125 @@ private struct MusicTile: View {
     private func refresh() {
         playing = player.playbackState == .playing
         if let i = player.nowPlayingItem {
-            title = [i.title, i.artist].compactMap { $0 }.joined(separator: " — ")
-        } else {
-            title = "Приложение «Музыка»"
+            title = i.title ?? "Без названия"
+            artist = i.artist ?? ""
+            art = i.artwork?.image(at: CGSize(width: 144, height: 144))
         }
     }
 }
 
-private struct RestTile: View {
-    @State private var started: Int?
+// MARK: Отдых
+
+@MainActor
+@Observable
+final class RestClock {
+    static let shared = RestClock()
+    var end: Date?
+    var total: Double = 90
+    func start(_ s: Int) {
+        total = Double(s)
+        end = Date().addingTimeInterval(Double(s))
+        Task { await OxAlarms.scheduleRest(seconds: s, next: "") }
+        FX.play(.energyPulse)
+    }
+}
+
+private struct RestModule: View {
+    @State private var clock = RestClock.shared
+
     var body: some View {
-        TileBox {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "timer").font(.title2)
-                Spacer(minLength: 0)
-                Text(started.map { "Отдых \($0) с" } ?? "Таймер отдыха").font(.subheadline.bold())
-                HStack(spacing: 6) {
-                    ForEach([60, 90, 120], id: \.self) { s in
-                        Button("\(s)") {
-                            Haptic.tap()
-                            started = s
-                            Task { await OxAlarms.scheduleRest(seconds: s, next: "") }
-                        }
-                        .font(.caption.bold())
-                        .buttonStyle(.glass)
-                        .controlSize(.mini)
+        TimelineView(.periodic(from: .now, by: 1)) { tl in
+            let left = max(0, clock.end?.timeIntervalSince(tl.date) ?? 0)
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
+                    Circle().stroke(Color.primary.opacity(0.1), lineWidth: 5)
+                    Circle().trim(from: 0, to: left > 0 ? left / clock.total : 0)
+                        .stroke(Color.lime, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1), value: left)
+                    if left > 0 {
+                        Text(String(format: "%d:%02d", Int(left) / 60, Int(left) % 60))
+                            .font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                    } else {
+                        Image(systemName: "timer").font(.system(size: 20, weight: .semibold))
                     }
                 }
+                .frame(width: 56, height: 56)
+                Spacer(minLength: 0)
+                Text("Отдых").font(.subheadline.bold())
+                Text(left > 0 ? "идёт" : "нажмите — 90 с").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { Haptic.tap(); clock.start(90) }
+    }
+}
+
+private struct RestChooser: View {
+    var done: () -> Void
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            ForEach([30, 45, 60, 90, 120, 180], id: \.self) { s in
+                Button {
+                    RestClock.shared.start(s)
+                    done()
+                } label: {
+                    Text(s < 60 ? "\(s) с" : (s % 60 == 0 ? "\(s / 60) мин" : "\(s / 60):\(String(format: "%02d", s % 60))"))
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(.glass)
             }
         }
     }
 }
 
-private struct WatchTile: View {
+// MARK: Прочие модули
+
+private struct WatchModule: View {
     var body: some View {
         let w = WatchLink.shared
-        TileBox {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "applewatch").font(.title2)
-                Spacer(minLength: 0)
-                Text("Apple Watch").font(.subheadline.bold())
-                Text(w.appInstalled ? "OXION на часах" : (w.paired ? "часы подключены" : "не подключены"))
-                    .font(.caption).opacity(0.7)
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: "applewatch")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(w.appInstalled ? Color.onLime : .primary)
+                .frame(width: 56, height: 56)
+                .background(w.appInstalled ? Color.lime : Color.primary.opacity(0.1), in: Circle())
+            Spacer(minLength: 0)
+            Text("Apple Watch").font(.subheadline.bold())
+            Text(w.appInstalled ? "OXION на часах" : (w.paired ? "подключены" : "нет часов")).font(.caption).foregroundStyle(.secondary)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { w.activate() }
     }
 }
 
-private struct TorchTile: View {
+private struct WorkoutModule: View {
+    var action: () -> Void
+    var body: some View {
+        Button { Haptic.tap(); action() } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: WorkoutEngine.shared.isActive ? "figure.strengthtraining.traditional" : "play.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .frame(width: 56, height: 56)
+                    .background(Color.onLime.opacity(0.12), in: Circle())
+                Spacer(minLength: 0)
+                Text("Тренировка").font(.subheadline.bold())
+                Text(WorkoutEngine.shared.isActive ? "идёт — открыть" : "начать").font(.caption).opacity(0.7)
+            }
+            .foregroundStyle(Color.onLime)
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(TileStyle())
+    }
+}
+
+private struct TorchModule: View {
     @State private var on = false
     var body: some View {
         Button {
@@ -496,16 +746,101 @@ private struct TorchTile: View {
             d.unlockForConfiguration()
             Haptic.tap()
         } label: {
-            TileBox(accent: on) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: on ? "flashlight.on.fill" : "flashlight.off.fill").font(.title2).contentTransition(.symbolEffect(.replace))
-                    Spacer(minLength: 0)
-                    Text("Фонарик").font(.subheadline.bold())
-                    Text(on ? "включён" : "выключен").font(.caption).opacity(0.7)
-                }
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: on ? "flashlight.on.fill" : "flashlight.off.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(on ? Color.onLime : .primary)
+                    .frame(width: 56, height: 56)
+                    .background(on ? Color.white : Color.primary.opacity(0.1), in: Circle())
+                    .contentTransition(.symbolEffect(.replace))
+                Spacer(minLength: 0)
+                Text("Фонарик").font(.subheadline.bold())
+                Text(on ? "включён" : "выключен").font(.caption).foregroundStyle(.secondary)
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(TileStyle())
+    }
+}
+
+struct TileStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
+    }
+}
+
+// MARK: Список устройств в раскрытом модуле (как в Пункте управления)
+
+private struct DeviceList: View {
+    var onlyHeart: Bool
+    @State private var hub = BLEHub.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if hub.state == .unauthorized {
+                Text("Разрешите Bluetooth: Настройки → Oxion → Bluetooth").font(.footnote).foregroundStyle(.orange)
+            } else if hub.state == .poweredOff {
+                Text("Bluetooth выключен — включите в Пункте управления").font(.footnote).foregroundStyle(.orange)
+            }
+            ForEach(hub.connected.sorted(by: { $0.value < $1.value }), id: \.key) { id, name in
+                row(icon: id == hub.hrDevice ? "heart.fill" : "checkmark", name: name,
+                    sub: hub.battery[id].map { "заряд \($0)%" } ?? "подключено", on: true) {
+                    hub.disconnect(id)
+                }
+            }
+            let others = hub.found.filter { hub.connected[$0.id] == nil && (!onlyHeart || $0.hr) }
+            if !others.isEmpty {
+                Text(onlyHeart ? "Датчики пульса рядом" : "Устройства рядом")
+                    .font(.caption.bold()).foregroundStyle(.secondary)
+                    .padding(.top, 8)
+            }
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(others) { d in
+                        row(icon: d.hr ? "heart" : "dot.radiowaves.left.and.right", name: d.name,
+                            sub: d.hr ? "датчик пульса" : signal(d.rssi), on: false) {
+                            hub.connect(d.id)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 260)
+            if hub.scanning {
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Поиск…").font(.caption).foregroundStyle(.secondary) }
+                    .padding(.top, 4)
+            } else if others.isEmpty && hub.connected.isEmpty {
+                Text(onlyHeart ? "Включите на часах «Трансляцию пульса» или наденьте нагрудный датчик." : "Ничего не найдено рядом.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Искать снова") { hub.scan() }.font(.subheadline.bold()).tint(Color.limeInk)
+            }
+        }
+    }
+
+    private func signal(_ rssi: Int) -> String { rssi > -60 ? "рядом" : rssi > -75 ? "недалеко" : "далеко" }
+
+    private func row(icon: String, name: String, sub: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button { Haptic.tap(); action() } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(on ? Color.onLime : .primary)
+                    .frame(width: 36, height: 36)
+                    .background(on ? Color.lime : Color.primary.opacity(0.1), in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(sub).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if on { Text("Отключить").font(.caption.bold()).foregroundStyle(.secondary) }
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -527,7 +862,7 @@ private struct PanelEditor: View {
                 } header: {
                     Text("На панели")
                 } footer: {
-                    Text("Перетащите, чтобы поменять порядок. Смахните влево, чтобы убрать.")
+                    Text("Перетащите, чтобы поменять порядок. Смахните влево, чтобы убрать. «Пульс» и «Сейчас играет» — широкие модули.")
                 }
                 let rest = PanelTile.allCases.filter { !layout.tiles.contains($0) }
                 if !rest.isEmpty {
@@ -544,91 +879,11 @@ private struct PanelEditor: View {
                 }
             }
             .environment(\.editMode, .constant(.active))
-            .navigationTitle("Панель")
+            .navigationTitle("Модули")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
         }
         .tint(Color.limeInk)
-    }
-}
-
-// MARK: - Поиск устройств
-
-struct DeviceScanView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var hub = BLEHub.shared
-
-    var body: some View {
-        List {
-            if hub.state == .unauthorized {
-                Section { Text("Разрешите доступ к Bluetooth: Настройки → Oxion → Bluetooth.").foregroundStyle(.orange) }
-            } else if hub.state == .poweredOff {
-                Section { Text("Bluetooth выключен — включите его в Пункте управления.").foregroundStyle(.orange) }
-            }
-            if !hub.connected.isEmpty {
-                Section("Подключены") {
-                    ForEach(hub.connected.sorted(by: { $0.value < $1.value }), id: \.key) { id, name in
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.limeInk)
-                            Text(name)
-                            Spacer()
-                            if let b = hub.battery[id] { Label("\(b)%", systemImage: "battery.75percent").font(.caption).foregroundStyle(Color.oxHint) }
-                        }
-                        .swipeActions { Button("Забыть", role: .destructive) { hub.disconnect(id) } }
-                    }
-                }
-            }
-            Section {
-                ForEach(hub.found.filter { hub.connected[$0.id] == nil }) { d in
-                    Button {
-                        Haptic.tap()
-                        hub.connect(d.id)
-                    } label: {
-                        HStack {
-                            Image(systemName: d.hr ? "heart.fill" : "dot.radiowaves.left.and.right")
-                                .foregroundStyle(d.hr ? Color(hex: 0xFF3B5C) : Color.oxHint)
-                                .frame(width: 26)
-                            VStack(alignment: .leading) {
-                                Text(d.name)
-                                if d.hr { Text("датчик пульса").font(.caption).foregroundStyle(Color.limeInk) }
-                            }
-                            Spacer()
-                            SignalBars(rssi: d.rssi)
-                        }
-                    }
-                    .tint(.primary)
-                }
-            } header: {
-                HStack {
-                    Text("Рядом")
-                    if hub.scanning { ProgressView().controlSize(.mini) }
-                }
-            } footer: {
-                Text("На часах включите «Трансляцию пульса» (Heart Rate Broadcast) — тогда они появятся здесь как датчик пульса. Apple Watch работает через приложение OXION на часах.")
-            }
-        }
-        .navigationTitle("Устройства")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(hub.scanning ? "Стоп" : "Искать") { hub.scanning ? hub.stopScan() : hub.scan() }
-            }
-            ToolbarItem(placement: .cancellationAction) { Button("Готово") { dismiss() } }
-        }
-        .onAppear { hub.start(); Task { try? await Task.sleep(for: .milliseconds(400)); hub.scan() } }
-        .onDisappear { hub.stopScan() }
-    }
-}
-
-private struct SignalBars: View {
-    let rssi: Int
-    var body: some View {
-        let lvl = rssi > -60 ? 3 : rssi > -75 ? 2 : 1
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(1...3, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1).fill(i <= lvl ? Color.primary : Color.primary.opacity(0.2)).frame(width: 3, height: CGFloat(4 + i * 3))
-            }
-        }
     }
 }
 

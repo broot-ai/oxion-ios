@@ -36,7 +36,7 @@ struct BubbleStyle: DynamicProperty {
 // MARK: экран «Оформление»
 
 struct AppearanceSettingsView: View {
-    @AppStorage("theme") private var theme = OxTheme.dark.rawValue
+    @AppStorage("theme") private var theme = OxTheme.system.rawValue
     @AppStorage("text_system") private var system = true
     @AppStorage("text_size") private var index = 3
     @State private var textSheet = false

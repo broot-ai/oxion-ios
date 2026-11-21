@@ -28,14 +28,30 @@ enum OxTheme: String, CaseIterable {
     case system, light, dark
     var title: String { switch self { case .system: "Как на iPhone"; case .light: "Светлая"; case .dark: "Тёмная" } }
     var scheme: ColorScheme? { switch self { case .system: nil; case .light: .light; case .dark: .dark } }
-    static var current: OxTheme { OxTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "dark") ?? .dark }
+    static var current: OxTheme { OxTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "system") ?? .system }
+    var uiStyle: UIUserInterfaceStyle { switch self { case .system: .unspecified; case .light: .light; case .dark: .dark } }
+
+    /// Тема ставится на все окна приложения. «Как на iPhone» — окна сами следуют за системой
+    /// (через preferredColorScheme это не работает: после ручной темы iOS «залипает»).
+    @MainActor static func apply() {
+        let style = current.uiStyle
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for w in scene.windows where w.overrideUserInterfaceStyle != style {
+                UIView.transition(with: w, duration: 0.3, options: .transitionCrossDissolve) {
+                    w.overrideUserInterfaceStyle = style
+                }
+            }
+        }
+    }
 }
 
 /// Применяет выбранную тему (используется и в отдельных окнах — алерты)
 struct OxThemeModifier: ViewModifier {
-    @AppStorage("theme") private var theme = OxTheme.dark.rawValue
+    @AppStorage("theme") private var theme = OxTheme.system.rawValue
     func body(content: Content) -> some View {
-        content.preferredColorScheme(OxTheme(rawValue: theme)?.scheme)
+        content
+            .onAppear { OxTheme.apply() }
+            .onChange(of: theme) { OxTheme.apply() }
     }
 }
 
@@ -134,7 +150,7 @@ final class AppModel {
     struct IdBox: Identifiable { let id: Int }
 
     enum AppSheet: String, Identifiable {
-        case qr, compose, progress, permissions, run, scanner, music, screenLock
+        case qr, compose, progress, permissions, run, scanner, music, screenLock, devices
         var id: String { rawValue }
     }
 
@@ -175,6 +191,13 @@ final class AppModel {
         case "permissions": sheet = .permissions
         case "vision": showVision = true
         case "run": sheet = .run
+        case "devices": sheet = .devices
+        case "rest":
+            let sec = parts.count > 1 ? Int(parts[1]) ?? 90 : 90
+            Task {
+                await OxAlarms.scheduleRest(seconds: sec, next: "")
+                OxAlert.show(icon: "timer", title: "Отдых \(sec) с", message: "Сработает даже в беззвучном режиме")
+            }
         case "exercise" where parts.count > 1:
             if let id = Int(parts[1]) { exerciseBox = IdBox(id: id) }
         case "trainer":
@@ -422,6 +445,7 @@ struct MainTabView: View {
             case .scanner: NavigationStack { LabelScannerView() }
             case .music: NavigationStack { WorkoutMusicView() }
             case .screenLock: NavigationStack { ScreenTimeLockView() }
+            case .devices: NavigationStack { DevicePanelView() }
             }
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }

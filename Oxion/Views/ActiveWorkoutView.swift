@@ -136,7 +136,7 @@ struct ActiveWorkoutView: View {
                 ContentUnavailableView("Тренировка не начата", systemImage: "figure.strengthtraining.traditional")
             }
         }
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .fullScreenCover(isPresented: $vision) { VisionCoachView() }
         .task(id: engine.state?.restEndsAt) {
             // сигнал «отдых окончен» — ровно в момент окончания, без секундного цикла
