@@ -75,6 +75,8 @@ targets:
         NSMotionUsageDescription: OXION считает шаги и определяет ходьбу и бег, чтобы предложить тренировку.
         NSAppleMusicUsageDescription: OXION включает музыку для тренировки из Apple Music.
         NSLocationAlwaysAndWhenInUseUsageDescription: OXION записывает маршрут пробежки, даже когда экран выключен.
+        NSLocationTemporaryUsageDescriptionDictionary:
+          run: Точная геопозиция нужна, чтобы правильно посчитать дистанцию и темп пробежки.
         NSContactsUsageDescription: OXION показывает ваши контакты, чтобы вы могли пригласить друзей. Контакты не отправляются на сервер.
         NSPhotoLibraryAddUsageDescription: OXION сохраняет карточки прогресса и итогов тренировки в «Фото».
         NSLocalNetworkUsageDescription: OXION ищет экраны и тренажёры в вашей сети Wi‑Fi, чтобы показать на них тренировку.

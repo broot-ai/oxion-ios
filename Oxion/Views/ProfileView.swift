@@ -61,18 +61,24 @@ struct ProfileView: View {
                 }
                 Section("Тренировки") {
                     nav("Прогресс тела", "chart.line.uptrend.xyaxis", Color.lime) { ProgressHubView() }
-                    nav("Будильники", "alarm.fill", Color(hex: 0xF0A030)) { AlarmSettingsView() }
+                    nav("Цели", "target", Color(hex: 0xFF5A4E)) { GoalsView() }
+                    nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
+                    nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
+                }
+                Section("Тренер и здоровье") {
+                    nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }
+                    nav("ИИ-тренер", "sparkles", Color.lime) { AICoachView() }
+                    nav("Здоровье", "heart.text.square.fill", Color(hex: 0xFF3B5C)) { HealthView() }
+                }
+                Section("Инструменты") {
                     nav("Пробежка с GPS", "figure.run", Color(hex: 0x58F670)) { RunTrackerView() }
                     nav("Сканер этикеток", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
+                    nav("Будильники", "alarm.fill", Color(hex: 0xF0A030)) { AlarmSettingsView() }
+                }
+                Section("Музыка и фокус") {
                     nav("Музыка для тренировки", "music.note", Color(hex: 0xFF3B5C)) { WorkoutMusicView() }
                     nav("Не отвлекаться", "hourglass", Color(hex: 0x8E7CFF)) { ScreenTimeLockView() }
                     nav("Game Center", "gamecontroller.fill", Color(hex: 0x0A84FF)) { GameCenterView() }
-                    nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
-                    nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
-                    nav("Цели", "target", Color(hex: 0xFF5A4E)) { GoalsView() }
-                    nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }
-                    nav("Здоровье", "heart.text.square.fill", Color(hex: 0xFF3B5C)) { HealthView() }
-                    nav("ИИ-тренер", "sparkles", Color.lime) { AICoachView() }
                 }
                 Section("Покупки") {
                     nav("Магазин спортпита", "bag.fill", Color(hex: 0xF0A030)) { ShopView() }

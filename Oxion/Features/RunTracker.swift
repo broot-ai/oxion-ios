@@ -59,7 +59,25 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         return Int((distance / 1000) * kg * (kind == .run ? 1.0 : 0.55))
     }
 
+    /// iPhone отдаёт «примерную» геопозицию (большой круг на карте) — просим точную на время тренировки
+    var approximate = false
+
+    func askPrecise() {
+        let st = manager.authorizationStatus
+        if st == .notDetermined { manager.requestWhenInUseAuthorization(); return }
+        approximate = manager.accuracyAuthorization == .reducedAccuracy
+        if approximate {
+            manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: "run") { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.approximate = self.manager.accuracyAuthorization == .reducedAccuracy
+                }
+            }
+        }
+    }
+
     func start() {
+        askPrecise()
         let st = manager.authorizationStatus
         if st == .notDetermined { manager.requestWhenInUseAuthorization() }
         if st == .denied || st == .restricted { denied = true; return }
@@ -113,7 +131,10 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let st = manager.authorizationStatus
-        Task { @MainActor in self.denied = st == .denied || st == .restricted }
+        Task { @MainActor in
+            self.denied = st == .denied || st == .restricted
+            if st == .authorizedWhenInUse || st == .authorizedAlways { self.askPrecise() }
+        }
     }
 
     // MARK: шаги и «вы, похоже, идёте»
@@ -157,9 +178,10 @@ struct RunTrackerView: View {
     @State private var t = RunTracker()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var saving = false
+    @Namespace private var mapScope
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Map(position: $camera) {
                 if t.coords.count > 1 {
                     MapPolyline(coordinates: t.coords)
@@ -168,12 +190,38 @@ struct RunTrackerView: View {
                 UserAnnotation()
             }
             .mapStyle(.standard(elevation: .realistic, emphasis: .muted, pointsOfInterest: .excludingAll))
-            .mapControls { MapUserLocationButton() }
-            .ignoresSafeArea(edges: .top)
-
-            panel
-                .padding(12)
+            .mapControls { }
+            .ignoresSafeArea(.container, edges: .top)
         }
+        .mapScope(mapScope)
+        .safeAreaInset(edge: .bottom) {
+                // панель снизу: значок «Карты» и кнопки карты поднимаются над ней, а не прячутся
+                panel
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
+            }
+            .overlay(alignment: .topTrailing) {
+                // кнопки карты — под шапкой, а не в строке состояния
+                VStack(spacing: 10) {
+                    MapUserLocationButton(scope: mapScope)
+                    MapCompass(scope: mapScope)
+                }
+                .buttonBorderShape(.circle)
+                .padding(.trailing, 12)
+                .padding(.top, 8)
+            }
+            .overlay(alignment: .top) {
+                if t.approximate {
+                    Button { t.askPrecise() } label: {
+                        Label("Геопозиция примерная — включить точную", systemImage: "location.circle")
+                            .font(.footnote.bold())
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                    }
+                    .buttonStyle(.glass)
+                    .padding(.top, 8)
+                }
+            }
+        .toolbar(.hidden, for: .tabBar)
         .navigationTitle(t.kind == .run ? "Пробежка" : "Прогулка")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -187,7 +235,7 @@ struct RunTrackerView: View {
                 }
             }
         }
-        .onAppear { t.startMotion() }
+        .onAppear { t.startMotion(); t.askPrecise() }
         .onDisappear { t.stopMotion() }
         .onChange(of: t.denied) {
             if t.denied { PermPrompt.show(.location, denied: true) }
