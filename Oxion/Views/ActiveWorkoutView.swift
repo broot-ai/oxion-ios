@@ -101,6 +101,8 @@ struct ActiveWorkoutView: View {
     @State private var reps = 0
     @State private var weight: Double?
     @State private var vision = false
+    @State private var flat = FlatDetector()
+    @State private var hub = BLEHub.shared
 
     var body: some View {
         ZStack {
@@ -109,9 +111,25 @@ struct ActiveWorkoutView: View {
             if let s = engine.state {
                 if s.phase == .finished {
                     summary(s)
+                } else if flat.flat {
+                    // телефон лежит на полу/скамье экраном вверх — режим «Табло»
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in ScoreboardView(s: s, now: ctx.date) }
+                        .ignoresSafeArea()
+                        .transition(.opacity.combined(with: .scale(scale: 1.05)))
                 } else {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         content(s, now: ctx.date)
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if hub.hrFresh {
+                            Label("\(hub.heartRate)", systemImage: "heart.fill")
+                                .font(.subheadline.bold().monospacedDigit())
+                                .foregroundStyle(Color(hex: 0xFF3B5C))
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .glassEffect(.regular, in: .capsule)
+                                .padding(.trailing, 16).padding(.top, 4)
+                                .contentTransition(.numericText())
+                        }
                     }
                 }
             } else {
@@ -127,7 +145,8 @@ struct ActiveWorkoutView: View {
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             if !Task.isCancelled, engine.state?.phase == .resting { OxHaptics.play(.restOver) }
         }
-        .onAppear { syncInputs() }
+        .onAppear { syncInputs(); flat.start(); BLEHub.shared.start() }
+        .onDisappear { flat.stop() }
         .onChange(of: engine.state?.current) { syncInputs() }
         .onChange(of: engine.state?.items[safe: engine.state?.current ?? 0]?.doneSets) { syncInputs() }
     }

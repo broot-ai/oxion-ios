@@ -73,6 +73,7 @@ targets:
         NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.
         NSFaceIDUsageDescription: OXION закрывает фото прогресса Face ID, если вы включили эту защиту.
         NSAlarmKitUsageDescription: OXION ставит будильник на конец отдыха между подходами и напоминает о тренировках.
+        NSBluetoothAlwaysUsageDescription: OXION подключает датчики пульса, часы и другие устройства по Bluetooth, чтобы показывать пульс во время тренировки.
         NSMotionUsageDescription: OXION считает шаги и определяет ходьбу и бег, чтобы предложить тренировку.
         NSAppleMusicUsageDescription: OXION включает музыку для тренировки из Apple Music.
         NSLocationAlwaysAndWhenInUseUsageDescription: OXION записывает маршрут пробежки, даже когда экран выключен.

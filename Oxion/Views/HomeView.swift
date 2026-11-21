@@ -188,6 +188,7 @@ struct HomeView: View {
             HStack(spacing: 18) {
                 ActivityRings(rings: rings)
                     .frame(width: 140, height: 140)
+                    .motionTilt(16, shine: false)
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(rings) { r in
                         VStack(alignment: .leading, spacing: 1) {

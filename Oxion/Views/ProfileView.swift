@@ -74,6 +74,7 @@ struct ProfileView: View {
                     nav("Пробежка с GPS", "figure.run", Color(hex: 0x58F670)) { RunTrackerView() }
                     nav("Сканер этикеток", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
                     nav("Будильники", "alarm.fill", Color(hex: 0xF0A030)) { AlarmSettingsView() }
+                    nav("Умные устройства", "dot.radiowaves.left.and.right", Color(hex: 0x3478F6)) { DevicePanelView() }
                 }
                 Section("Музыка и фокус") {
                     nav("Музыка для тренировки", "music.note", Color(hex: 0xFF3B5C)) { WorkoutMusicView() }
