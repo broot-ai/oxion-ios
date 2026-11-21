@@ -75,7 +75,7 @@ struct NFCCheckInView: View {
                     }
                     Image(systemName: "wave.3.right.circle.fill")
                         .font(.system(size: 64))
-                        .foregroundStyle(Color.lime)
+                        .foregroundStyle(Color.limeInk)
                 }
                 .frame(height: 220)
                 Text("Отметка в клубе").font(.title.bold())
@@ -91,7 +91,7 @@ struct NFCCheckInView: View {
 
                 if let r = last {
                     VStack(spacing: 6) {
-                        Image(systemName: r.repeat == true ? "checkmark.circle" : "checkmark.seal.fill").font(.largeTitle).foregroundStyle(Color.lime)
+                        Image(systemName: r.repeat == true ? "checkmark.circle" : "checkmark.seal.fill").font(.largeTitle).foregroundStyle(Color.limeInk)
                         Text(r.repeat == true ? "Вы уже отмечены" : "Посещение засчитано").font(.headline)
                         Text(r.place ?? "").foregroundStyle(Color.oxHint)
                         Text("В этом месяце: \(r.month ?? 0) · всего: \(r.total ?? 0)").font(.caption).foregroundStyle(Color.oxHint)
@@ -170,7 +170,7 @@ struct NFCTagsAdminView: View {
                 ForEach(items) { t in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(t.name ?? "").font(.headline)
-                        Text(t.payload).font(.caption.monospaced()).foregroundStyle(Color.lime).textSelection(.enabled)
+                        Text(t.payload).font(.caption.monospaced()).foregroundStyle(Color.limeInk).textSelection(.enabled)
                         Text("Посещений: \(t.visits ?? 0)").font(.caption).foregroundStyle(Color.oxHint)
                     }
                     .contextMenu { Button("Скопировать") { UIPasteboard.general.string = t.payload } }
@@ -220,7 +220,7 @@ struct SharePlayView: View {
             VStack(spacing: 18) {
                 ZStack {
                     Circle().fill(Color.lime.opacity(0.12)).frame(width: 150, height: 150)
-                    Image(systemName: "shareplay").font(.system(size: 60)).foregroundStyle(Color.lime)
+                    Image(systemName: "shareplay").font(.system(size: 60)).foregroundStyle(Color.limeInk)
                 }
                 Text("Тренируйтесь вместе").font(.title.bold())
                 Text("Создайте комнату в FaceTime: друзья увидят ваши подходы, а вы — их. Соревнуйтесь по количеству подходов и смотрите общие итоги.")
@@ -307,7 +307,7 @@ struct Initials: View {
     var body: some View {
         Text(String(name.prefix(1)).uppercased())
             .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
-            .foregroundStyle(Color.lime)
+            .foregroundStyle(Color.limeInk)
             .frame(width: size, height: size)
             .background(Color.lime.opacity(0.18), in: Circle())
     }

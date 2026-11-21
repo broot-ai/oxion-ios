@@ -172,8 +172,8 @@ struct AlarmSettingsView: View {
                             } label: {
                                 Text(t).font(.caption.bold())
                                     .frame(maxWidth: .infinity).padding(.vertical, 8)
-                                    .foregroundStyle(days.contains(d) ? Color.black : Color.white)
-                                    .background(days.contains(d) ? Color.lime : Color.white.opacity(0.08), in: Capsule())
+                                    .foregroundStyle(days.contains(d) ? Color.black : Color.primary)
+                                    .background(days.contains(d) ? Color.lime : Color.primary.opacity(0.08), in: Capsule())
                             }
                             .buttonStyle(.plain)
                         }

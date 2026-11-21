@@ -74,10 +74,13 @@ struct TGProfileScaffold<Content: View, Actions: View>: View {
                             .frame(height: headerH)
                             .contentShape(Rectangle())
                             .onTapGesture { toggleExpanded() }
-                        nameBlock
-                        actions()
-                            .padding(.horizontal, 16)
-                            .padding(.top, 14)
+                        Group {
+                            nameBlock
+                            actions()
+                                .padding(.horizontal, 16)
+                                .padding(.top, 14)
+                        }
+                        .environment(\.colorScheme, .dark)
                         content()
                             .background(Color.oxBg.opacity(0.001))
                     }
@@ -163,7 +166,7 @@ struct TGProfileScaffold<Content: View, Actions: View>: View {
                         Circle().fill(Color.lime.opacity(0.25))
                         Text(String(name.prefix(1)).uppercased())
                             .font(.system(size: 40, weight: .bold))
-                            .foregroundStyle(Color.lime)
+                            .foregroundStyle(Color.limeInk)
                     }
                 }
             }
@@ -260,7 +263,7 @@ struct TGInfoCard: View {
                         Text(r.value).font(.body).textSelection(.enabled)
                     }
                     Spacer()
-                    if let icon = r.icon { Image(systemName: icon).foregroundStyle(Color.lime) }
+                    if let icon = r.icon { Image(systemName: icon).foregroundStyle(Color.limeInk) }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
                 if i < rows.count - 1 { Divider().padding(.leading, 16) }
@@ -269,3 +272,4 @@ struct TGInfoCard: View {
         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
+

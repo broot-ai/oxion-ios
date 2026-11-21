@@ -22,7 +22,7 @@ struct PostDetailView: View {
                     ForEach(Array((t.chain ?? []).enumerated()), id: \.element.id) { i, c in
                         row(c, line: i < (t.chain ?? []).count - 1)
                     }
-                    Divider().overlay(Color.white.opacity(0.08))
+                    Divider().overlay(Color.primary.opacity(0.08))
                     HStack {
                         Text("Ответы").font(.headline)
                         Text("\(t.replies?.count ?? 0)").foregroundStyle(Color.oxHint)
@@ -36,7 +36,7 @@ struct PostDetailView: View {
                     }
                     ForEach(t.replies ?? []) { r in
                         row(r)
-                        Divider().overlay(Color.white.opacity(0.06))
+                        Divider().overlay(Color.primary.opacity(0.06))
                     }
                 } else if let e = errorText {
                     ErrorStateView(message: e) { Task { await load() } }.padding(.top, 60)
@@ -237,7 +237,7 @@ struct ComposerView: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(spacing: 6) {
                 Avatar(url: API.media(model.me?.photoUrl), name: model.me?.displayName ?? "?", size: 40)
-                Capsule().fill(Color.white.opacity(0.14)).frame(width: 2).frame(maxHeight: .infinity)
+                Capsule().fill(Color.primary.opacity(0.14)).frame(width: 2).frame(maxHeight: .infinity)
             }
             .frame(width: 40)
             VStack(alignment: .leading, spacing: 6) {
@@ -336,7 +336,7 @@ struct ComposerView: View {
                     set: { v in if i < pollOptions.count { pollOptions[i] = String(v.prefix(40)) } }))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.14)))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.14)))
             }
             HStack {
                 if pollOptions.count < 4 {

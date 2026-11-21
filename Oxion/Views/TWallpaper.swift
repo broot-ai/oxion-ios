@@ -214,6 +214,8 @@ struct WallPatternLayer: View {
 
 struct TWallpaperView: View {
     let engine: TWallpaperEngine
+    /// для светлой темы: если выбран тёмный набор — берём светлый «Лайм»
+    let lightEngine: TWallpaperEngine
     var pattern: WallPattern = .sport
     var mask = false
     var opacity: Double = 0.5
@@ -264,7 +266,11 @@ struct TWallpaperView: View {
 final class ChatWallpaper {
     static let shared = ChatWallpaper()
 
-    var presetId: String { didSet { save(); engine.setColors(preset.swiftColors) } }
+    var presetId: String { didSet {
+        save()
+        engine.setColors(preset.swiftColors)
+        lightEngine.setColors((preset.dark ? (WallPreset.all.first { $0.id == "lime" } ?? preset) : preset).swiftColors)
+    } }
     var pattern: WallPattern { didSet { save() } }
     var mask: Bool { didSet { save() } }
     var opacity: Double { didSet { save() } }
@@ -285,7 +291,9 @@ final class ChatWallpaper {
         animate = d.object(forKey: "wall_animate") as? Bool ?? false
         moveOnSend = d.object(forKey: "wall_move") as? Bool ?? true
         enabled = d.object(forKey: "wall_on") as? Bool ?? true
-        engine = TWallpaperEngine(colors: (WallPreset.all.first { $0.id == pid } ?? WallPreset.all[0]).swiftColors)
+        let p = WallPreset.all.first { $0.id == pid } ?? WallPreset.all[0]
+        engine = TWallpaperEngine(colors: p.swiftColors)
+        lightEngine = TWallpaperEngine(colors: (p.dark ? (WallPreset.all.first { $0.id == "lime" } ?? p) : p).swiftColors)
     }
 
     private func save() {
@@ -295,14 +303,20 @@ final class ChatWallpaper {
         d.set(animate, forKey: "wall_animate"); d.set(moveOnSend, forKey: "wall_move"); d.set(enabled, forKey: "wall_on")
     }
 
-    func bump() { if moveOnSend && enabled { engine.toNextPosition() } }
+    func bump() { if moveOnSend && enabled { engine.toNextPosition(); lightEngine.toNextPosition() } }
 }
 
 /// Фон чата: подставляется за сообщения
 struct ChatWallpaperBackground: View {
     @State private var w = ChatWallpaper.shared
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        if w.enabled {
+        if w.enabled && scheme == .light {
+            // светлая тема: светлые цвета и узор поверх, без затемнения
+            TWallpaperView(engine: w.lightEngine, pattern: w.pattern, mask: false, opacity: w.opacity * 0.6,
+                           animate: w.animate && PowerSaver.allowsNow(.liveBackgrounds))
+                .ignoresSafeArea()
+        } else if w.enabled {
             TWallpaperView(engine: w.engine, pattern: w.pattern, mask: w.mask, opacity: w.opacity,
                            animate: w.animate && PowerSaver.allowsNow(.liveBackgrounds))
                 .overlay(w.preset.dark || w.mask ? Color.clear : Color.black.opacity(0.35))

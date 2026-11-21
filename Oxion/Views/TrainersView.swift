@@ -189,7 +189,7 @@ struct TrainerCard: View {
                     if let p = t.price {
                         Text("\(p) ₽")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color.lime)
+                            .foregroundStyle(Color.limeInk)
                     }
                     if let e = t.experience, e > 0 {
                         Text("опыт \(e) \(RU.plural(e, "год", "года", "лет"))")
@@ -200,7 +200,7 @@ struct TrainerCard: View {
             }
             .padding(14)
         }
-        .background(Color.white.opacity(0.05))
+        .background(Color.primary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }

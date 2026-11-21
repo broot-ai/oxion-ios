@@ -40,7 +40,7 @@ struct ExercisesView: View {
                                     .padding(.vertical, 10)
                                     .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                        .stroke(muscle == key ? Color.lime : Color.white.opacity(0.07), lineWidth: muscle == key ? 2 : 1))
+                                        .stroke(muscle == key ? Color.lime : Color.primary.opacity(0.07), lineWidth: muscle == key ? 2 : 1))
                                 }
                             }
                         }
@@ -83,7 +83,7 @@ struct ExercisesView: View {
                                     Spacer()
                                     Text("моё")
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(Color.lime)
+                                        .foregroundStyle(Color.limeInk)
                                 }
                             }
                         }

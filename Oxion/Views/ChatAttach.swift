@@ -283,7 +283,7 @@ struct ChatAttachSheet: View {
                             .padding(.vertical, 8)
                             .background {
                                 if tab == t {
-                                    Capsule().fill(.white.opacity(0.1)).matchedGeometryEffect(id: "tab", in: ns)
+                                    Capsule().fill(.primary.opacity(0.1)).matchedGeometryEffect(id: "tab", in: ns)
                                 }
                             }
                         }

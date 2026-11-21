@@ -28,7 +28,7 @@ struct PhoneVerifyView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
                 Image(systemName: request == nil ? "phone.badge.checkmark" : "paperplane.circle.fill")
-                    .font(.system(size: 44)).foregroundStyle(Color.lime)
+                    .font(.system(size: 44)).foregroundStyle(Color.limeInk)
                     .contentTransition(.symbolEffect(.replace))
                 Text(request == nil ? "Ваш номер телефона" : "Код в Telegram")
                     .font(.title.bold())
@@ -166,7 +166,7 @@ private struct CodeBoxes: View {
                         .frame(height: 56)
                         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(i == code.count ? Color.lime : Color.white.opacity(0.08), lineWidth: i == code.count ? 2 : 1))
+                            .stroke(i == code.count ? Color.lime : Color.primary.opacity(0.08), lineWidth: i == code.count ? 2 : 1))
                 }
             }
             .allowsHitTesting(false)
@@ -233,7 +233,7 @@ struct PhoneSettingsView: View {
                 HStack {
                     Label(phone ?? "Не привязан", systemImage: "phone.fill")
                     Spacer()
-                    if phone != nil { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.lime) }
+                    if phone != nil { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk) }
                 }
                 Button(phone == nil ? "Привязать номер" : "Сменить номер") { link = true }
                 if phone != nil {

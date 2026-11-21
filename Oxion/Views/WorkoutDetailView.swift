@@ -343,7 +343,7 @@ struct ExercisePickerSheet: View {
                             }
                             Spacer()
                             Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(Color.lime)
+                                .foregroundStyle(Color.limeInk)
                         }
                     }
                 }

@@ -84,7 +84,7 @@ struct SubscriptionView: View {
                 if let t {
                     if t.published == true, let until = t.paidUntil {
                         Label("Опубликована до \(Date(timeIntervalSince1970: until / 1000).formatted(date: .long, time: .omitted))", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(Color.lime)
+                            .foregroundStyle(Color.limeInk)
                     } else if let miss = t.missing, !miss.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Чтобы опубликовать, заполните анкету:").font(.subheadline.bold())
@@ -191,7 +191,7 @@ struct TrainerEditView: View {
                                     Text("Фото").font(.caption)
                                 }
                                 .frame(width: 90, height: 120)
-                                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                         }
                     }
@@ -340,7 +340,7 @@ struct RecordsView: View {
                                 .background(Color(hex: 0xF0A030).opacity(0.18), in: Circle())
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(r.name).font(.headline)
-                                Text(r.best).font(.title3.bold()).foregroundStyle(Color.lime)
+                                Text(r.best).font(.title3.bold()).foregroundStyle(Color.limeInk)
                                 HStack(spacing: 10) {
                                     if let e = r.e1rm { Text("1ПМ ≈ \(Int(e)) кг") }
                                     if let d = r.lastDate { Text(RU.human(d)) }
@@ -488,7 +488,7 @@ struct ChallengeDetailView: View {
             if let c {
                 VStack(alignment: .leading, spacing: 16) {
                     ChallengeCard(c: c)
-                    if let p = c.place { Label("Ваше место: \(p)", systemImage: "medal.fill").font(.headline).foregroundStyle(Color.lime) }
+                    if let p = c.place { Label("Ваше место: \(p)", systemImage: "medal.fill").font(.headline).foregroundStyle(Color.limeInk) }
                     Button {
                         Task { await join(!(c.joined ?? false)) }
                     } label: {
@@ -496,7 +496,7 @@ struct ChallengeDetailView: View {
                             .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                     }
                     .buttonStyle(.glassProminent)
-                    .tint(c.joined == true ? Color.white.opacity(0.2) : Color.lime)
+                    .tint(c.joined == true ? Color.primary.opacity(0.2) : Color.lime)
                     .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     if let board = c.board, !board.isEmpty {
                         Text("Таблица лидеров").font(.title3.bold())
@@ -558,7 +558,7 @@ struct GoalsView: View {
                                 if let t = g.trainer?.name { Text("от тренера \(t)").font(.caption).foregroundStyle(Color.oxHint) }
                             }
                             Spacer()
-                            Text("\(g.pct ?? 0)%").font(.title3.bold()).foregroundStyle(Color.lime)
+                            Text("\(g.pct ?? 0)%").font(.title3.bold()).foregroundStyle(Color.limeInk)
                         }
                         ProgressView(value: Double(g.pct ?? 0), total: 100).tint(Color.lime)
                         HStack {
@@ -624,7 +624,7 @@ struct MyCoachView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(t.name ?? "Тренер").font(.headline)
                                 Text(t.status == "active" ? "Ведёт вас" : "Ожидает подтверждения").font(.caption).foregroundStyle(Color.oxHint)
-                                if let p = t.price { Text("\(p) ₽ / занятие").font(.caption).foregroundStyle(Color.lime) }
+                                if let p = t.price { Text("\(p) ₽ / занятие").font(.caption).foregroundStyle(Color.limeInk) }
                             }
                             Spacer()
                             Button {
@@ -821,7 +821,7 @@ struct HealthView: View {
                     .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                     HStack {
-                        Image(systemName: "checkmark.icloud.fill").foregroundStyle(Color.lime)
+                        Image(systemName: "checkmark.icloud.fill").foregroundStyle(Color.limeInk)
                         Text(hk.lastSync.map { "Отправлено в Oxion \($0.formatted(date: .omitted, time: .shortened)) — тренер видит ваши данные" }
                              ?? "Данные отправляются в Oxion автоматически")
                             .font(.caption)
@@ -1011,7 +1011,7 @@ struct OrdersView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Заказ № \(o.num?.value ?? o.id.value ?? "")").font(.headline)
                             Text("\(o.storeName ?? "") · \(o.lines ?? 0) поз.").font(.caption).foregroundStyle(Color.oxHint)
-                            Text(o.statusName ?? o.status ?? "").font(.caption.bold()).foregroundStyle(Color.lime)
+                            Text(o.statusName ?? o.status ?? "").font(.caption.bold()).foregroundStyle(Color.limeInk)
                         }
                         Spacer()
                         Text(rub(o.totalKop)).font(.headline)
@@ -1319,8 +1319,8 @@ struct TicketView: View {
                         if m.fromAdmin == 1 { Spacer(minLength: 50) }
                         Text(m.text ?? "")
                             .padding(.horizontal, 14).padding(.vertical, 9)
-                            .foregroundStyle(m.fromAdmin == 1 ? Color.oxBg : Color.primary)
-                            .background(m.fromAdmin == 1 ? Color.lime : Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .foregroundStyle(m.fromAdmin == 1 ? Color.onLime : Color.primary)
+                            .background(m.fromAdmin == 1 ? Color.lime : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         if m.fromAdmin != 1 { Spacer(minLength: 50) }
                     }
                 }

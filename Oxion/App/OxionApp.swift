@@ -6,12 +6,37 @@ extension Color {
     init(hex: UInt32) {
         self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
     }
-    /// Цвета как в PWA Oxion (app.css)
-    static let lime = Color(hex: 0xB2EE37)
-    static let oxBg = Color(hex: 0x0F1012)
-    static let oxCard = Color(hex: 0x18191C)
-    static let oxCard2 = Color(hex: 0x202124)
-    static let oxHint = Color(hex: 0x8A8A83)
+    /// Цвет, который сам меняется для светлой и тёмной темы
+    init(light: UInt32, dark: UInt32) {
+        self.init(uiColor: UIColor { t in
+            let h = t.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat((h >> 16) & 0xFF) / 255, green: CGFloat((h >> 8) & 0xFF) / 255, blue: CGFloat(h & 0xFF) / 255, alpha: 1)
+        })
+    }
+    /// Цвета как в PWA Oxion (app.css) + светлая тема
+    static let lime = Color(hex: 0xB2EE37)                              // заливки: кнопки, пузыри — яркий в обеих темах
+    static let limeInk = Color(light: 0x4E8A06, dark: 0xB2EE37)          // текст и значки «лаймом» — темнее на светлом фоне
+    static let onLime = Color(hex: 0x0F1012)                            // текст на лаймовой заливке
+    static let oxBg = Color(light: 0xF2F2F7, dark: 0x0F1012)
+    static let oxCard = Color(light: 0xFFFFFF, dark: 0x18191C)
+    static let oxCard2 = Color(light: 0xE9EAEE, dark: 0x202124)
+    static let oxHint = Color(light: 0x7C7C80, dark: 0x8A8A83)
+    static let oxBubble = Color(light: 0xFFFFFF, dark: 0x1F2124)        // чужой пузырь в чате
+}
+
+enum OxTheme: String, CaseIterable {
+    case system, light, dark
+    var title: String { switch self { case .system: "Как на iPhone"; case .light: "Светлая"; case .dark: "Тёмная" } }
+    var scheme: ColorScheme? { switch self { case .system: nil; case .light: .light; case .dark: .dark } }
+    static var current: OxTheme { OxTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "dark") ?? .dark }
+}
+
+/// Применяет выбранную тему (используется и в отдельных окнах — алерты)
+struct OxThemeModifier: ViewModifier {
+    @AppStorage("theme") private var theme = OxTheme.dark.rawValue
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(OxTheme(rawValue: theme)?.scheme)
+    }
 }
 
 @main
@@ -50,7 +75,7 @@ struct OxionApp: App {
                     default: model.handle(route: "diary")
                     }
                 }
-                .preferredColorScheme(.dark)
+                .modifier(OxThemeModifier())
                 .tint(.lime)
                 .onReceive(NotificationCenter.default.publisher(for: .oxionUnauthorized)) { _ in
                     model.logoutLocal()

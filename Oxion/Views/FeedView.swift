@@ -96,7 +96,7 @@ struct FeedView: View {
                     tabBar
                     newPostRow
                     topicsRow
-                    Divider().overlay(Color.white.opacity(0.06))
+                    Divider().overlay(Color.primary.opacity(0.06))
 
                     if let e = store.errorText, store.items.isEmpty {
                         ErrorStateView(message: e) { Task { await store.load(reset: true) } }
@@ -115,7 +115,7 @@ struct FeedView: View {
                             .onAppear {
                                 if item.id == store.items.last?.id { Task { await store.load(reset: false) } }
                             }
-                        Divider().overlay(Color.white.opacity(0.06))
+                        Divider().overlay(Color.primary.opacity(0.06))
                     }
 
                     if store.loading {
@@ -231,7 +231,7 @@ struct FeedView: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                                 .background(Color.oxCard, in: Capsule())
-                                .overlay(Capsule().stroke(Color.white.opacity(0.06)))
+                                .overlay(Capsule().stroke(Color.primary.opacity(0.06)))
                         }
                         .buttonStyle(.plain)
                     }
@@ -276,13 +276,13 @@ struct ThreadPost: View {
                     }
                     .buttonStyle(.plain)
                     if showLine {
-                        Capsule().fill(Color.white.opacity(0.14)).frame(width: 2).frame(maxHeight: .infinity)
+                        Capsule().fill(Color.primary.opacity(0.14)).frame(width: 2).frame(maxHeight: .infinity)
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     header(p)
                     if p.trainerAnswer == true {
-                        Text("🎓 Ответ тренера").font(.caption.bold()).foregroundStyle(Color.lime)
+                        Text("🎓 Ответ тренера").font(.caption.bold()).foregroundStyle(Color.limeInk)
                     }
                     if let r = p.replyToName, !r.isEmpty {
                         (Text("в ответ ").foregroundColor(Color.oxHint) + Text(r).bold())
@@ -329,7 +329,7 @@ struct ThreadPost: View {
                         Button { onOpen?() } label: {
                             Text("Ещё \(n) \(RU.plural(n, "часть", "части", "частей")) ветки ›")
                                 .font(.subheadline)
-                                .foregroundStyle(Color.lime)
+                                .foregroundStyle(Color.limeInk)
                         }
                         .buttonStyle(.plain)
                     }
@@ -347,7 +347,7 @@ struct ThreadPost: View {
             }
             .buttonStyle(.plain)
             if p.author.trainer == true {
-                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.lime)
+                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
             }
             if let tp = p.topic, let t = model.meta?.feedTopics?.first(where: { $0.key == tp }) {
                 Text("› \(t.icon ?? "") \(t.name)")
@@ -693,7 +693,7 @@ struct PostProductCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(p["title"]?.string ?? "Товар").font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text(p["store"]?.string ?? "").font(.caption).foregroundStyle(Color.oxHint)
-                Text(rub(p["price_kop"]?.int)).font(.subheadline.bold()).foregroundStyle(Color.lime)
+                Text(rub(p["price_kop"]?.int)).font(.subheadline.bold()).foregroundStyle(Color.limeInk)
             }
             Spacer()
         }
@@ -718,20 +718,20 @@ struct PollView: View {
                         if showResults {
                             GeometryReader { g in
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(poll.mine == i ? Color.lime.opacity(0.35) : Color.white.opacity(0.08))
+                                    .fill(poll.mine == i ? Color.lime.opacity(0.35) : Color.primary.opacity(0.08))
                                     .frame(width: g.size.width * CGFloat(o.votes ?? 0) / CGFloat(total))
                             }
                         }
                         HStack {
                             Text(o.text).font(.subheadline.weight(poll.mine == i ? .semibold : .regular))
-                            if poll.mine == i { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.lime) }
+                            if poll.mine == i { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.limeInk) }
                             Spacer()
                             if showResults { Text("\(Int(Double(o.votes ?? 0) / Double(total) * 100))%").font(.subheadline) }
                         }
                         .padding(.horizontal, 12)
                     }
                     .frame(height: 40)
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.12)))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.12)))
                 }
                 .buttonStyle(.plain)
             }
@@ -760,7 +760,7 @@ struct QuoteCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.14)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.primary.opacity(0.14)))
     }
 }
 
@@ -783,7 +783,7 @@ struct TopicFeedView: View {
                                onChange: { change in store.update(item.post.id, change) },
                                onRemove: { store.remove(item.post.id) },
                                onCompose: { compose = $0 })
-                    Divider().overlay(Color.white.opacity(0.06))
+                    Divider().overlay(Color.primary.opacity(0.06))
                 }
                 if store.loading { ProgressView().padding() }
                 else if store.items.isEmpty {

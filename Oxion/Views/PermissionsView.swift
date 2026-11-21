@@ -370,7 +370,7 @@ struct PermissionsView: View {
                         if model.me?.city != c {
                             Button("Сделать моим") { Task { await setCity(c) } }.buttonStyle(.glass)
                         } else {
-                            Image(systemName: "checkmark").foregroundStyle(Color.lime)
+                            Image(systemName: "checkmark").foregroundStyle(Color.limeInk)
                         }
                     }
                 }
@@ -406,7 +406,7 @@ struct PermissionsView: View {
                     .frame(width: 32, height: 32)
                     .background(k.tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(k.title).font(.subheadline.bold()).foregroundStyle(.white)
+                    Text(k.title).font(.subheadline.bold()).foregroundStyle(.primary)
                     Text(k.purpose).font(.caption).foregroundStyle(Color.oxHint).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 6)

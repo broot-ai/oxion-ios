@@ -58,7 +58,7 @@ struct ShopView: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "shippingbox.fill")
-                                        .foregroundStyle(Color.lime)
+                                        .foregroundStyle(Color.limeInk)
                                     Text("Активные заказы: \(h.activeOrders ?? 0)")
                                         .font(.headline)
                                     Spacer()
@@ -291,7 +291,7 @@ struct ProductView: View {
                     }
                     VStack(alignment: .leading, spacing: 10) {
                         if let b = p.brand, !b.isEmpty {
-                            Text(b.uppercased()).font(.caption.bold()).foregroundStyle(Color.lime)
+                            Text(b.uppercased()).font(.caption.bold()).foregroundStyle(Color.limeInk)
                         }
                         Text(p.title).font(.title2.bold())
                         HStack(spacing: 10) {

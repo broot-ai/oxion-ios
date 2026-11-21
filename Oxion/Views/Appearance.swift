@@ -36,12 +36,17 @@ struct BubbleStyle: DynamicProperty {
 // MARK: экран «Оформление»
 
 struct AppearanceSettingsView: View {
+    @AppStorage("theme") private var theme = OxTheme.dark.rawValue
     @AppStorage("text_system") private var system = true
     @AppStorage("text_size") private var index = 3
     @State private var textSheet = false
 
     var body: some View {
         List {
+            Section("Тема") {
+                ThemePicker(selection: $theme)
+                    .listRowInsets(EdgeInsets(top: 14, leading: 10, bottom: 14, trailing: 10))
+            }
             Section {
                 Button { textSheet = true } label: {
                     LabeledContent("Размер текста", value: system ? "Системный" : Look.names[index])
@@ -81,7 +86,7 @@ struct ChatPreview: View {
             Text("Сегодня")
                 .font(.caption.bold())
                 .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(.white.opacity(0.08), in: Capsule())
+                .background(.primary.opacity(0.08), in: Capsule())
                 .padding(.bottom, 4)
             ForEach(msgs) { m in
                 HStack {
@@ -91,7 +96,7 @@ struct ChatPreview: View {
                             HStack(spacing: 6) {
                                 Capsule().fill(Color.lime).frame(width: 3)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text("Вы").font(.system(size: fontSize * 0.8, weight: .bold)).foregroundStyle(Color.lime)
+                                    Text("Вы").font(.system(size: fontSize * 0.8, weight: .bold)).foregroundStyle(Color.limeInk)
                                     Text(r).font(.system(size: fontSize * 0.8)).lineLimit(1)
                                 }
                             }
@@ -116,10 +121,10 @@ struct ChatPreview: View {
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .foregroundStyle(m.mine ? Color.oxBg : Color.primary)
+                    .foregroundStyle(m.mine ? Color.onLime : Color.primary)
                     .background(
                         TailBubbleShape(mine: m.mine, radius: radius, tail: true)
-                            .fill(m.mine ? Color.lime : Color(hex: 0x1F2124).opacity(0.94))
+                            .fill(m.mine ? Color.lime : Color.oxBubble.opacity(0.94))
                     )
                     .fixedSize(horizontal: false, vertical: true)
                     if !m.mine { Spacer(minLength: 50) }
@@ -203,10 +208,10 @@ struct StepSlider: View {
             let w = g.size.width - 30
             let step = w / CGFloat(max(1, count - 1))
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.15)).frame(height: 4).padding(.horizontal, 15)
+                Capsule().fill(.primary.opacity(0.15)).frame(height: 4).padding(.horizontal, 15)
                 Capsule().fill(Color.lime).frame(width: CGFloat(value) * step, height: 4).padding(.leading, 15)
                 ForEach(0..<count, id: \.self) { i in
-                    Circle().fill(i <= value ? Color.lime : .white.opacity(0.3))
+                    Circle().fill(i <= value ? Color.lime : .primary.opacity(0.3))
                         .frame(width: 6, height: 6)
                         .offset(x: 15 + CGFloat(i) * step - 3, y: 12)
                 }
@@ -321,7 +326,7 @@ struct AppIconPicker: View {
                             .padding(3)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(on ? Color.lime : .white.opacity(0.1), lineWidth: on ? 2.5 : 1)
+                                    .stroke(on ? Color.lime : .primary.opacity(0.1), lineWidth: on ? 2.5 : 1)
                             )
                             .scaleEffect(on ? 1.04 : 1)
                         Text(icon.title)
@@ -344,5 +349,64 @@ struct AppIconPicker: View {
                 if let err { OxAlert.error(err.localizedDescription) } else { current = icon.id }
             }
         }
+    }
+}
+
+
+/// Выбор темы карточками-превью, как в настройках iPhone
+struct ThemePicker: View {
+    @Binding var selection: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(OxTheme.allCases, id: \.rawValue) { t in
+                Button {
+                    Haptic.tap()
+                    withAnimation(.easeInOut(duration: 0.35)) { selection = t.rawValue }
+                } label: {
+                    VStack(spacing: 8) {
+                        preview(t)
+                            .frame(height: 118)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(selection == t.rawValue ? Color.lime : Color.primary.opacity(0.12), lineWidth: selection == t.rawValue ? 3 : 1))
+                        Text(t.title).font(.caption.weight(.semibold))
+                        Image(systemName: selection == t.rawValue ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selection == t.rawValue ? Color.limeInk : Color.oxHint)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func preview(_ t: OxTheme) -> some View {
+        switch t {
+        case .light: mini(dark: false)
+        case .dark: mini(dark: true)
+        case .system:
+            HStack(spacing: 0) {
+                mini(dark: false)
+                mini(dark: true)
+            }
+        }
+    }
+
+    private func mini(dark: Bool) -> some View {
+        let bg = dark ? Color(hex: 0x0F1012) : Color(hex: 0xF2F2F7)
+        let card = dark ? Color(hex: 0x202124) : .white
+        return VStack(alignment: .leading, spacing: 5) {
+            RoundedRectangle(cornerRadius: 4).fill(card).frame(width: 34, height: 12)
+            HStack { Spacer(); RoundedRectangle(cornerRadius: 4).fill(Color.lime).frame(width: 30, height: 12) }
+            RoundedRectangle(cornerRadius: 4).fill(card).frame(width: 40, height: 12)
+            Spacer()
+            RoundedRectangle(cornerRadius: 6).fill(card).frame(height: 14)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(bg)
     }
 }

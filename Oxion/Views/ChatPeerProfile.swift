@@ -84,7 +84,7 @@ struct ChatPeerProfileView: View {
                 HStack(spacing: 6) {
                     Text(peer.name ?? "Пользователь").font(.system(size: 30, weight: .bold))
                     if peer.trainer == true || user?.trainer == true {
-                        Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.lime)
+                        Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk)
                     }
                 }
                 HStack(spacing: 5) {
@@ -145,7 +145,7 @@ struct ChatPeerProfileView: View {
             Image(systemName: icon).font(.system(size: 19, weight: .semibold))
             Text(title).font(.caption2.weight(.medium))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
@@ -175,7 +175,7 @@ struct ChatPeerProfileView: View {
     private func infoRow(_ label: String, _ value: String, accent: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption).foregroundStyle(Color.oxHint)
-            Text(value).font(.body).foregroundStyle(accent ? Color.lime : .white)
+            Text(value).font(.body).foregroundStyle(accent ? Color.limeInk : .primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -189,8 +189,8 @@ struct ChatPeerProfileView: View {
                 Button { withAnimation(.snappy) { tab = i } } label: {
                     Text(t).font(.subheadline.bold())
                         .padding(.horizontal, 16).padding(.vertical, 8)
-                        .foregroundStyle(tab == i ? Color.black : Color.white)
-                        .background(tab == i ? Color.lime : Color.white.opacity(0.07), in: Capsule())
+                        .foregroundStyle(tab == i ? Color.black : Color.primary)
+                        .background(tab == i ? Color.lime : Color.primary.opacity(0.07), in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -210,7 +210,7 @@ struct ChatPeerProfileView: View {
                         NavigationLink { PostDetailView(postId: it.post.chainOf ?? it.post.id) } label: {
                             VStack(alignment: .leading, spacing: 8) {
                                 if let t = it.post.text, !t.isEmpty {
-                                    Text(t).font(.subheadline).foregroundStyle(.white).multilineTextAlignment(.leading).lineLimit(5)
+                                    Text(t).font(.subheadline).foregroundStyle(.primary).multilineTextAlignment(.leading).lineLimit(5)
                                 }
                                 if let p = it.post.photos?.first, let u = API.media(p) {
                                     RemoteImage(url: u).frame(height: 180).frame(maxWidth: .infinity)
@@ -259,7 +259,7 @@ struct ChatPeerProfileView: View {
                 }
                 ForEach(found.reversed()) { m in
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(m.mine ? "Вы" : (peer.name ?? "Собеседник")).font(.caption.bold()).foregroundStyle(Color.lime)
+                        Text(m.mine ? "Вы" : (peer.name ?? "Собеседник")).font(.caption.bold()).foregroundStyle(Color.limeInk)
                         Text(m.text ?? "").font(.subheadline)
                         Text(ChatTime.short(m.at ?? 0)).font(.caption2).foregroundStyle(Color.oxHint)
                     }

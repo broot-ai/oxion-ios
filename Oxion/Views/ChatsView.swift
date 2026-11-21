@@ -150,7 +150,7 @@ struct ChatsView: View {
                                 .frame(width: 52, height: 52)
                                 .background(Color(hex: 0x636366), in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Архив").font(.headline).foregroundStyle(.white)
+                                Text("Архив").font(.headline).foregroundStyle(.primary)
                                 Text(store.archived.compactMap { $0.peer.name }.prefix(3).joined(separator: ", "))
                                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             }
@@ -284,7 +284,7 @@ struct ChatListRow: View {
             ChatRow(c: c)
         }
         .buttonStyle(.plain)
-        .listRowBackground(c.pinned == true ? Color.white.opacity(0.04) : Color.clear)
+        .listRowBackground(c.pinned == true ? Color.primary.opacity(0.04) : Color.clear)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button { Task { await store.setArchived(c, c.archived != true) } } label: {
                 Label(c.archived == true ? "Из архива" : "В архив", systemImage: c.archived == true ? "tray.and.arrow.up.fill" : "archivebox.fill")
@@ -355,7 +355,7 @@ struct ChatRow: View {
                     }
                     Spacer()
                     if c.mine == true, (c.unread ?? 0) == 0 {
-                        Image(systemName: "checkmark").font(.caption2.bold()).foregroundStyle(Color.lime)
+                        Image(systemName: "checkmark").font(.caption2.bold()).foregroundStyle(Color.limeInk)
                     }
                     if let at = c.at, at > 0 {
                         Text(ChatTime.short(at))
@@ -420,7 +420,7 @@ struct ChatPeekView: View {
                             if m.mine { Spacer(minLength: 40) }
                             Text(m.deleted == true ? "Сообщение удалено" : (m.text ?? (m.photo != nil ? "📷 Фото" : (Kinds.label[m.kind ?? ""] ?? "Сообщение"))))
                                 .font(.subheadline)
-                                .foregroundStyle(m.mine ? Color.black : Color.white)
+                                .foregroundStyle(m.mine ? Color.black : Color.primary)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
                                 .background(m.mine ? Color.lime : Color.oxCard2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             if !m.mine { Spacer(minLength: 40) }
@@ -535,7 +535,7 @@ struct ChatView: View {
                         Label(protect?.by == "peer" ? "Собеседник включил защиту от снимков экрана" : "Защита от снимков экрана включена",
                               systemImage: "lock.shield.fill")
                             .font(.caption.bold())
-                            .foregroundStyle(Color.lime)
+                            .foregroundStyle(Color.limeInk)
                             .padding(.horizontal, 12).padding(.vertical, 6)
                             .background(Color.lime.opacity(0.12), in: Capsule())
                             .padding(.bottom, 4)
@@ -547,9 +547,9 @@ struct ChatView: View {
                                 Text(m.text ?? "Снимок экрана")
                             }
                             .font(.caption.bold())
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(.primary.opacity(0.8))
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(Color.white.opacity(0.08), in: Capsule())
+                            .background(Color.primary.opacity(0.08), in: Capsule())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 4)
                             .id(m.id)
@@ -594,10 +594,10 @@ struct ChatView: View {
                         HStack(spacing: 4) {
                             Text(peer?.name ?? title).font(.headline).lineLimit(1)
                             if peer?.trainer == true {
-                                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.lime)
+                                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
                             }
                             if shielded {
-                                Image(systemName: "lock.shield.fill").font(.caption2).foregroundStyle(Color.lime)
+                                Image(systemName: "lock.shield.fill").font(.caption2).foregroundStyle(Color.limeInk)
                             }
                         }
                         Text(PeerStatus.text(peer?.lastSeen))
@@ -652,7 +652,7 @@ struct ChatView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(r.mine ? "Ответ себе" : "Ответ")
                             .font(.caption.bold())
-                            .foregroundStyle(Color.lime)
+                            .foregroundStyle(Color.limeInk)
                         Text(r.text ?? "Фото")
                             .font(.caption)
                             .lineLimit(1)
@@ -906,8 +906,8 @@ struct Bubble: View {
     var style = BubbleStyle()
 
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true }
-    private var fill: Color { m.mine ? Color.lime : Color(hex: 0x1F2124).opacity(0.94) }
-    private var ink: Color { m.mine ? Color.oxBg : Color.primary }
+    private var fill: Color { m.mine ? Color.lime : Color.oxBubble.opacity(0.94) }
+    private var ink: Color { m.mine ? Color.onLime : Color.primary }
     private var buttons: [InlineBtn] { m.kind.map { ChatCard.buttons(kind: $0, card: m.card, mine: m.mine) } ?? [] }
 
     var body: some View {
@@ -951,8 +951,8 @@ struct Bubble: View {
             .padding(12)
             .padding(.bottom, 12)
             .overlay(alignment: .bottomTrailing) { meta(on: false).padding(.trailing, 12).padding(.bottom, 7) }
-            .background(shape.fill(Color(hex: 0x1F2124).opacity(0.94)))
-            .overlay(shape.stroke(m.mine ? Color.lime.opacity(0.35) : Color.white.opacity(0.06), lineWidth: 1))
+            .background(shape.fill(Color.oxBubble.opacity(0.94)))
+            .overlay(shape.stroke(m.mine ? Color.lime.opacity(0.35) : Color.primary.opacity(0.06), lineWidth: 1))
     }
 
     private var hasText: Bool { !(m.text ?? "").isEmpty && m.deleted != true }
@@ -1038,7 +1038,7 @@ struct Bubble: View {
             }
         }
         .font(.caption2)
-        .foregroundStyle(photo ? Color.white : (m.mine && !isCardOnly ? Color.oxBg.opacity(0.6) : Color.white.opacity(0.5)))
+        .foregroundStyle(photo ? Color.white : (m.mine && !isCardOnly ? Color.onLime.opacity(0.6) : Color.primary.opacity(0.5)))
     }
 }
 
@@ -1061,8 +1061,12 @@ struct CallScreen: View {
     @State private var pulse = false
 
     var body: some View {
+        callBody.environment(\.colorScheme, .dark)
+    }
+
+    private var callBody: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x1B2A10), Color.oxBg, Color.black], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [Color(hex: 0x1B2A10), Color(hex: 0x0F1012), Color.black], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
             VStack(spacing: 18) {
                 Spacer().frame(height: 40)
@@ -1116,7 +1120,7 @@ struct CallScreen: View {
                     .foregroundStyle(on ? Color.black : Color.white)
                     .frame(width: 66, height: 66)
             }
-            .glassEffect(on ? .regular.tint(Color.white.opacity(0.9)).interactive() : .regular.interactive(), in: .circle)
+            .glassEffect(on ? .regular.tint(Color.primary.opacity(0.9)).interactive() : .regular.interactive(), in: .circle)
             Text(title).font(.caption).foregroundStyle(Color.oxHint)
         }
     }

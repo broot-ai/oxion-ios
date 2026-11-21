@@ -147,7 +147,7 @@ struct WatchPreviewView: View {
         let resting = s.phase == .resting
         return VStack(spacing: 4) {
             Text(s.phase == .paused ? "ПАУЗА" : resting ? "ОТДЫХ" : "ПОДХОД \(min((it?.doneSets ?? 0) + 1, it?.sets ?? 1))/\(it?.sets ?? 0)")
-                .font(.system(size: 10, weight: .heavy)).foregroundStyle(Color.lime)
+                .font(.system(size: 10, weight: .heavy)).foregroundStyle(Color.limeInk)
             Text(clock(resting ? s.restLeft(now) : s.elapsed(now)))
                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
             Text(it?.name ?? "").font(.system(size: 13, weight: .semibold)).lineLimit(1)
@@ -172,13 +172,13 @@ struct WatchPreviewView: View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 wbtn("checkmark", Color.lime) { engine.completeSet(); OxHaptics.play(.setDone) }
-                wbtn("forward.fill", .white.opacity(0.2)) { engine.nextSet() }
+                wbtn("forward.fill", .primary.opacity(0.2)) { engine.nextSet() }
             }
             HStack(spacing: 6) {
                 if s.phase == .paused {
-                    wbtn("play.fill", .white.opacity(0.2)) { engine.resume() }
+                    wbtn("play.fill", .primary.opacity(0.2)) { engine.resume() }
                 } else {
-                    wbtn("pause.fill", .white.opacity(0.2)) { engine.pause() }
+                    wbtn("pause.fill", .primary.opacity(0.2)) { engine.pause() }
                 }
                 wbtn("xmark", .red.opacity(0.8)) { engine.finish(); OxHaptics.play(.workoutDone) }
             }

@@ -41,7 +41,7 @@ struct UserProfileView: View {
                         if let pin = u.pinned, tab == "posts" {
                             Label("Закреплено", systemImage: "pin.fill").font(.caption).foregroundStyle(Color.oxHint).padding(.horizontal, 16)
                             ThreadPost(post: pin, onOpen: { route = .post(pin.id) }, onUser: { _ in }, onCompose: { compose = $0 })
-                            Divider().overlay(Color.white.opacity(0.06))
+                            Divider().overlay(Color.primary.opacity(0.06))
                         }
                         if posts.isEmpty {
                             Text("Пока ничего нет").foregroundStyle(Color.oxHint).frame(maxWidth: .infinity).padding(40)
@@ -56,7 +56,7 @@ struct UserProfileView: View {
                                            },
                                            onRemove: { posts.removeAll { $0.post.id == item.post.id } },
                                            onCompose: { compose = $0 })
-                                Divider().overlay(Color.white.opacity(0.06))
+                                Divider().overlay(Color.primary.opacity(0.06))
                             }
                         }
                         .padding(.bottom, 40)
@@ -293,7 +293,7 @@ struct FeedSearchView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(u.name ?? "").font(.subheadline.bold())
-                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.lime) }
+                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk) }
                     }
                     Text(u.bio ?? u.city ?? "").font(.caption).foregroundStyle(Color.oxHint).lineLimit(1)
                 }
@@ -339,7 +339,7 @@ struct AICoachView: View {
                         Label(local.useLocal ? "Думает на iPhone · без интернета" : "Думает на сервере OXION",
                               systemImage: local.useLocal ? "iphone.gen3" : "cloud.fill")
                             .font(.caption.bold())
-                            .foregroundStyle(Color.lime)
+                            .foregroundStyle(Color.limeInk)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Color.lime.opacity(0.12), in: Capsule())
                     }
@@ -363,8 +363,8 @@ struct AICoachView: View {
                                 }
                             }
                             .padding(.horizontal, 14).padding(.vertical, 10)
-                            .foregroundStyle(m.role == "user" ? Color.oxBg : Color.primary)
-                            .background(m.role == "user" ? Color.lime : Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .foregroundStyle(m.role == "user" ? Color.onLime : Color.primary)
+                            .background(m.role == "user" ? Color.lime : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                             if m.role != "user" { Spacer(minLength: 30) }
                         }
                         .id(m.id)
@@ -474,7 +474,7 @@ struct AIPlanCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(plan["title"]?.string ?? "План тренировки", systemImage: "list.bullet.clipboard.fill")
-                .font(.headline).foregroundStyle(Color.lime)
+                .font(.headline).foregroundStyle(Color.limeInk)
             ForEach(Array((plan["exercises"]?.array ?? []).enumerated()), id: \.offset) { _, e in
                 HStack {
                     Text(e["name"]?.string ?? "").font(.subheadline)

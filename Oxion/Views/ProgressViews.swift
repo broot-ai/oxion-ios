@@ -74,7 +74,7 @@ struct ProgressHubView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle().fill(Color.lime.opacity(0.18)).frame(width: 58, height: 58)
-                    Image(systemName: "play.circle.fill").font(.system(size: 34)).foregroundStyle(Color.lime)
+                    Image(systemName: "play.circle.fill").font(.system(size: 34)).foregroundStyle(Color.limeInk)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Progress Replay").font(.title3.bold())
@@ -112,7 +112,7 @@ struct ProgressHubView: View {
                 .padding(.horizontal, 16)
             } else if store.photos.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "person.crop.rectangle.badge.plus").font(.largeTitle).foregroundStyle(Color.lime)
+                    Image(systemName: "person.crop.rectangle.badge.plus").font(.largeTitle).foregroundStyle(Color.limeInk)
                     Text("Добавьте первое фото — спереди, сбоку или сзади. Фото хранятся только на этом iPhone.")
                         .font(.subheadline).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
                     Button("Добавить фото") { addPhoto = true }.buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(.black)
@@ -176,9 +176,9 @@ struct ProgressHubView: View {
                             .foregroundStyle(LinearGradient(colors: [Color.lime.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
                             .interpolationMethod(.catmullRom)
                         LineMark(x: .value("Дата", p.date), y: .value("Вес", p.value))
-                            .foregroundStyle(Color.lime).interpolationMethod(.catmullRom)
+                            .foregroundStyle(Color.limeInk).interpolationMethod(.catmullRom)
                             .lineStyle(StrokeStyle(lineWidth: 2.5))
-                        PointMark(x: .value("Дата", p.date), y: .value("Вес", p.value)).foregroundStyle(Color.lime).symbolSize(20)
+                        PointMark(x: .value("Дата", p.date), y: .value("Вес", p.value)).foregroundStyle(Color.limeInk).symbolSize(20)
                     }
                     .chartYScale(domain: lo...hi)
                     .frame(height: 170)
@@ -218,7 +218,7 @@ struct ProgressHubView: View {
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(10)
-                                    .background(measureKey == k ? Color.lime.opacity(0.14) : Color.white.opacity(0.04),
+                                    .background(measureKey == k ? Color.lime.opacity(0.14) : Color.primary.opacity(0.04),
                                                 in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 }
                                 .buttonStyle(.plain)
@@ -229,8 +229,8 @@ struct ProgressHubView: View {
                     if s.count >= 2 {
                         Chart(s) { p in
                             LineMark(x: .value("Дата", p.date), y: .value(measureKey.title, p.value))
-                                .foregroundStyle(Color.lime).interpolationMethod(.catmullRom)
-                            PointMark(x: .value("Дата", p.date), y: .value(measureKey.title, p.value)).foregroundStyle(Color.lime)
+                                .foregroundStyle(Color.limeInk).interpolationMethod(.catmullRom)
+                            PointMark(x: .value("Дата", p.date), y: .value(measureKey.title, p.value)).foregroundStyle(Color.limeInk)
                         }
                         .chartYScale(domain: ((s.map { $0.value }.min() ?? 0) - 2)...((s.map { $0.value }.max() ?? 0) + 2))
                         .frame(height: 130)
@@ -515,7 +515,7 @@ struct PhotoViewer: View {
                     Spacer()
                     VStack(spacing: 0) {
                         Text(photo.date.formatted(date: .long, time: .omitted)).font(.subheadline.bold())
-                        Text(photo.poseTitle).font(.caption).foregroundStyle(.white.opacity(0.7))
+                        Text(photo.poseTitle).font(.caption).foregroundStyle(.primary.opacity(0.7))
                     }
                     .padding(.horizontal, 14).padding(.vertical, 6)
                     .glassEffect(.regular, in: .capsule)
@@ -600,10 +600,10 @@ struct BeforeAfterView: View {
                         .padding(.horizontal, 8)
                     }
                     let days = Calendar.current.dateComponents([.day], from: b.date, to: a.date).day ?? 0
-                    Text("Между фото \(abs(days)) \(RU.plural(abs(days), "день", "дня", "дней"))").font(.subheadline).foregroundStyle(.white.opacity(0.7))
+                    Text("Между фото \(abs(days)) \(RU.plural(abs(days), "день", "дня", "дней"))").font(.subheadline).foregroundStyle(.primary.opacity(0.7))
                 } else {
                     Spacer()
-                    Text("Выберите два фото ниже").foregroundStyle(.white.opacity(0.6))
+                    Text("Выберите два фото ниже").foregroundStyle(.primary.opacity(0.6))
                     Spacer()
                 }
 
@@ -633,7 +633,7 @@ struct BeforeAfterView: View {
 
     private func picker(_ title: String, _ sel: Binding<ProgressPhoto?>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption.bold()).foregroundStyle(.white.opacity(0.6)).padding(.horizontal, 16)
+            Text(title).font(.caption.bold()).foregroundStyle(.primary.opacity(0.6)).padding(.horizontal, 16)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(store.photos) { p in
@@ -894,7 +894,7 @@ struct ReplayPlayerView: View {
                 HStack(spacing: 4) {
                     ForEach(slides.indices, id: \.self) { i in
                         GeometryReader { g in
-                            Capsule().fill(.white.opacity(0.25))
+                            Capsule().fill(.primary.opacity(0.25))
                                 .overlay(alignment: .leading) {
                                     Capsule().fill(.white)
                                         .frame(width: g.size.width * (i < index ? 1 : i == index ? progress : 0))
@@ -951,10 +951,10 @@ struct ReplayPlayerView: View {
         case .intro:
             VStack(spacing: 14) {
                 Spacer()
-                Text("ВАШ ПУТЬ").font(.caption.bold()).tracking(4).foregroundStyle(Color.lime)
+                Text("ВАШ ПУТЬ").font(.caption.bold()).tracking(4).foregroundStyle(Color.limeInk)
                 Text(periodText).font(.system(size: 40, weight: .heavy)).multilineTextAlignment(.center)
                 Text("\(days) \(RU.plural(days, "день", "дня", "дней")) · \(workouts.count) \(RU.plural(workouts.count, "тренировка", "тренировки", "тренировок")) · \(photos.count) фото")
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.primary.opacity(0.7))
                 Spacer()
             }
             .padding(30)
@@ -973,7 +973,7 @@ struct ReplayPlayerView: View {
                         if let w = weightAt(p.date) { Label("\(fmt(w)) кг", systemImage: "scalemass") }
                         Label("\(workoutsUntil(p.date))", systemImage: "figure.strengthtraining.traditional")
                     }
-                    .font(.subheadline.bold()).foregroundStyle(Color.lime)
+                    .font(.subheadline.bold()).foregroundStyle(Color.limeInk)
                 }
                 .padding(24).padding(.bottom, 40)
             }
@@ -981,7 +981,7 @@ struct ReplayPlayerView: View {
         case .stats:
             VStack(alignment: .leading, spacing: 18) {
                 Spacer()
-                Text("ЦИФРЫ ПЕРИОДА").font(.caption.bold()).tracking(4).foregroundStyle(Color.lime)
+                Text("ЦИФРЫ ПЕРИОДА").font(.caption.bold()).tracking(4).foregroundStyle(Color.limeInk)
                 big("\(workouts.count)", RU.plural(workouts.count, "тренировка", "тренировки", "тренировок"))
                 big(perWeek, "в среднем в неделю")
                 if let d = weightDelta { big("\(d >= 0 ? "+" : "")\(fmt(d)) кг", "изменение веса") }
@@ -1019,7 +1019,7 @@ struct ReplayPlayerView: View {
                         .buttonStyle(.glass)
                     }
                 }
-                Text("Фото в карточку не попадают — только цифры.").font(.caption).foregroundStyle(.white.opacity(0.5))
+                Text("Фото в карточку не попадают — только цифры.").font(.caption).foregroundStyle(.primary.opacity(0.5))
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1033,7 +1033,7 @@ struct ReplayPlayerView: View {
                 Image("ox-logo").resizable().scaledToFit().frame(width: 26, height: 34)
                 Text("OXION").font(.headline.bold())
                 Spacer()
-                Text(periodText).font(.caption).foregroundStyle(.white.opacity(0.7))
+                Text(periodText).font(.caption).foregroundStyle(.primary.opacity(0.7))
             }
             Text("Мой прогресс").font(.system(size: 30, weight: .heavy))
             HStack(spacing: 12) {
@@ -1045,7 +1045,7 @@ struct ReplayPlayerView: View {
         .padding(20)
         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Color.lime.opacity(0.4), lineWidth: 1))
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
     }
 
     @MainActor
@@ -1074,12 +1074,12 @@ struct ReplayPlayerView: View {
 
     private func tile(_ v: String, _ t: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(v).font(.title2.bold()).foregroundStyle(Color.lime).minimumScaleFactor(0.6).lineLimit(1)
-            Text(t).font(.caption).foregroundStyle(.white.opacity(0.7))
+            Text(v).font(.title2.bold()).foregroundStyle(Color.limeInk).minimumScaleFactor(0.6).lineLimit(1)
+            Text(t).font(.caption).foregroundStyle(.primary.opacity(0.7))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func baPhoto(_ i: UIImage, _ t: String, _ d: Date) -> some View {
@@ -1088,7 +1088,7 @@ struct ReplayPlayerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading) {
-                    Text(t).font(.headline.bold()).foregroundStyle(Color.lime)
+                    Text(t).font(.headline.bold()).foregroundStyle(Color.limeInk)
                     Text(d.formatted(.dateTime.day().month(.abbreviated))).font(.caption)
                 }
                 .padding(10)
@@ -1097,8 +1097,8 @@ struct ReplayPlayerView: View {
 
     private func big(_ v: String, _ t: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(v).font(.system(size: 52, weight: .heavy)).foregroundStyle(Color.lime)
-            Text(t).font(.headline).foregroundStyle(.white.opacity(0.75))
+            Text(v).font(.system(size: 52, weight: .heavy)).foregroundStyle(Color.limeInk)
+            Text(t).font(.headline).foregroundStyle(.primary.opacity(0.75))
         }
     }
 

@@ -247,7 +247,7 @@ struct RunTrackerView: View {
             if !t.running {
                 if t.suggestWalk {
                     Label("\(t.activityText) — записать тренировку?", systemImage: "sparkles")
-                        .font(.subheadline.bold()).foregroundStyle(Color.lime)
+                        .font(.subheadline.bold()).foregroundStyle(Color.limeInk)
                 }
                 Picker("", selection: $t.kind) {
                     ForEach(RunTracker.Kind.allCases, id: \.self) { k in Label(k.title, systemImage: k.icon).tag(k) }

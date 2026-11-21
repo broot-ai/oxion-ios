@@ -142,7 +142,7 @@ struct HomeView: View {
                     .font(.title3.weight(.semibold))
                 Spacer()
                 Text("\(stats?.workouts ?? 0)")
-                    .foregroundStyle(Color.lime)
+                    .foregroundStyle(Color.limeInk)
                     .font(.headline)
                 + Text("/\(goal)")
                     .font(.headline)
@@ -150,7 +150,7 @@ struct HomeView: View {
             WeekPills(done: Set(stats?.daysDone ?? []))
             HStack(spacing: 8) {
                 Image(systemName: "flame.fill")
-                    .foregroundStyle(Color.lime)
+                    .foregroundStyle(Color.limeInk)
                 Text(motivation)
                     .font(.subheadline)
                     .foregroundStyle(Color.oxHint)
@@ -427,7 +427,7 @@ struct WeekPills: View {
                         .foregroundStyle(isDone ? Color.black.opacity(0.7) : Color.oxHint)
                     Text("\(cal.component(.day, from: d))")
                         .font(.headline)
-                        .foregroundStyle(isDone ? Color.black : Color.white)
+                        .foregroundStyle(isDone ? Color.black : Color.primary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)

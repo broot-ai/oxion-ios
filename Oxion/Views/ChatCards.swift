@@ -10,8 +10,8 @@ struct ChatCard: View {
     var embedded = false
 
     private var onLime: Bool { mine && embedded }
-    private var fg: Color { onLime ? Color.oxBg : .primary }
-    private var sub: Color { onLime ? Color.oxBg.opacity(0.6) : Color.oxHint }
+    private var fg: Color { onLime ? Color.onLime : .primary }
+    private var sub: Color { onLime ? Color.onLime.opacity(0.6) : Color.oxHint }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -20,7 +20,7 @@ struct ChatCard: View {
                 Text(String((Kinds.label[kind] ?? "📎").prefix(2)))
                     .font(.system(size: 16))
                     .frame(width: 30, height: 30)
-                    .background((onLime ? Color.oxBg.opacity(0.12) : Color.lime.opacity(0.16)), in: Circle())
+                    .background((onLime ? Color.onLime.opacity(0.12) : Color.lime.opacity(0.16)), in: Circle())
                 Text(String((Kinds.label[kind] ?? "Карточка").dropFirst(2)).trimmingCharacters(in: .whitespaces))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(sub)
@@ -100,7 +100,7 @@ struct ChatCard: View {
                     if let b = c?["best"]?.string { metric(b, "лучший") }
                 }
                 if pts.count > 1 {
-                    Sparkline(values: pts, color: onLime ? Color.oxBg : Color.lime)
+                    Sparkline(values: pts, color: onLime ? Color.onLime : Color.limeInk)
                         .frame(height: 44)
                 }
             }

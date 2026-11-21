@@ -55,7 +55,7 @@ struct Avatar: View {
                 Circle().fill(Color.lime.opacity(0.18))
                 Text(String(name.prefix(1)).uppercased())
                     .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.lime)
+                    .foregroundStyle(Color.limeInk)
             }
         }
         .frame(width: size, height: size)
@@ -70,7 +70,7 @@ struct RemoteImage: View {
     var body: some View {
         OxRemoteImage(url: url, gated: true) {
             ZStack {
-                Rectangle().fill(Color.white.opacity(0.06))
+                Rectangle().fill(Color.primary.opacity(0.06))
                 Image(systemName: icon)
                     .font(.title)
                     .foregroundStyle(Color.lime.opacity(0.7))
@@ -89,7 +89,7 @@ struct Chip: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .foregroundStyle(selected ? Color.black : Color.primary)
-            .background(selected ? Color.lime : Color.white.opacity(0.08), in: Capsule())
+            .background(selected ? Color.lime : Color.primary.opacity(0.08), in: Capsule())
     }
 }
 

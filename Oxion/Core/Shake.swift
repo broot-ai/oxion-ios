@@ -130,7 +130,7 @@ struct MuscleThumb: View {
             } else {
                 Image(systemName: MuscleArt.symbol(key))
                     .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(Color.lime)
+                    .foregroundStyle(Color.limeInk)
             }
         }
         .frame(width: size, height: size)

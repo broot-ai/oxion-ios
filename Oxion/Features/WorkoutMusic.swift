@@ -271,7 +271,7 @@ struct WorkoutMusicView: View {
                         if let u = service.url(tr.query) { Haptic.tap(); openURL(u) }
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "play.circle.fill").font(.title2).foregroundStyle(Color.lime)
+                            Image(systemName: "play.circle.fill").font(.title2).foregroundStyle(Color.limeInk)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(tr.title).font(.subheadline.bold()).lineLimit(1)
                                 Text(tr.artist).font(.caption).foregroundStyle(Color.oxHint).lineLimit(1)
@@ -312,12 +312,12 @@ struct WorkoutMusicView: View {
                 ForEach(music.libraryPlaylists, id: \.persistentID) { p in
                     Button { music.playLibrary(p) } label: {
                         HStack {
-                            Image(systemName: "music.note.list").foregroundStyle(Color.lime)
+                            Image(systemName: "music.note.list").foregroundStyle(Color.limeInk)
                             Text(p.name ?? "Плейлист")
                             Spacer()
                             Text("\(p.count)").foregroundStyle(Color.oxHint)
                             if music.libraryPlayingId == p.persistentID {
-                                Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.lime)
+                                Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.limeInk)
                             }
                         }
                     }
@@ -358,7 +358,7 @@ struct WorkoutMusicView: View {
                         }
                         Spacer()
                         if music.playingId == p.id {
-                            Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.lime)
+                            Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.limeInk)
                         }
                     }
                 }
