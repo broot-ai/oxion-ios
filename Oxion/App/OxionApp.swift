@@ -296,7 +296,10 @@ struct MainTabView: View {
             Haptic.success()
             showCard = true
         }
-        .sheet(isPresented: $showCard) { MyCardSheet() }
+        .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
+        .onChange(of: model.sheet) {
+            if model.sheet == .qr { model.sheet = nil; showCard = true }
+        }
         .sheet(item: $model.sheet) { s in
             switch s {
             case .qr: MyCardSheet()

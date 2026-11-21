@@ -174,7 +174,7 @@ struct ProfileView: View {
             .sheet(isPresented: $editing) {
                 EditProfileSheet()
             }
-            .sheet(isPresented: $showCard) { MyCardSheet() }
+            .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
             .task { await refreshNotifText() }
     }
 

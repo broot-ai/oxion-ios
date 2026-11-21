@@ -642,8 +642,11 @@ struct ChatView: View {
         .toolbar(.hidden, for: .tabBar)
         .fullScreenCover(item: $call) { CallScreen(req: $0) }
         .sheet(isPresented: $attaching) {
-            AttachSheet(chatId: chatId) { m in
-                if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
+            ChatAttachSheet(chatId: chatId, replyTo: replyTo?.id) { m in
+                replyTo = nil
+                withAnimation(.spring(duration: 0.4, bounce: 0.2)) {
+                    if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
+                }
             }
         }
         .task {
@@ -693,14 +696,7 @@ struct ChatView: View {
                 Button {
                     attaching = true
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.title3)
-                        .frame(width: 44, height: 44)
-                }
-                .glassEffect(.regular.interactive(), in: .circle)
-
-                PhotosPicker(selection: $photoPick, matching: .images) {
-                    Image(systemName: "photo")
+                    Image(systemName: "paperclip")
                         .font(.title3)
                         .frame(width: 44, height: 44)
                 }

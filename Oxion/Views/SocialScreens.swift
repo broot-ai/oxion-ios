@@ -57,7 +57,7 @@ struct UserProfileView: View {
         .navigationDestination(item: $route) { FeedDestination(route: $0) }
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await loadPosts() } } }
-        .sheet(isPresented: $showCard) { MyCardSheet() }
+        .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
         .toolbar {
             if let u, u.me != true {
                 ToolbarItem(placement: .topBarTrailing) {

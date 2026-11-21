@@ -763,7 +763,7 @@ struct ClientsView: View {
         .background(Color.oxBg)
         .navigationTitle("Мои клиенты")
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
-        .sheet(isPresented: $showQR) { MyCardSheet() }
+        .fullScreenCover(isPresented: $showQR) { MyCardSheet() }
         .oxRefreshable { await load() }
         .task { await load() }
     }
