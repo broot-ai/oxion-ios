@@ -106,6 +106,7 @@ struct ProfileView: View {
                     Section("Для тренера") {
                         nav("Моя анкета тренера", "person.text.rectangle.fill", Color.lime) { TrainerEditView() }
                         nav("Мои клиенты", "person.2.fill", Color(hex: 0x58F670)) { ClientsView() }
+                        nav("Расписание и запись", "calendar", Color(hex: 0x3FD6C9)) { TrainerScheduleView() }
                         nav("PRO-размещение", "crown.fill", Color(hex: 0xF0A030)) { SubscriptionView() }
                     }
                 }

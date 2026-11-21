@@ -26,6 +26,11 @@ struct HomeView: View {
                     header
                     searchBar
                     weekBlock
+                    if model.me?.mode == "trainer" {
+                        HomeTrainerCard()
+                    } else {
+                        HomeSessionCard { openTrainer = $0 }
+                    }
                     ringsCard
                     if model.me?.mode != "trainer" { featuredBlock }
                     coachCard

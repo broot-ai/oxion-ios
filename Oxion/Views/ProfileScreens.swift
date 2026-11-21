@@ -601,6 +601,7 @@ struct MyCoachView: View {
     @State private var data: CoachMy?
     @State private var errorText: String?
     @State private var chat: ChatRef?
+    @State private var booking: CoachTrainer?
 
     var body: some View {
         ScrollView {
@@ -629,6 +630,10 @@ struct MyCoachView: View {
                             }
                             Spacer()
                             Button {
+                                booking = t
+                            } label: { Image(systemName: "calendar.badge.plus") }
+                                .buttonStyle(.glass)
+                            Button {
                                 Task { await openChat(t) }
                             } label: { Image(systemName: "bubble.left.fill") }
                                 .buttonStyle(.glass)
@@ -647,6 +652,17 @@ struct MyCoachView: View {
                                     }
                                     Spacer()
                                     if let p = x.price { Text("\(p) ₽").font(.subheadline) }
+                                    Menu {
+                                        Button { CalendarAdd.add(title: "Тренировка с \(x.trainer?.name ?? "тренером")", start: x.date, minutes: x.minutes ?? 60, place: x.place) } label: {
+                                            Label("В Календарь", systemImage: "calendar.badge.plus")
+                                        }
+                                        Button(role: .destructive) {
+                                            OxAlert.confirm(icon: "calendar.badge.minus", title: "Отменить запись?", message: BookingFormat.when(x.date),
+                                                            action: "Отменить", destructive: true) {
+                                                Task { if await BookingStore.shared.cancel(x.id, late: false) { await load() } }
+                                            }
+                                        } label: { Label("Отменить запись", systemImage: "xmark") }
+                                    } label: { Image(systemName: "ellipsis.circle").font(.title3) }
                                 }
                             }
                         }
@@ -684,6 +700,7 @@ struct MyCoachView: View {
         .background(Color.oxBg)
         .navigationTitle("Мой тренер")
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
+        .sheet(item: $booking) { t in BookingSheet(trainerId: t.id, trainerName: t.name ?? "Тренер") { Task { await load() } } }
         .oxRefreshable { await load() }
         .task { await load() }
     }

@@ -211,6 +211,7 @@ struct TrainerDetailView: View {
     @State private var errorText: String?
     @State private var chat: ChatRef?
     @State private var opening = false
+    @State private var booking = false
 
     var body: some View {
         Group {
@@ -232,20 +233,33 @@ struct TrainerDetailView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if let t, t.isMe != true {
-                Button {
-                    Task { await openChat(name: t.name ?? "Тренер") }
-                } label: {
-                    HStack {
-                        if opening { ProgressView() } else { Image(systemName: "bubble.left.and.bubble.right.fill") }
-                        Text("Написать тренеру")
+                HStack(spacing: 10) {
+                    Button {
+                        Haptic.tap()
+                        booking = true
+                    } label: {
+                        Label("Записаться", systemImage: "calendar.badge.plus")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                     }
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                    .buttonStyle(.glassProminent)
+                    .tint(Color.lime)
+                    .foregroundStyle(Color.onLime)
+                    Button {
+                        Task { await openChat(name: t.name ?? "Тренер") }
+                    } label: {
+                        Group {
+                            if opening { ProgressView() } else { Image(systemName: "bubble.left.and.bubble.right.fill") }
+                        }
+                        .font(.headline)
+                        .frame(width: 44)
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(opening)
                 }
-                .buttonStyle(.glassProminent)
                 .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
-                .disabled(opening)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
             }
@@ -261,6 +275,9 @@ struct TrainerDetailView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $booking) {
+            BookingSheet(trainerId: id, trainerName: t?.name ?? "Тренер")
         }
         .task { await load() }
     }
