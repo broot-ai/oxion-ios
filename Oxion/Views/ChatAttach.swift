@@ -540,29 +540,3 @@ final class OneShotLocation: NSObject, CLLocationManagerDelegate {
     }
 }
 
-/// Съёмка фото камерой
-struct CameraPicker: UIViewControllerRepresentable {
-    var onImage: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let p = UIImagePickerController()
-        p.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
-        p.delegate = context.coordinator
-        return p
-    }
-
-    func updateUIViewController(_ vc: UIImagePickerController, context: Context) {}
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraPicker
-        init(_ p: CameraPicker) { parent = p }
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let img = info[.originalImage] as? UIImage { parent.onImage(img) }
-            parent.dismiss()
-        }
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
-    }
-}
