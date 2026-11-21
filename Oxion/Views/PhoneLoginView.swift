@@ -48,11 +48,16 @@ struct PhoneVerifyView: View {
                         .focused($focus, equals: .phone)
                 } else {
                     CodeBoxes(code: $code, length: request?.length ?? 6)
-                        .focused($focus, equals: .code)
                         .onChange(of: code) {
-                            code = String(code.filter(\.isNumber).prefix(request?.length ?? 6))
                             if code.count == (request?.length ?? 6) { Task { await verify() } }
                         }
+                    PasteButton(payloadType: String.self) { items in
+                        let digits = String((items.first ?? "").filter(\.isNumber).prefix(request?.length ?? 6))
+                        if !digits.isEmpty { code = digits }
+                    }
+                    .buttonBorderShape(.capsule)
+                    .labelStyle(.titleAndIcon)
+                    .tint(Color.lime)
                     HStack {
                         Button("Изменить номер") { withAnimation { request = nil; code = "" } }
                         Spacer()
@@ -109,7 +114,7 @@ struct PhoneVerifyView: View {
             withAnimation { request = r }
             code = ""
             resendIn = 60
-            focus = .code
+            focus = nil
             Haptic.tap()
         } catch {
             errorText = error.localizedDescription
@@ -141,19 +146,17 @@ struct PhoneVerifyView: View {
     }
 }
 
-/// Шесть клеточек для кода (само поле скрыто; iOS подставит код из буфера/подсказки клавиатуры)
+/// Шесть клеточек для кода. Под ними — настоящее системное поле (UIKit):
+/// так подсказка с кодом над клавиатурой и вставка срабатывают надёжно.
 private struct CodeBoxes: View {
     @Binding var code: String
     let length: Int
 
     var body: some View {
         ZStack {
-            TextField("", text: $code)
-                .keyboardType(.numberPad)
-                .textContentType(.oneTimeCode)
-                .foregroundStyle(.clear)
-                .tint(.clear)
+            OTPField(code: $code, length: length)
                 .frame(height: 56)
+                .opacity(0.02)
             HStack(spacing: 8) {
                 ForEach(0..<length, id: \.self) { i in
                     let ch = i < code.count ? String(code[code.index(code.startIndex, offsetBy: i)]) : ""
@@ -167,6 +170,53 @@ private struct CodeBoxes: View {
                 }
             }
             .allowsHitTesting(false)
+        }
+    }
+}
+
+/// Системное поле для одноразового кода: принимает подсказку iOS и вставку целиком
+private struct OTPField: UIViewRepresentable {
+    @Binding var code: String
+    let length: Int
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.keyboardType = .numberPad
+        tf.textContentType = .oneTimeCode
+        tf.autocorrectionType = .no
+        tf.textColor = .clear
+        tf.tintColor = .clear
+        tf.delegate = context.coordinator
+        tf.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { tf.becomeFirstResponder() }
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if tf.text != code { tf.text = code }
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: OTPField
+        init(_ p: OTPField) { parent = p }
+
+        /// Подсказка с кодом и вставка приходят сюда одной строкой — берём только цифры
+        func textField(_ tf: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+            let current = tf.text ?? ""
+            guard let r = Range(range, in: current) else { return false }
+            let next = String(current.replacingCharacters(in: r, with: string).filter(\.isNumber).prefix(parent.length))
+            tf.text = next
+            parent.code = next
+            return false
+        }
+
+        @objc func changed(_ tf: UITextField) {
+            let next = String((tf.text ?? "").filter(\.isNumber).prefix(parent.length))
+            if tf.text != next { tf.text = next }
+            if parent.code != next { parent.code = next }
         }
     }
 }
