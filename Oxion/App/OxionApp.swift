@@ -142,6 +142,9 @@ final class AppModel {
     func handle(route: String) {
         let parts = route.split(separator: "/").map(String.init)
         switch parts.first ?? "" {
+        case "workout" where parts.count > 1 && parts[1] == "legs":
+            selectedTab = .diary
+            Task { await quickWorkout(title: "Ноги", groups: ["legs"]) }
         case "workout":
             if WorkoutEngine.shared.state != nil { showActiveWorkout = true } else { selectedTab = .diary }
         case "diary": selectedTab = .diary
@@ -181,6 +184,19 @@ final class AppModel {
         }
     }
     var trainerQuery = ""
+    var workoutBox: IdBox?
+
+    /// Быстро создать тренировку на сегодня (из Siri / «Команд») и открыть её
+    func quickWorkout(title: String, groups: [String]) async {
+        do {
+            let w: WorkoutFull = try await API.call("/workouts", method: "POST",
+                                                    body: ["date": RU.dayFormatter.string(from: Date()), "title": title, "groups": groups])
+            workoutBox = IdBox(id: w.id)
+            FX.play(.energyPulse)
+        } catch {
+            OxAlert.error(error.localizedDescription)
+        }
+    }
 
     func start() async {
         if API.token == nil {
@@ -377,7 +393,11 @@ struct MainTabView: View {
         .transaction { t in
             if !PowerSaver.allowsNow(.interface) { t.disablesAnimations = true; t.animation = nil }
         }
-        .onChange(of: model.selectedTab) { Haptic.tap(.soft) }
+        .onChange(of: model.selectedTab) {
+            Haptic.tap(.soft)
+            let b = UIScreen.main.bounds
+            FX.play(.dust, at: CGPoint(x: b.midX, y: b.maxY - 70))
+        }
         .onReceive(NotificationCenter.default.publisher(for: .oxionFocusChanged)) { _ in
             withAnimation { focusHideFeed = OxFocus.hideFeed }
             if focusHideFeed && model.selectedTab == .feed { model.selectedTab = .home }
@@ -406,6 +426,7 @@ struct MainTabView: View {
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
+        .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
         .onChange(of: chats.unread) { QuickActions.update(unread: chats.unread) }
         .overlay(alignment: .bottom) {
             ActiveWorkoutBar { model.showActiveWorkout = true }

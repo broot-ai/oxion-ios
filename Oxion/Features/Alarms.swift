@@ -38,6 +38,8 @@ enum OxAlarms {
             WorkoutMusic.shared.handle(e)
             ScreenLock.shared.handle(e)
             if e == .finished { GameHub.shared.workoutFinished(s) }
+            if e == .started { FX.play(.energyPulse) }
+            if e == .finished { FX.play(.confetti) }
         }
     }
 

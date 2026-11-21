@@ -589,6 +589,7 @@ struct GoalsView: View {
             let r: GoalsResponse = try await API.call("/goals")
             items = r.items
             loaded = true
+            for g in r.items where g.status == "done" { Celebrate.goal(id: g.id) }
         } catch { errorText = error.localizedDescription }
     }
 }

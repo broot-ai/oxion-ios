@@ -156,6 +156,8 @@ struct WeekCard: View {
             ZStack {
                 Circle()
                     .stroke(Color.lime.opacity(0.15), lineWidth: 14)
+                    .onAppear { Celebrate.weekGoal(done: done, goal: goal) }
+                    .onChange(of: done) { Celebrate.weekGoal(done: done, goal: goal) }
                 Circle()
                     .trim(from: 0, to: progress)
                     .stroke(Color.lime, style: StrokeStyle(lineWidth: 14, lineCap: .round))

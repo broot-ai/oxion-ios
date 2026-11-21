@@ -95,34 +95,105 @@ struct OpenFavoritesIntent: AppIntent {
     }
 }
 
+// MARK: - Быстрые действия OS 2.0
+
+struct StartLegWorkoutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Запустить тренировку ног"
+    static var description = IntentDescription("Создаёт на сегодня тренировку «Ноги» и открывает её")
+    static var openAppWhenRun: Bool = true
+    func perform() async throws -> some IntentResult {
+        await MainActor.run { PendingRoute.go("workout/legs") }
+        return .result()
+    }
+}
+
+struct ShowProgressIntent: AppIntent {
+    static var title: LocalizedStringResource = "Посмотреть прогресс"
+    static var description = IntentDescription("Открывает прогресс тела: вес, замеры, фото")
+    static var openAppWhenRun: Bool = true
+    func perform() async throws -> some IntentResult {
+        await MainActor.run { PendingRoute.go("progress") }
+        return .result()
+    }
+}
+
+struct StartRestTimerIntent: AppIntent {
+    static var title: LocalizedStringResource = "Начать таймер отдыха"
+    static var description = IntentDescription("Ставит системный таймер отдыха — он сработает даже в беззвучном режиме")
+    @Parameter(title: "Секунд", default: 90, inclusiveRange: (10, 900))
+    var seconds: Int
+
+    static var parameterSummary: some ParameterSummary { Summary("Таймер отдыха на \(\.$seconds) секунд") }
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        await OxAlarms.scheduleRest(seconds: seconds, next: "")
+        let m = seconds / 60, sec = seconds % 60
+        return .result(dialog: "Отдых \(m > 0 ? "\(m) мин " : "")\(sec > 0 ? "\(sec) сек" : ""). Скажу, когда пора.")
+    }
+}
+
+enum ReminderDays: String, AppEnum {
+    case everyday, weekdays, weekends
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Дни"
+    static var caseDisplayRepresentations: [ReminderDays: DisplayRepresentation] = [
+        .everyday: "каждый день", .weekdays: "по будням", .weekends: "по выходным",
+    ]
+    var days: Set<Locale.Weekday> {
+        switch self {
+        case .everyday: [.monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday]
+        case .weekdays: [.monday, .tuesday, .wednesday, .thursday, .friday]
+        case .weekends: [.saturday, .sunday]
+        }
+    }
+}
+
+struct CreateReminderIntent: AppIntent {
+    static var title: LocalizedStringResource = "Создать напоминание о тренировке"
+    static var description = IntentDescription("Будильник-напоминание OXION в нужное время")
+    @Parameter(title: "Время") var time: Date
+    @Parameter(title: "Дни", default: .everyday) var days: ReminderDays
+
+    static var parameterSummary: some ParameterSummary { Summary("Напоминать в \(\.$time) \(\.$days)") }
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+        let ok = await OxAlarms.setReminder(hour: c.hour ?? 9, minute: c.minute ?? 0, days: days.days)
+        return .result(dialog: ok ? "Готово: напомню в \(String(format: "%02d:%02d", c.hour ?? 9, c.minute ?? 0))." : "Не получилось — разрешите OXION будильники в настройках.")
+    }
+}
+
+/// Не больше 10 фраз-команд на приложение (ограничение iOS). Остальные действия всё равно есть в «Командах».
 struct OxionShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: StartWorkoutIntent(),
                     phrases: ["Запусти тренировку в \(.applicationName)", "Начни тренировку \(.applicationName)", "\(.applicationName) старт"],
                     shortTitle: "Начать тренировку", systemImageName: "figure.strengthtraining.traditional")
-        AppShortcut(intent: RestLeftIntent(),
-                    phrases: ["Сколько осталось отдыхать в \(.applicationName)", "\(.applicationName) отдых"],
-                    shortTitle: "Сколько отдыхать", systemImageName: "timer")
-        AppShortcut(intent: SiriCompleteSetIntent(),
-                    phrases: ["Заверши подход в \(.applicationName)", "\(.applicationName) подход готов"],
-                    shortTitle: "Завершить подход", systemImageName: "checkmark.circle.fill")
-        AppShortcut(intent: NextExerciseIntent(),
-                    phrases: ["Следующее упражнение в \(.applicationName)", "\(.applicationName) дальше"],
-                    shortTitle: "Следующее упражнение", systemImageName: "forward.fill")
+        AppShortcut(intent: StartLegWorkoutIntent(),
+                    phrases: ["Тренировка ног в \(.applicationName)", "Запусти тренировку ног \(.applicationName)", "\(.applicationName) ноги"],
+                    shortTitle: "Тренировка ног", systemImageName: "figure.step.training")
         AppShortcut(intent: ShowStatsIntent(),
                     phrases: ["Покажи мою статистику в \(.applicationName)", "Открой статистику \(.applicationName)"],
                     shortTitle: "Статистика", systemImageName: "chart.bar.fill")
-        AppShortcut(intent: WeekWorkoutsIntent(),
-                    phrases: ["Сколько тренировок я сделал за неделю в \(.applicationName)", "\(.applicationName) моя неделя"],
-                    shortTitle: "Моя неделя", systemImageName: "calendar")
-        AppShortcut(intent: OpenFavoritesIntent(),
-                    phrases: ["Открой избранных тренеров в \(.applicationName)", "\(.applicationName) избранные"],
-                    shortTitle: "Избранные тренеры", systemImageName: "heart.fill")
-        AppShortcut(intent: OpenRepCounterIntent(),
-                    phrases: ["Считай повторы в \(.applicationName)", "\(.applicationName) камера"],
-                    shortTitle: "Счёт повторов", systemImageName: "camera.viewfinder")
+        AppShortcut(intent: StartRestTimerIntent(),
+                    phrases: ["Таймер отдыха в \(.applicationName)", "Начни отдых \(.applicationName)", "\(.applicationName) отдых"],
+                    shortTitle: "Таймер отдыха", systemImageName: "timer")
+        AppShortcut(intent: ShowProgressIntent(),
+                    phrases: ["Покажи прогресс в \(.applicationName)", "\(.applicationName) прогресс"],
+                    shortTitle: "Прогресс", systemImageName: "chart.line.uptrend.xyaxis")
+        AppShortcut(intent: CreateReminderIntent(),
+                    phrases: ["Напомни о тренировке в \(.applicationName)", "\(.applicationName) напоминание"],
+                    shortTitle: "Напоминание", systemImageName: "alarm")
+        AppShortcut(intent: SiriCompleteSetIntent(),
+                    phrases: ["Заверши подход в \(.applicationName)", "\(.applicationName) подход готов"],
+                    shortTitle: "Завершить подход", systemImageName: "checkmark.circle.fill")
+        AppShortcut(intent: RestLeftIntent(),
+                    phrases: ["Сколько осталось отдыхать в \(.applicationName)", "\(.applicationName) сколько отдыхать"],
+                    shortTitle: "Сколько отдыхать", systemImageName: "hourglass")
         AppShortcut(intent: StartRunIntent(),
                     phrases: ["Начни пробежку в \(.applicationName)", "\(.applicationName) пробежка"],
                     shortTitle: "Пробежка", systemImageName: "figure.run")
+        AppShortcut(intent: OpenRepCounterIntent(),
+                    phrases: ["Считай повторы в \(.applicationName)", "\(.applicationName) камера"],
+                    shortTitle: "Счёт повторов", systemImageName: "camera.viewfinder")
     }
 }

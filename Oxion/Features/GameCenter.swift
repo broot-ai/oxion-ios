@@ -37,6 +37,9 @@ final class GameHub {
     func workoutFinished(_ s: WorkoutState) {
         let n = workoutsDone + 1
         UserDefaults.standard.set(n, forKey: countKey)
+        if [1, 10, 25, 50, 100, 250, 500].contains(n) {
+            Task { try? await Task.sleep(for: .seconds(1.4)); Celebrate.achievement("workouts-\(n)") }
+        }
         guard GKLocalPlayer.local.isAuthenticated else { return }
         let sets = s.items.reduce(0) { $0 + $1.sets }
         Task {
