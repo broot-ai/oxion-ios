@@ -505,6 +505,17 @@ struct ChatView: View {
     @FocusState private var focused: Bool
     @Namespace private var zoomNS
     @State private var translateText: String?
+    @State private var productBox: AppModel.IdBox?
+
+    /// у последнего сообщения в серии от одного человека — «хвостик»
+    private var tailIds: Set<Int> {
+        var out = Set<Int>()
+        let list = messages.filter { $0.kind != "shot" }
+        for (i, m) in list.enumerated() {
+            if i == list.count - 1 || list[i + 1].mine != m.mine { out.insert(m.id) }
+        }
+        return out
+    }
 
     private var shielded: Bool { protect?.on == true }
 
@@ -512,7 +523,7 @@ struct ChatView: View {
         ScreenShield(enabled: shielded) {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 6) {
+                LazyVStack(spacing: 4) {
                     if !loaded {
                         ProgressView().padding(.top, 40)
                     } else if messages.isEmpty {
@@ -560,6 +571,9 @@ struct ChatView: View {
             }
         }
         .environment(chats)
+        }
+        .sheet(item: $productBox) { b in
+            NavigationStack { ProductView(productId: b.id, onCart: { _ in }) }
         }
         .translationPresentation(isPresented: Binding(get: { translateText != nil }, set: { if !$0 { translateText = nil } }),
                                  text: translateText ?? "")
@@ -771,7 +785,12 @@ struct ChatView: View {
 
     @ViewBuilder
     private func bubbleRow(_ m: Message) -> some View {
-                Bubble(m: m, read: m.mine && m.id <= peerReadId)
+                Bubble(m: m, read: m.mine && m.id <= peerReadId, tail: tailIds.contains(m.id)) { action in
+                    switch action {
+                    case .product(let id): productBox = AppModel.IdBox(id: id)
+                    case .call(let video): call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: video)
+                    }
+                }
                     .id(m.id)
                     .transition(Self.bubbleTransition(mine: m.mine))
                     .contextMenu {
@@ -881,23 +900,31 @@ struct ChatView: View {
 struct Bubble: View {
     let m: Message
     var read: Bool
+    /// последнее сообщение в серии от одного человека — с «хвостиком»
+    var tail = true
+    var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
 
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true }
+    private var fill: Color { m.mine ? Color.lime : Color(hex: 0x1F2124).opacity(0.94) }
+    private var ink: Color { m.mine ? Color.oxBg : Color.primary }
+    private var buttons: [InlineBtn] { m.kind.map { ChatCard.buttons(kind: $0, card: m.card, mine: m.mine) } ?? [] }
 
     var body: some View {
-        HStack(alignment: .bottom) {
+        HStack(alignment: .bottom, spacing: 0) {
             if m.mine { Spacer(minLength: 56) }
             VStack(alignment: m.mine ? .trailing : .leading, spacing: 4) {
-                if isCardOnly, let k = m.kind {
-                    // карточка без лишней «обёртки» сообщения
-                    VStack(alignment: .trailing, spacing: 4) {
-                        ChatCard(kind: k, card: m.card, mine: m.mine)
-                        meta.padding(.trailing, 6)
+                VStack(spacing: 4) {
+                    if isCardOnly, let k = m.kind {
+                        cardBubble(k)
+                    } else {
+                        bubble
                     }
-                } else {
-                    bubble
+                    if !buttons.isEmpty {
+                        InlineButtonsRow(buttons: buttons, radius: max(8, style.radius * 0.7), onTap: onAction)
+                    }
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 if let rs = m.reactions, !rs.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(rs, id: \.self) { r in
@@ -905,14 +932,30 @@ struct Bubble: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(r.mine == true ? Color.lime.opacity(0.3) : Color.white.opacity(0.1), in: Capsule())
+                                .background(r.mine == true ? Color.lime.opacity(0.3) : Color.black.opacity(0.35), in: Capsule())
                         }
                     }
                 }
             }
             if !m.mine { Spacer(minLength: 56) }
         }
+        .padding(m.mine ? .trailing : .leading, tail ? 0 : 0)
     }
+
+    private var shape: TailBubbleShape { TailBubbleShape(mine: m.mine, radius: style.radius, tail: tail) }
+
+    // карточка (товар, звонок, тренировка…) в пузыре
+    private func cardBubble(_ k: String) -> some View {
+        ChatCard(kind: k, card: m.card, mine: false, embedded: true)
+            .frame(maxWidth: 270, alignment: .leading)
+            .padding(12)
+            .padding(.bottom, 12)
+            .overlay(alignment: .bottomTrailing) { meta(on: false).padding(.trailing, 12).padding(.bottom, 7) }
+            .background(shape.fill(Color(hex: 0x1F2124).opacity(0.94)))
+            .overlay(shape.stroke(m.mine ? Color.lime.opacity(0.35) : Color.white.opacity(0.06), lineWidth: 1))
+    }
+
+    private var hasText: Bool { !(m.text ?? "").isEmpty && m.deleted != true }
 
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -924,54 +967,78 @@ struct Bubble: View {
                         Text(r.text ?? "").font(.caption).lineLimit(2)
                     }
                     .opacity(0.85)
+                    .padding(.trailing, 6)
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, 4)
+                .padding(.leading, 4)
+                .background((m.mine ? Color.black : Color.lime).opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             if m.deleted == true {
-                Text("Сообщение удалено").italic().opacity(0.6)
+                (Text("Сообщение удалено").italic() + timeSpacer)
+                    .opacity(0.6)
             } else {
                 if let p = API.media(m.photo) {
                     RemoteImage(url: p)
-                        .frame(width: 230, height: 270)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .frame(width: 240, height: 280)
+                        .clipShape(RoundedRectangle(cornerRadius: max(4, style.radius - 4), style: .continuous))
                         .padding(.horizontal, -8)
+                        .padding(.top, m.reply == nil ? -5 : 0)
+                        .overlay(alignment: .bottomTrailing) {
+                            if !hasText {
+                                meta(on: true)
+                                    .padding(.horizontal, 7).padding(.vertical, 3)
+                                    .background(.black.opacity(0.45), in: Capsule())
+                                    .padding(6)
+                            }
+                        }
                 }
                 if let k = m.kind {
                     ChatCard(kind: k, card: m.card, mine: m.mine, embedded: true)
                         .padding(.horizontal, -6)
                 }
                 if let t = m.text, !t.isEmpty {
-                    Text(t).font(.system(size: style.fontSize))
+                    // время встаёт в конец последней строки, пузырь — по ширине текста
+                    (Text(t) + timeSpacer)
+                        .font(.system(size: style.fontSize))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            meta.frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .foregroundStyle(m.mine ? Color.oxBg : Color.primary)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: style.radius, bottomLeadingRadius: m.mine ? style.radius : style.tail,
-                                   bottomTrailingRadius: m.mine ? style.tail : style.radius, topTrailingRadius: style.radius, style: .continuous)
-                .fill(m.mine ? Color.lime : Color.white.opacity(0.08))
-        )
-        .overlay(
-            UnevenRoundedRectangle(topLeadingRadius: style.radius, bottomLeadingRadius: m.mine ? style.radius : style.tail,
-                                   bottomTrailingRadius: m.mine ? style.tail : style.radius, topTrailingRadius: style.radius, style: .continuous)
-                .stroke(m.mine ? Color.clear : Color.white.opacity(0.07))
-        )
+        .padding(.horizontal, 12)
+        .padding(.top, 7)
+        .padding(.bottom, needsMetaRow ? 20 : 7)
+        .overlay(alignment: .bottomTrailing) {
+            if hasText || m.deleted == true || needsMetaRow {
+                meta(on: false).padding(.trailing, 10).padding(.bottom, 5)
+            }
+        }
+        .foregroundStyle(ink)
+        .background(shape.fill(fill))
         .frame(maxWidth: 300, alignment: m.mine ? .trailing : .leading)
     }
 
-    private var meta: some View {
+    /// фото без текста — время на фото; карточка без текста — отдельной строкой
+    private var needsMetaRow: Bool { m.deleted != true && !hasText && m.photo == nil }
+
+    /// невидимая «подложка» под время в конце текста
+    private var timeSpacer: Text {
+        Text("\u{2002}" + (m.edited == true ? "изм. " : "") + ChatTime.time(m.at) + (m.mine ? "\u{2002}✓✓" : ""))
+            .font(.caption2)
+            .foregroundColor(.clear)
+    }
+
+    private func meta(on photo: Bool) -> some View {
         HStack(spacing: 3) {
             if m.edited == true { Text("изм.") }
             Text(ChatTime.time(m.at))
             if m.mine {
                 Image(systemName: read ? "checkmark.circle.fill" : "checkmark")
+                    .font(.system(size: 10, weight: .bold))
             }
         }
         .font(.caption2)
-        .opacity(0.55)
+        .foregroundStyle(photo ? Color.white : (m.mine && !isCardOnly ? Color.oxBg.opacity(0.6) : Color.white.opacity(0.5)))
     }
 }
 

@@ -447,6 +447,13 @@ enum JSONValue: Decodable, Hashable {
         }
     }
     var int: Int? { number.map { Int($0) } }
+    var bool: Bool? {
+        switch self {
+        case .bool(let b): return b
+        case .number(let n): return n != 0
+        default: return nil
+        }
+    }
     var array: [JSONValue] {
         if case .array(let a) = self { return a }
         return []

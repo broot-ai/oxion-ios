@@ -15,6 +15,7 @@ struct ChatCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if kind != "product" && kind != "call" {
             HStack(spacing: 8) {
                 Text(String((Kinds.label[kind] ?? "📎").prefix(2)))
                     .font(.system(size: 16))
@@ -24,6 +25,7 @@ struct ChatCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(sub)
                     .textCase(.uppercase)
+            }
             }
             content
         }
@@ -112,6 +114,10 @@ struct ChatCard: View {
             VoicePlayer(url: API.media(c?["url"]?.string), seconds: c?["dur"]?.int ?? 0, tint: fg)
         case "sticker":
             Text("🎨").font(.system(size: 54))
+        case "product":
+            productBody(c)
+        case "call":
+            callBody(c)
         default:
             VStack(alignment: .leading, spacing: 4) {
                 if let t = c?["title"]?.string ?? c?["text"]?.string ?? c?["name"]?.string {
@@ -119,6 +125,95 @@ struct ChatCard: View {
                 }
                 Text("Подробнее — в полной версии чата").font(.caption).foregroundStyle(sub)
             }
+        }
+    }
+
+    // MARK: товар и звонок
+
+    @ViewBuilder
+    private func productBody(_ c: JSONValue?) -> some View {
+        let price = (c?["price_kop"]?.number ?? 0) / 100
+        let old = (c?["old_price_kop"]?.number).map { $0 / 100 }
+        HStack(alignment: .top, spacing: 12) {
+            RemoteImage(url: API.media(c?["photo"]?.string), icon: "bag.fill")
+                .frame(width: 84, height: 84)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(alignment: .topLeading) {
+                    if let old, old > price {
+                        Text("−\(Int(((old - price) / old * 100).rounded()))%")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(Color(hex: 0xFF5A4E), in: Capsule())
+                            .padding(5)
+                    }
+                }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Self.rub(price)).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(fg)
+                    if let old, old > price {
+                        Text(Self.rub(old)).font(.caption).strikethrough().foregroundStyle(sub)
+                    }
+                }
+                Text(c?["title"]?.string ?? "Товар")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(fg)
+                    .lineLimit(2)
+                Text([c?["brand"]?.string, c?["store"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(sub).lineLimit(1)
+                if let r = c?["rating"]?.number, r > 0 {
+                    Label("\(r.formatted(.number.precision(.fractionLength(0...1)))) · \(c?["rating_count"]?.int ?? 0) отз.", systemImage: "star.fill")
+                        .font(.caption).foregroundStyle(sub)
+                }
+                if c?["in_stock"]?.bool == false {
+                    Text("Нет в наличии").font(.caption.bold()).foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func callBody(_ c: JSONValue?) -> some View {
+        let video = c?["video"]?.bool == true
+        let dur = c?["dur"]?.int ?? 0
+        let missed = dur == 0
+        let title: String = {
+            let what = video ? "видеозвонок" : "звонок"
+            if mine { return missed ? "Отменённый \(what)" : "Исходящий \(what)" }
+            return missed ? "Пропущенный \(what)" : "Входящий \(what)"
+        }()
+        HStack(spacing: 12) {
+            Image(systemName: video ? "video.fill" : "phone.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(missed && !mine ? Color(hex: 0xFF5A4E) : Color.lime)
+                .frame(width: 42, height: 42)
+                .background((missed && !mine ? Color(hex: 0xFF5A4E) : Color.lime).opacity(0.15), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.prefix(1).uppercased() + title.dropFirst())
+                    .font(.subheadline.bold())
+                    .foregroundStyle(missed && !mine ? Color(hex: 0xFF5A4E) : fg)
+                Text(missed ? (mine ? "Без ответа" : "Нажмите, чтобы перезвонить") : String(format: "%d:%02d", dur / 60, dur % 60))
+                    .font(.caption).foregroundStyle(sub)
+            }
+        }
+    }
+
+    static func rub(_ v: Double) -> String {
+        v.formatted(.number.grouping(.automatic).precision(.fractionLength(0...2))) + " ₽"
+    }
+
+    /// Кнопки под карточкой (как inline-кнопки в Telegram)
+    static func buttons(kind: String, card: JSONValue?, mine: Bool) -> [InlineBtn] {
+        switch kind {
+        case "product":
+            guard let id = card?["pid"]?.int else { return [] }
+            return [InlineBtn(title: "Открыть товар", icon: "bag", action: .product(id))]
+        case "call":
+            let video = card?["video"]?.bool == true
+            let missed = (card?["dur"]?.int ?? 0) == 0
+            return [InlineBtn(title: missed && !mine ? "Перезвонить" : "Позвонить ещё", icon: video ? "video" : "phone", action: .call(video: video))]
+        default:
+            return []
         }
     }
 
@@ -269,5 +364,93 @@ struct AttachSheet: View {
         } catch {
             errorText = error.localizedDescription
         }
+    }
+}
+
+
+struct InlineBtn: Identifiable {
+    enum Action { case product(Int), call(video: Bool) }
+    let id = UUID()
+    let title: String
+    let icon: String
+    let action: Action
+}
+
+/// Ряд inline-кнопок под сообщением
+struct InlineButtonsRow: View {
+    let buttons: [InlineBtn]
+    var radius: CGFloat = 14
+    var onTap: (InlineBtn.Action) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(buttons) { b in
+                Button {
+                    Haptic.tap()
+                    onTap(b.action)
+                } label: {
+                    Text(b.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .overlay(alignment: .topTrailing) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 8, weight: .heavy))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .padding(5)
+                        }
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                        .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                }
+                .buttonStyle(InlinePressStyle())
+            }
+        }
+    }
+}
+
+private struct InlinePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .brightness(configuration.isPressed ? 0.08 : 0)
+            .animation(.spring(duration: 0.2), value: configuration.isPressed)
+    }
+}
+
+/// Пузырь с закруглённым «хвостиком», как в Telegram
+struct TailBubbleShape: Shape {
+    var mine: Bool
+    var radius: CGFloat
+    var tail: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(radius, rect.height / 2, rect.width / 2)
+        let small = min(6, r)
+        var p = Path()
+        let minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+        // рисуем для своего сообщения (хвост справа внизу), чужое — зеркально
+        p.move(to: CGPoint(x: minX + r, y: minY))
+        p.addLine(to: CGPoint(x: maxX - r, y: minY))
+        p.addArc(tangent1End: CGPoint(x: maxX, y: minY), tangent2End: CGPoint(x: maxX, y: minY + r), radius: r)
+        if tail {
+            p.addLine(to: CGPoint(x: maxX, y: maxY - 10))
+            p.addCurve(to: CGPoint(x: maxX + 6, y: maxY),
+                       control1: CGPoint(x: maxX, y: maxY - 3), control2: CGPoint(x: maxX + 3, y: maxY - 0.5))
+            p.addCurve(to: CGPoint(x: maxX - 12, y: maxY - 1.5),
+                       control1: CGPoint(x: maxX - 2, y: maxY + 0.8), control2: CGPoint(x: maxX - 8, y: maxY))
+            p.addQuadCurve(to: CGPoint(x: maxX - r - 2, y: maxY), control: CGPoint(x: maxX - 15, y: maxY))
+        } else {
+            p.addLine(to: CGPoint(x: maxX, y: maxY - small))
+            p.addArc(tangent1End: CGPoint(x: maxX, y: maxY), tangent2End: CGPoint(x: maxX - small, y: maxY), radius: small)
+        }
+        p.addLine(to: CGPoint(x: minX + r, y: maxY))
+        p.addArc(tangent1End: CGPoint(x: minX, y: maxY), tangent2End: CGPoint(x: minX, y: maxY - r), radius: r)
+        p.addLine(to: CGPoint(x: minX, y: minY + r))
+        p.addArc(tangent1End: CGPoint(x: minX, y: minY), tangent2End: CGPoint(x: minX + r, y: minY), radius: r)
+        p.closeSubpath()
+        if mine { return p }
+        return p.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: rect.minX * 2 + rect.width, ty: 0))
     }
 }

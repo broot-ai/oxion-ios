@@ -118,9 +118,8 @@ struct ChatPreview: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .foregroundStyle(m.mine ? Color.oxBg : Color.primary)
                     .background(
-                        UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: m.mine ? radius : min(6, radius),
-                                               bottomTrailingRadius: m.mine ? min(6, radius) : radius, topTrailingRadius: radius, style: .continuous)
-                            .fill(m.mine ? Color.lime : Color.white.opacity(0.09))
+                        TailBubbleShape(mine: m.mine, radius: radius, tail: true)
+                            .fill(m.mine ? Color.lime : Color(hex: 0x1F2124).opacity(0.94))
                     )
                     .fixedSize(horizontal: false, vertical: true)
                     if !m.mine { Spacer(minLength: 50) }
