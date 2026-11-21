@@ -188,7 +188,6 @@ struct HomeView: View {
             HStack(spacing: 18) {
                 ActivityRings(rings: rings)
                     .frame(width: 140, height: 140)
-                    .motionTilt(16, shine: false)
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(rings) { r in
                         VStack(alignment: .leading, spacing: 1) {
@@ -448,30 +447,88 @@ struct RingData: Identifiable {
     let text: String
 }
 
+/// Кольцо (бублик) как фигура — для жидкого стекла
+struct RingTrackShape: Shape {
+    var inset: CGFloat
+    var line: CGFloat
+    func path(in rect: CGRect) -> Path {
+        Circle().path(in: rect.insetBy(dx: inset + line / 2, dy: inset + line / 2))
+            .strokedPath(StrokeStyle(lineWidth: line))
+    }
+}
+
+/// Заполненная часть кольца — дуга со скруглёнными концами
+struct RingArcShape: Shape {
+    var inset: CGFloat
+    var line: CGFloat
+    var progress: Double
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: inset + line / 2, dy: inset + line / 2)
+        var p = Path()
+        p.addArc(center: CGPoint(x: r.midX, y: r.midY), radius: r.width / 2,
+                 startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * max(0.0001, progress)), clockwise: false)
+        return p.strokedPath(StrokeStyle(lineWidth: line, lineCap: .round))
+    }
+}
+
+/// Кольца из жидкого стекла: дорожка — прозрачное стекло, заполненная часть — цветное стекло
 struct ActivityRings: View {
     let rings: [RingData]
 
     var body: some View {
         GeometryReader { geo in
             let size = min(geo.size.width, geo.size.height)
-            let line = size * 0.11
-            ZStack {
-                ForEach(Array(rings.enumerated()), id: \.offset) { i, r in
-                    let inset = CGFloat(i) * (line + 4)
-                    let p = r.max > 0 ? min(1, r.value / r.max) : 0
-                    Circle()
-                        .stroke(r.color.opacity(0.18), lineWidth: line)
-                        .padding(inset + line / 2)
-                    Circle()
-                        .trim(from: 0, to: max(0.001, p))
-                        .stroke(r.color, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .padding(inset + line / 2)
-                        .animation(.spring(duration: 0.9), value: p)
+            let line = size * 0.12
+            GlassEffectContainer(spacing: 2) {
+                ZStack {
+                    ForEach(Array(rings.enumerated()), id: \.offset) { i, r in
+                        let inset = CGFloat(i) * (line + 5)
+                        let p = r.max > 0 ? min(1, r.value / r.max) : 0
+                        // дорожка — бесцветное стекло
+                        Color.clear
+                            .glassEffect(.regular, in: RingTrackShape(inset: inset, line: line))
+                        // заполнено — цветное стекло со свечением
+                        if p > 0 {
+                            Color.clear
+                                .glassEffect(.regular.tint(r.color.opacity(0.85)), in: RingArcShape(inset: inset, line: line, progress: p))
+                                .shadow(color: r.color.opacity(0.55), radius: 8)
+                                .transition(.opacity)
+                                .animation(.spring(duration: 0.9), value: p)
+                        }
+                    }
                 }
             }
+            .overlay { RingGlint(rings: rings.count, line: line) }
             .frame(width: size, height: size)
         }
+    }
+}
+
+/// Блик на стекле, который плавает за наклоном телефона (без 3D-поворота — стекло остаётся живым)
+private struct RingGlint: View {
+    let rings: Int
+    let line: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !PowerSaver.allowsNow(.liveBackgrounds))) { _ in
+            let t = TiltMotion.shared
+            let angle = Angle.degrees(-135 + t.x * 60 - t.y * 30)
+            ZStack {
+                ForEach(0..<rings, id: \.self) { i in
+                    RingTrackShape(inset: CGFloat(i) * (line + 5), line: line)
+                        .fill(AngularGradient(colors: [.white.opacity(0.35), .white.opacity(0), .white.opacity(0), .white.opacity(0.12), .white.opacity(0)],
+                                              center: .center, angle: angle))
+                        .blendMode(.plusLighter)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { TiltMotion.shared.start() }
+        .onDisappear { TiltMotion.shared.stop() }
     }
 }
 
