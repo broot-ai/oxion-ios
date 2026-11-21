@@ -35,6 +35,11 @@ GitHub → Actions → «Выгрузка в TestFlight» → Run workflow. Че
 | SharePlay — совместная тренировка | превью | да |
 | App Clip по QR/NFC в зале | нет | да — `APPLE_TEAM_ID` в Cloudflare + App Clip Experience в App Store Connect |
 | Универсальные ссылки (…/clip/trainer/34 открывает приложение) | нет | да |
+| Подписка PRO через App Store (StoreKit 2) | кнопка есть, покупка недоступна | да — товар `ru.oxion.app.pro.month` в App Store Connect |
+| Вход через Apple | кнопка есть, Apple ответит ошибкой | да — включить Sign in with Apple у App ID |
+| Game Center: рейтинг и достижения | ошибка входа | да — создать рейтинги и достижения (см. ниже) |
+| Музыка Apple Music | нет | да — включить MusicKit у App ID; у человека подписка Apple Music |
+| «Не отвлекаться» (Экранное время) | нет | только после отдельного разрешения Apple на Family Controls |
 
 ## 6. App Clip и ссылки
 - Cloudflare: переменная `APPLE_TEAM_ID` → воркер начнёт отдавать `/.well-known/apple-app-site-association`.
@@ -42,6 +47,14 @@ GitHub → Actions → «Выгрузка в TestFlight» → Run workflow. Че
 - App Store Connect → приложение → App Clip → Default Experience: адрес `https://ваш-домен/clip`.
 - Метки NFC и QR-коды: адрес вида `https://ваш-домен/clip/tag/<id>` (панель владельца показывает его у каждой метки), `…/clip/trainer/<id>`, `…/clip/exercise/<id>`.
 - Свой домен вместо workers.dev: переменная GitHub `APP_DOMAIN` (Variables) — подставится в права приложения.
+
+## 6а. Покупки, вход через Apple, Game Center, музыка
+1. **Подписка PRO.** App Store Connect → приложение → Подписки → группа «OXION PRO» → подписка с ID `ru.oxion.app.pro.month`, срок 1 месяц, цена. Там же → App Information → App Store Server Notifications → Production и Sandbox URL: `https://fit-app.brootai.workers.dev/iap/apple/notify`, версия 2. Сервер сам проверяет подпись Apple, ключи не нужны.
+2. **Вход через Apple.** developer.apple.com → Identifiers → ru.oxion.app → галочка Sign in with Apple. В Cloudflare должна быть `APNS_BUNDLE_ID=ru.oxion.app` (по ней сервер сверяет токен).
+3. **Game Center.** App Store Connect → приложение → Features → Game Center: рейтинги `oxion.workouts.total` (всего тренировок, «Most recent score» → лучше «Best score»), `oxion.sets.week` (подходов за тренировку); достижения `oxion.first`, `oxion.ten`, `oxion.fifty`, `oxion.hundred`.
+4. **Apple Music.** developer.apple.com → Identifiers → ru.oxion.app → App Services → MusicKit.
+5. **Экранное время.** Заявка: developer.apple.com/contact/request/family-controls-distribution. После одобрения добавить в `Oxion/Oxion.release.entitlements` ключ `com.apple.developer.family-controls` = true. Без одобрения ключ НЕ добавлять — сборка не подпишется.
+6. **Wallet-карта клуба** не сделана: нужен сертификат Pass Type ID и подпись карт на сервере. Сделаю, когда будет аккаунт.
 
 ## 7. Перед отправкой на проверку Apple
 - Цифровые подписки (PRO для тренера) внутри iOS-приложения Apple требует продавать через In-App Purchase.
