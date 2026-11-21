@@ -543,41 +543,7 @@ struct ChatView: View {
                             .padding(.vertical, 4)
                             .id(m.id)
                         } else {
-                        Bubble(m: m, read: m.mine && m.id <= peerReadId)
-                            .id(m.id)
-                            .transition(Self.bubbleTransition(mine: m.mine))
-                            .contextMenu {
-                                Section {
-                                    ForEach(Kinds.reactions, id: \.self) { e in
-                                        Button(e) { Task { await react(m, e) } }
-                                    }
-                                }
-                                Button {
-                                    replyTo = m
-                                    focused = true
-                                } label: {
-                                    Label("Ответить", systemImage: "arrowshape.turn.up.left")
-                                }
-                                if let t = m.text, !t.isEmpty {
-                                    Button {
-                                        UIPasteboard.general.string = t
-                                    } label: {
-                                        Label("Скопировать", systemImage: "doc.on.doc")
-                                    }
-                                    Button {
-                                        translateText = t
-                                    } label: {
-                                        Label("Перевести", systemImage: "translate")
-                                    }
-                                }
-                                if m.mine && m.deleted != true {
-                                    Button(role: .destructive) {
-                                        Task { await remove(m) }
-                                    } label: {
-                                        Label("Удалить", systemImage: "trash")
-                                    }
-                                }
-                            }
+                        bubbleRow(m)
                         }
                     }
                 }
@@ -800,6 +766,45 @@ struct ChatView: View {
                         ? "Собеседник включил защиту: на снимке переписка не видна, а он получил уведомление о снимке."
                         : "На снимке переписка не видна. Собеседник получил уведомление о снимке.")
         await load(initial: false)
+    }
+
+    @ViewBuilder
+    private func bubbleRow(_ m: Message) -> some View {
+                Bubble(m: m, read: m.mine && m.id <= peerReadId)
+                    .id(m.id)
+                    .transition(Self.bubbleTransition(mine: m.mine))
+                    .contextMenu {
+                        Section {
+                            ForEach(Kinds.reactions, id: \.self) { e in
+                                Button(e) { Task { await react(m, e) } }
+                            }
+                        }
+                        Button {
+                            replyTo = m
+                            focused = true
+                        } label: {
+                            Label("Ответить", systemImage: "arrowshape.turn.up.left")
+                        }
+                        if let t = m.text, !t.isEmpty {
+                            Button {
+                                UIPasteboard.general.string = t
+                            } label: {
+                                Label("Скопировать", systemImage: "doc.on.doc")
+                            }
+                            Button {
+                                translateText = t
+                            } label: {
+                                Label("Перевести", systemImage: "translate")
+                            }
+                        }
+                        if m.mine && m.deleted != true {
+                            Button(role: .destructive) {
+                                Task { await remove(m) }
+                            } label: {
+                                Label("Удалить", systemImage: "trash")
+                            }
+                        }
+                    }
     }
 
     static func bubbleTransition(mine: Bool) -> AnyTransition {
