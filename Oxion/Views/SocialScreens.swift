@@ -413,7 +413,7 @@ struct AICoachView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    OxAlert.confirm(icon: "trash.fill", title: "Очистить переписку?"", action: "Очистить", destructive: true) {
+                    OxAlert.confirm(icon: "trash.fill", title: "Очистить переписку?", action: "Очистить", destructive: true) {
                         Task {
                             let _: OK? = try? await API.call("/ai/messages", method: "DELETE")
                             items = []
@@ -474,7 +474,7 @@ struct AICoachView: View {
             return
         }
         do {
-            let r: AIReply = try await API.call("/ai/chat"", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
+            let r: AIReply = try await API.call("/ai/chat", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
             items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt))
             left = r.left
             Haptic.success()
