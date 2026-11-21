@@ -8,6 +8,7 @@ struct ChatCard: View {
     let mine: Bool
     /// внутри сообщения с текстом — без собственного фона
     var embedded = false
+    var messageId: Int? = nil
 
     private var onLime: Bool { mine && embedded }
     private var fg: Color { onLime ? Color.onLime : .primary }
@@ -15,7 +16,7 @@ struct ChatCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if kind != "product" && kind != "call" {
+            if !["product", "call", "voice", "vnote", "video", "file", "photos"].contains(kind) {
             HStack(spacing: 8) {
                 Text(String((Kinds.label[kind] ?? "📎").prefix(2)))
                     .font(.system(size: 16))
@@ -111,7 +112,17 @@ struct ChatCard: View {
                 if let s = c?["streak"]?.int, s > 0 { metric("\(s)", "недель подряд") }
             }
         case "voice":
-            VoicePlayer(url: API.media(c?["url"]?.string), seconds: c?["dur"]?.int ?? 0, tint: fg)
+            VoiceMessageView(url: API.media(c?["url"]?.string), seconds: c?["dur"]?.int ?? 0, wave: c?["wave"]?.string ?? "",
+                             tint: fg, messageId: messageId, transcript: c?["tr"]?.string)
+        case "vnote":
+            VideoNoteView(url: API.media(c?["url"]?.string), seconds: c?["dur"]?.int ?? 0)
+        case "video":
+            ChatVideoView(url: API.media(c?["url"]?.string), seconds: c?["dur"]?.int ?? 0)
+        case "file":
+            FileCardView(name: c?["name"]?.string ?? "Файл", ext: c?["ext"]?.string ?? "", size: c?["size"]?.int ?? 0,
+                         url: API.media(c?["url"]?.string), fg: fg, sub: sub)
+        case "photos":
+            PhotoReportView(card: c, fg: fg, sub: sub)
         case "sticker":
             Text("🎨").font(.system(size: 54))
         case "product":
@@ -452,5 +463,56 @@ struct TailBubbleShape: Shape {
         p.closeSubpath()
         if mine { return p }
         return p.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: rect.minX * 2 + rect.width, ty: 0))
+    }
+}
+
+
+struct FileCardView: View {
+    let name: String
+    let ext: String
+    let size: Int
+    let url: URL?
+    let fg: Color
+    let sub: Color
+    @Environment(\.openURL) private var openURL
+    var body: some View {
+        Button { if let url { openURL(url) } } label: {
+            HStack(spacing: 12) {
+                Text(ext.uppercased().prefix(4))
+                    .font(.caption.bold())
+                    .foregroundStyle(Color.onLime)
+                    .frame(width: 46, height: 46)
+                    .background(Color.lime, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name).font(.subheadline.bold()).foregroundStyle(fg).lineLimit(2)
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)).font(.caption).foregroundStyle(sub)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct PhotoReportView: View {
+    let card: JSONValue?
+    let fg: Color
+    let sub: Color
+    var body: some View {
+        let ps = card?["photos"]?.array ?? []
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Фотоотчёт", systemImage: "camera.fill").font(.caption.bold()).foregroundStyle(sub)
+            HStack(spacing: 4) {
+                ForEach(Array(ps.enumerated()), id: \.offset) { _, p in
+                    RemoteImage(url: API.media(p["url"]?.string))
+                        .frame(width: 80, height: 110)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(alignment: .bottom) {
+                            Text(p["label"]?.string ?? "").font(.caption2.bold()).foregroundStyle(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 2).background(.black.opacity(0.45), in: Capsule()).padding(4)
+                        }
+                }
+            }
+            if let w = card?["weight"]?.string { Text("Вес: \(w) кг").font(.caption.bold()).foregroundStyle(fg) }
+        }
     }
 }

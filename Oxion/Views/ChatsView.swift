@@ -691,16 +691,23 @@ struct ChatView: View {
                     .padding(.vertical, 11)
                     .glassEffect(.regular, in: .rect(cornerRadius: 22))
 
-                Button {
-                    Task { await send() }
-                } label: {
-                    Image(systemName: sending ? "hourglass" : "arrow.up")
-                        .font(.headline)
-                        .frame(width: 44, height: 44)
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending {
+                    RecordButton(onVoice: { url, dur, wave in Task { await sendVoice(url, dur: dur, wave: wave) } },
+                                 onVideo: { url, dur in Task { await sendVideoNote(url, dur: dur) } })
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        Image(systemName: sending ? "hourglass" : "arrow.up")
+                            .font(.headline)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.circle)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
@@ -855,6 +862,40 @@ struct ChatView: View {
         }
     }
 
+    private func sendVoice(_ url: URL, dur: Int, wave: String) async {
+        guard let data = try? Data(contentsOf: url) else { return }
+        sending = true
+        defer { sending = false }
+        var f: [String: String] = ["dur": String(dur), "wave": wave]
+        if let r = replyTo { f["reply_to"] = String(r.id) }
+        do {
+            let m: Message = try await API.upload("/chats/\(chatId)/messages", fields: f, fileField: "voice", data: data,
+                                                  filename: "voice.m4a", mime: "audio/mp4")
+            replyTo = nil
+            withAnimation(.spring(duration: 0.4, bounce: 0.25)) { if !messages.contains(where: { $0.id == m.id }) { messages.append(m) } }
+            Haptic.success()
+            ChatWallpaper.shared.bump()
+        } catch { errorText = error.localizedDescription }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func sendVideoNote(_ url: URL, dur: Int) async {
+        guard let data = try? Data(contentsOf: url) else { return }
+        sending = true
+        defer { sending = false }
+        var f: [String: String] = ["dur": String(dur), "round": "1"]
+        if let r = replyTo { f["reply_to"] = String(r.id) }
+        do {
+            let m: Message = try await API.upload("/chats/\(chatId)/messages", fields: f, fileField: "video", data: data,
+                                                  filename: "note.mov", mime: "video/quicktime")
+            replyTo = nil
+            withAnimation(.spring(duration: 0.4, bounce: 0.25)) { if !messages.contains(where: { $0.id == m.id }) { messages.append(m) } }
+            Haptic.success()
+            ChatWallpaper.shared.bump()
+        } catch { errorText = error.localizedDescription }
+        try? FileManager.default.removeItem(at: url)
+    }
+
     private func sendPhoto() async {
         guard let item = photoPick else { return }
         photoPick = nil
@@ -915,7 +956,21 @@ struct Bubble: View {
             if m.mine { Spacer(minLength: 56) }
             VStack(alignment: m.mine ? .trailing : .leading, spacing: 4) {
                 VStack(spacing: 4) {
-                    if isCardOnly, let k = m.kind {
+                    if isCardOnly, m.kind == "vnote" {
+                        // кружок — без пузыря, как в Telegram
+                        ChatCard(kind: "vnote", card: m.card, mine: m.mine, embedded: true, messageId: m.id)
+                            .overlay(alignment: .bottomTrailing) {
+                                meta(on: true).padding(.horizontal, 7).padding(.vertical, 3)
+                                    .background(.black.opacity(0.45), in: Capsule())
+                            }
+                    } else if isCardOnly, m.kind == "voice" {
+                        ChatCard(kind: "voice", card: m.card, mine: m.mine, embedded: true, messageId: m.id)
+                            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 20)
+                            .frame(minWidth: 230)
+                            .overlay(alignment: .bottomTrailing) { meta(on: false).padding(.trailing, 10).padding(.bottom, 5) }
+                            .foregroundStyle(ink)
+                            .background(shape.fill(fill))
+                    } else if isCardOnly, let k = m.kind {
                         cardBubble(k)
                     } else {
                         bubble
@@ -924,7 +979,7 @@ struct Bubble: View {
                         InlineButtonsRow(buttons: buttons, radius: max(8, style.radius * 0.7), onTap: onAction)
                     }
                 }
-                .frame(width: isCardOnly ? 294 : nil)
+                .frame(width: isCardOnly && !["vnote", "voice"].contains(m.kind ?? "") ? 294 : nil)
                 if let rs = m.reactions, !rs.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(rs, id: \.self) { r in
@@ -946,7 +1001,7 @@ struct Bubble: View {
 
     // карточка (товар, звонок, тренировка…) в пузыре
     private func cardBubble(_ k: String) -> some View {
-        ChatCard(kind: k, card: m.card, mine: false, embedded: true)
+        ChatCard(kind: k, card: m.card, mine: false, embedded: true, messageId: m.id)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .padding(.bottom, 12)
@@ -993,7 +1048,7 @@ struct Bubble: View {
                         }
                 }
                 if let k = m.kind {
-                    ChatCard(kind: k, card: m.card, mine: m.mine, embedded: true)
+                    ChatCard(kind: k, card: m.card, mine: m.mine, embedded: true, messageId: m.id)
                         .padding(.horizontal, -6)
                 }
                 if let t = m.text, !t.isEmpty {
