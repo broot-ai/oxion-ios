@@ -332,6 +332,7 @@ struct AICoachView: View {
     @State private var sending = false
     @State private var enabled = true
     @State private var left: Int?
+    @State private var local = OnDeviceCoach.shared
 
     private let hints = ["Составь тренировку на сегодня", "Как накачать грудь дома?", "Сколько белка мне нужно?", "Разбери мою неделю"]
 
@@ -348,6 +349,12 @@ struct AICoachView: View {
                         Text("ИИ-тренер").font(.title2.bold())
                         Text("Составит тренировку на сегодня и ответит на вопросы о питании и технике")
                             .font(.subheadline).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
+                        Label(local.useLocal ? "Думает на iPhone · без интернета" : "Думает на сервере OXION",
+                              systemImage: local.useLocal ? "iphone.gen3" : "cloud.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.lime)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color.lime.opacity(0.12), in: Capsule())
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
@@ -389,8 +396,24 @@ struct AICoachView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Где думает тренер", selection: Binding(get: { local.useLocal }, set: { v in
+                        if v && !local.isAvailable {
+                            OxAlert.show(icon: "apple.intelligence", title: "ИИ на iPhone недоступен", message: local.reason)
+                            return
+                        }
+                        local.useLocal = v
+                        local.reset()
+                        if v, !local.reason.isEmpty { OxAlert.show(icon: "apple.intelligence", title: "ИИ на iPhone", message: local.reason) }
+                    })) {
+                        Label("Сервер OXION", systemImage: "cloud").tag(false)
+                        Label("На iPhone — без интернета", systemImage: "iphone.gen3").tag(true)
+                    }
+                } label: { Image(systemName: local.useLocal ? "apple.intelligence" : "cloud") }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    OxAlert.confirm(icon: "trash.fill", title: "Очистить переписку?", action: "Очистить", destructive: true) {
+                    OxAlert.confirm(icon: "trash.fill", title: "Очистить переписку?"", action: "Очистить", destructive: true) {
                         Task {
                             let _: OK? = try? await API.call("/ai/messages", method: "DELETE")
                             items = []
@@ -403,7 +426,7 @@ struct AICoachView: View {
             VStack(spacing: 4) {
                 if let left { Text("Осталось вопросов сегодня: \(left)").font(.caption2).foregroundStyle(Color.oxHint) }
                 HStack(spacing: 8) {
-                    TextField(enabled ? "Спросите тренера…" : "ИИ-тренер пока не подключён", text: $text, axis: .vertical)
+                    TextField(enabled || local.useLocal ? "Спросите тренера…" : "ИИ-тренер пока не подключён", text: $text, axis: .vertical)
                         .lineLimit(1...5)
                         .padding(.horizontal, 16).padding(.vertical, 11)
                         .glassEffect(.regular, in: .rect(cornerRadius: 22))
@@ -428,13 +451,30 @@ struct AICoachView: View {
     private func send() async {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        if !enabled { OxAlert.soon("ИИ-тренер"); return }
+        if !enabled && !local.useLocal { OxAlert.soon("ИИ-тренер"); return }
         text = ""
         items.append(AIMessage(id: -Int(Date().timeIntervalSince1970), role: "user", content: t, plan: nil, createdAt: nil))
         sending = true
         defer { sending = false }
+        if local.useLocal {
+            // ответ на iPhone: показываем текст по мере генерации
+            let id = -Int(Date().timeIntervalSince1970 * 10)
+            items.append(AIMessage(id: id, role: "assistant", content: "…", plan: nil, createdAt: nil))
+            do {
+                _ = try await local.ask(t) { part in
+                    if let i = items.firstIndex(where: { $0.id == id }) {
+                        items[i] = AIMessage(id: id, role: "assistant", content: part, plan: nil, createdAt: nil)
+                    }
+                }
+                Haptic.success()
+            } catch {
+                items.removeAll { $0.id == id }
+                OxAlert.error("ИИ на iPhone: \(error.localizedDescription)")
+            }
+            return
+        }
         do {
-            let r: AIReply = try await API.call("/ai/chat", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
+            let r: AIReply = try await API.call("/ai/chat"", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
             items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt))
             left = r.left
             Haptic.success()

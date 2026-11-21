@@ -21,6 +21,7 @@ struct OxionApp: App {
 
     init() {
         AppSettings.register()
+        OxAlarms.attach()
     }
 
     var body: some Scene {

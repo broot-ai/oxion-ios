@@ -273,6 +273,7 @@ struct OxionWidgetBundle: WidgetBundle {
         DashboardWidget()
         WorkoutLiveActivity()
         SyncLiveActivity()
+        AlarmLiveActivity()
         StartWorkoutControl()
         RestTimerControl()
         FavoritesControl()
