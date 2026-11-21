@@ -339,11 +339,11 @@ struct Body3DScreen: View {
         let groups = MuscleDataManager.groups(of: sel.selected)
         let title = groups.prefix(3).map { model.muscleName($0) }.joined(separator: " + ")
         Haptic.success()
+        let app = model
         close()
-        let model = model
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(450))
-            await model.quickWorkout(title: title.isEmpty ? "Тренировка" : title, groups: groups)
+            await app.quickWorkout(title: title.isEmpty ? "Тренировка" : title, groups: groups)
         }
     }
 }
