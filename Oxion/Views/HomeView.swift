@@ -294,10 +294,7 @@ struct HomeView: View {
             push = .coach
         } label: {
             HStack(spacing: 14) {
-                Circle()
-                    .fill(AngularGradient(colors: [Color.lime, Color(hex: 0x3FD6C9), Color(hex: 0x58F670), Color.lime], center: .center))
-                    .frame(width: 46, height: 46)
-                    .blur(radius: 1)
+                AIOrb(size: 50)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("ИИ-тренер")
                         .font(.headline)

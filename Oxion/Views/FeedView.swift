@@ -140,7 +140,7 @@ struct FeedView: View {
                         .accessibilityLabel("Новая публикация")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { path.append(.coach) } label: { Image(systemName: "sparkles") }
+                    Button { path.append(.coach) } label: { AIOrb(size: 26) }
                     Button { path.append(.search) } label: { Image(systemName: "magnifyingglass") }
                     Button { path.append(.activity) } label: { Image(systemName: "heart") }
                 }

@@ -341,11 +341,8 @@ struct AICoachView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     VStack(spacing: 10) {
-                        Circle()
-                            .fill(AngularGradient(colors: [Color.lime, Color(hex: 0x3FD6C9), Color(hex: 0x58F670), Color.lime], center: .center))
-                            .frame(width: 84, height: 84)
-                            .blur(radius: 2)
-                            .shadow(color: Color.lime.opacity(0.5), radius: 20)
+                        AIOrb(size: 92, active: sending)
+                            .padding(.bottom, 6)
                         Text("ИИ-тренер").font(.title2.bold())
                         Text("Составит тренировку на сегодня и ответит на вопросы о питании и технике")
                             .font(.subheadline).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
@@ -368,7 +365,7 @@ struct AICoachView: View {
                     }
                     ForEach(items) { m in
                         HStack {
-                            if m.role == "user" { Spacer(minLength: 50) }
+                            if m.role == "user" { Spacer(minLength: 50) } else { AIOrb(size: 26).padding(.top, 4) }
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(m.content)
                                 if let plan = m.plan, m.role != "user" {
@@ -383,7 +380,7 @@ struct AICoachView: View {
                         .id(m.id)
                     }
                     if sending {
-                        HStack(spacing: 8) { ProgressView(); Text("Думаю…").foregroundStyle(Color.oxHint) }
+                        HStack(spacing: 10) { AIOrb(size: 28, active: true); Text("Думаю…").foregroundStyle(Color.oxHint) }
                     }
                 }
                 .padding(16)
