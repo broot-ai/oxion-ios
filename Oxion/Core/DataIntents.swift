@@ -79,6 +79,7 @@ struct LogSetIntent: AppIntent {
     @Parameter(title: "Вес, кг") var weight: Double?
     static var parameterSummary: some ParameterSummary { Summary("Подход: \(\.$reps) повт. × \(\.$weight) кг") }
 
+    @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let e = WorkoutEngine.shared
         guard e.isActive, let name = e.state?.currentItem?.name else { throw OxIntentError.noWorkout }
