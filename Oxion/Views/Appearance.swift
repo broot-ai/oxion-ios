@@ -47,6 +47,7 @@ struct AppearanceSettingsView: View {
                     LabeledContent("Размер текста", value: system ? "Системный" : Look.names[index])
                 }
                 .tint(.primary)
+                NavigationLink("Фон чатов") { ChatWallpaperSettingsView() }
                 NavigationLink("Углы блоков с сообщениями") { BubbleCornersView() }
                 NavigationLink("Анимации") { AnimationSettingsView() }
             }

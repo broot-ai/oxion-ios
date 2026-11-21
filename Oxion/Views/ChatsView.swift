@@ -552,6 +552,7 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            .background { ChatWallpaperBackground() }
             .onChange(of: messages.last?.id) {
                 if let id = messages.last?.id {
                     withAnimation { proxy.scrollTo(id, anchor: .bottom) }
@@ -829,6 +830,7 @@ struct ChatView: View {
                 if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
             }
             if UserDefaults.standard.object(forKey: "anim_send_haptic") as? Bool ?? true { Haptic.tap() }
+            ChatWallpaper.shared.bump()
         } catch {
             errorText = error.localizedDescription
         }
