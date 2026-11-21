@@ -15,11 +15,29 @@ struct SplashView: View {
 struct FlameMark: View {
     var size: CGFloat = 80
     var body: some View {
-        Image("ox-logo")
-            .resizable()
-            .scaledToFit()
-            .frame(height: size * 1.3)
-            .shadow(color: Color.lime.opacity(0.55), radius: size * 0.3)
+        AnimatedFire(size: size * 1.9)
+            .frame(width: size * 1.3, height: size * 1.3)
+    }
+}
+
+/// Живой зелёный огонь OXION — тот же шейдер, что на загрузочном экране PWA (языки пламени, ореол, искры)
+struct AnimatedFire: View {
+    var size: CGFloat = 120
+    /// полный цикл анимации, секунд (как LOOP = 3 в PWA)
+    var loop: Double = 3
+
+    var body: some View {
+        let live = PowerSaver.allowsNow(.interface)
+        TimelineView(.animation(minimumInterval: 1 / 60, paused: !live)) { tl in
+            let ph = live ? (tl.date.timeIntervalSinceReferenceDate / loop).truncatingRemainder(dividingBy: 1) : 0.2
+            Rectangle()
+                .fill(.black)
+                .colorEffect(ShaderLibrary.oxFire(.float2(size, size), .float(ph), .float(1),
+                                                  .image(Image("fire-tex")), .image(Image("fire-blur"))))
+        }
+        .frame(width: size, height: size)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

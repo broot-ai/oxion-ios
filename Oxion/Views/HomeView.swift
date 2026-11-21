@@ -149,8 +149,8 @@ struct HomeView: View {
             }
             WeekPills(done: Set(stats?.daysDone ?? []))
             HStack(spacing: 8) {
-                Image(systemName: "flame.fill")
-                    .foregroundStyle(Color.limeInk)
+                AnimatedFire(size: 40)
+                    .frame(width: 24, height: 28)
                 Text(motivation)
                     .font(.subheadline)
                     .foregroundStyle(Color.oxHint)
