@@ -45,7 +45,7 @@ final class OxAppDelegate: NSObject, UIApplicationDelegate {
     static func schedule() {
         guard PowerSaver.allowsNow(.background) else { return }
         let r = BGAppRefreshTaskRequest(identifier: refreshId)
-        r.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
+        r.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)   // минимум, который допускает iOS
         try? BGTaskScheduler.shared.submit(r)
     }
 
@@ -57,6 +57,7 @@ final class OxAppDelegate: NSObject, UIApplicationDelegate {
                     .reduce(0) { $0 + max($1.unread ?? 0, $1.marked == true ? 1 : 0) }
                 AppBadge.set(n)
                 QuickActions.update(unread: n)
+                await LocalChatNotifier.notifyNew(r.items)
             }
             await WidgetSync.refresh()
             WidgetCenter.shared.reloadAllTimelines()
@@ -154,5 +155,44 @@ final class OxNotifDelegate: NSObject, UNUserNotificationCenterDelegate {
             else { route = "home" }
         }
         if let route { await MainActor.run { PendingRoute.go(route) } }
+    }
+}
+
+/// Уведомления о новых сообщениях без пушей Apple (бесплатный Apple ID их не поддерживает):
+/// при фоновом обновлении сравниваем последние сообщения с уже показанными и показываем локальное уведомление.
+/// iOS сама решает, как часто будить приложение (обычно раз в 15 мин – несколько часов).
+enum LocalChatNotifier {
+    private static let key = "ox.notifiedLastIds"
+
+    private static var seen: [String: Int] {
+        get { UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+
+    /// Пользователь видел список чатов в приложении — по этим сообщениям уведомлять не нужно
+    static func markSeen(_ items: [ChatItem]) {
+        var s = seen
+        for c in items { if let id = c.lastId { s[String(c.id)] = max(s[String(c.id)] ?? 0, id) } }
+        seen = s
+    }
+
+    static func notifyNew(_ items: [ChatItem]) async {
+        let center = UNUserNotificationCenter.current()
+        guard await center.notificationSettings().authorizationStatus == .authorized else { markSeen(items); return }
+        let s = seen
+        let first = s.isEmpty
+        for c in items where c.muted != true && c.archived != true && c.mine != true && (c.unread ?? 0) > 0 {
+            guard let last = c.lastId, last > (s[String(c.id)] ?? 0), !first else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = c.peer.name ?? "Новое сообщение"
+            let n = c.unread ?? 1
+            content.body = (c.last?.isEmpty == false ? c.last! : "Новое сообщение") + (n > 1 ? " (+\(n - 1))" : "")
+            content.sound = .default
+            content.threadIdentifier = "chat\(c.id)"
+            content.userInfo = ["route": "chats", "url": "/#chat/\(c.id)"]
+            let req = UNNotificationRequest(identifier: "chat\(c.id)-\(last)", content: content, trigger: nil)
+            try? await center.add(req)
+        }
+        markSeen(items)
     }
 }

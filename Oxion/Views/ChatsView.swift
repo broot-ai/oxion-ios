@@ -47,6 +47,7 @@ final class ChatsStore {
             items = r.items
             errorText = nil
             AppBadge.set(unread)
+            LocalChatNotifier.markSeen(r.items)
         } catch {
             errorText = error.localizedDescription
         }
