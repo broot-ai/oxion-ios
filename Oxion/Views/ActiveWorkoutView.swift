@@ -160,7 +160,17 @@ struct ActiveWorkoutView: View {
                         .foregroundStyle(paused ? Color.oxHint : Color.lime)
                 }
                 Spacer()
-                Image("ox-logo").resizable().scaledToFit().frame(width: 30, height: 40)
+                // пульс с Apple Watch, если часы прислали его за последние 30 секунд
+                if let at = WatchLink.shared.heartRateAt, now.timeIntervalSince(at) < 30, WatchLink.shared.heartRate > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "heart.fill").foregroundStyle(Color(hex: 0xFF5A4E))
+                            .symbolEffect(.pulse)
+                        Text("\(WatchLink.shared.heartRate)").font(.subheadline.bold().monospacedDigit())
+                    }
+                    .frame(width: 56)
+                } else {
+                    Image("ox-logo").resizable().scaledToFit().frame(width: 30, height: 40)
+                }
             }
 
             VStack(spacing: 6) {

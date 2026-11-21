@@ -38,6 +38,12 @@ final class NFCReader: NSObject, NFCNDEFReaderSessionDelegate {
     nonisolated func readerSession(_ session: NFCNDEFReaderSession, didDetectNDEFs messages: [NFCNDEFMessage]) {
         for m in messages {
             for r in m.records {
+                // метка-ссылка …/clip/tag/<id>: её же открывает App Clip у тех, у кого OXION не установлен
+                if let u = r.wellKnownTypeURIPayload(), u.path.contains("/clip/tag/") {
+                    let id = u.lastPathComponent
+                    Task { @MainActor in self.onTag?("oxion:" + id) }
+                    return
+                }
                 let (text, _) = r.wellKnownTypeTextPayload()
                 if let t = text, t.lowercased().hasPrefix("oxion:") {
                     Task { @MainActor in self.onTag?(t) }

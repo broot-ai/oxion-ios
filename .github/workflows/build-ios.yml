@@ -78,6 +78,21 @@ jobs:
           path: Oxion.ipa
           retention-days: 14
 
+      # Часы и App Clip в тестовую IPA не входят (бесплатный Apple ID их не подпишет),
+      # но здесь проверяем, что они собираются — чтобы сборка для App Store не сломалась.
+      - name: Проверить сборку Apple Watch и App Clip
+        run: |
+          xcodebuild -showsdks | grep -q watchos || xcodebuild -downloadPlatform watchOS || true
+          xcodebuild -project Oxion.xcodeproj -target OxionWatch -configuration Release -sdk watchos \
+            SYMROOT="$RUNNER_TEMP/sym" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -60; exit 1; }
+          xcodebuild -project Oxion.xcodeproj -target OxionClip -configuration Release -sdk iphoneos \
+            SYMROOT="$RUNNER_TEMP/sym" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -60; exit 1; }
+          APPLE_TEAM_ID=TEST000000 ruby scripts/release_spec.rb
+          xcodegen generate --spec project.release.yml --project "$RUNNER_TEMP/relcheck" > build.log 2>&1 || { cat build.log; exit 1; }
+          echo "Часы, App Clip и конфигурация для App Store — в порядке"
+
       - name: Сохранить ошибки сборки в ветку build-log
         if: failure()
         run: |

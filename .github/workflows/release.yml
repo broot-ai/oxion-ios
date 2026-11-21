@@ -1,0 +1,98 @@
+# Сборка для TestFlight / App Store. Запускается ТОЛЬКО вручную: Actions → «Выгрузка в TestFlight» → Run workflow.
+# Нужен аккаунт разработчика Apple ($99/год) и секреты репозитория (Settings → Secrets and variables → Actions):
+#   APPLE_TEAM_ID   — Team ID (developer.apple.com → Membership), 10 символов
+#   ASC_KEY_ID      — Key ID ключа App Store Connect API (Users and Access → Integrations → App Store Connect API)
+#   ASC_ISSUER_ID   — Issuer ID там же
+#   ASC_KEY_P8      — содержимое скачанного файла AuthKey_XXXX.p8 целиком
+# Необязательная переменная (Variables): APP_DOMAIN — свой домен вместо fit-app.brootai.workers.dev
+
+name: Выгрузка в TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить секреты
+        env:
+          T: ${{ secrets.APPLE_TEAM_ID }}
+          K: ${{ secrets.ASC_KEY_ID }}
+          I: ${{ secrets.ASC_ISSUER_ID }}
+          P: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          miss=""
+          [ -z "$T" ] && miss="$miss APPLE_TEAM_ID"
+          [ -z "$K" ] && miss="$miss ASC_KEY_ID"
+          [ -z "$I" ] && miss="$miss ASC_ISSUER_ID"
+          [ -z "$P" ] && miss="$miss ASC_KEY_P8"
+          if [ -n "$miss" ]; then echo "Не заданы секреты:$miss. Инструкция — в DEVELOPER-ACCOUNT.md"; exit 1; fi
+
+      - name: Выбрать Xcode 26 или новее
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -E 'Xcode_(2[6-9]|[3-9][0-9])' | grep -vi beta | sort -V | tail -1 || true)
+          [ -z "$XC" ] && XC=/Applications/Xcode.app
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -q iphoneos || xcodebuild -downloadPlatform iOS
+          xcodebuild -showsdks | grep -q watchos || xcodebuild -downloadPlatform watchOS
+
+      - name: Подготовить проект для App Store
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+        run: |
+          brew install xcodegen
+          ruby scripts/release_spec.rb
+          xcodegen generate --spec project.release.yml
+
+      - name: Ключ App Store Connect
+        env:
+          P: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$P" > "$RUNNER_TEMP/keys/AuthKey.p8"
+
+      - name: Собрать архив (подпись создаётся автоматически)
+        run: |
+          xcodebuild -project Oxion.xcodeproj -scheme Oxion -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Oxion.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            archive > archive.log 2>&1 || { grep -E "error:" archive.log | sort -u | head -60; tail -60 archive.log; exit 1; }
+
+      - name: Выгрузить в App Store Connect (TestFlight)
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Oxion.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+          echo "Готово: сборка ${{ github.run_number }} ушла в App Store Connect. Через 10–30 минут она появится в TestFlight."
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: release-log
+          path: archive.log
+          retention-days: 7

@@ -1,6 +1,7 @@
 import UIKit
 import BackgroundTasks
 import WidgetKit
+import UserNotifications
 
 /// Делегат приложения: меню при удержании иконки (быстрые действия) и фоновое обновление контента.
 final class OxAppDelegate: NSObject, UIApplicationDelegate {
@@ -12,7 +13,20 @@ final class OxAppDelegate: NSObject, UIApplicationDelegate {
             guard let t = task as? BGAppRefreshTask else { task.setTaskCompleted(success: false); return }
             OxAppDelegate.handle(t)
         }
+        UNUserNotificationCenter.current().delegate = OxNotifDelegate.shared
+        // токен для пушей Apple: окно разрешения не показывает, просто получает адрес устройства.
+        // В тестовой версии (бесплатный Apple ID) iOS откажет — это нормально.
+        application.registerForRemoteNotifications()
         return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { @MainActor in await PushRegistrar.save(hex) }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Task { @MainActor in PushRegistrar.lastError = error.localizedDescription }
     }
 
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
@@ -82,5 +96,62 @@ enum QuickActions {
                                              icon: UIApplicationShortcutIcon(systemImageName: "camera.viewfinder"))
         }
         UIApplication.shared.shortcutItems = [item]
+    }
+}
+
+// MARK: - Пуши с сервера (APNs)
+
+@MainActor
+enum PushRegistrar {
+    static var lastError: String?
+    static var token: String? {
+        get { UserDefaults.standard.string(forKey: "apns_token") }
+        set { UserDefaults.standard.set(newValue, forKey: "apns_token") }
+    }
+    /// Пуши работают, только если приложение подписано аккаунтом разработчика ($99)
+    static var available: Bool { token != nil }
+
+    static func save(_ hex: String) async {
+        token = hex
+        lastError = nil
+        await upload()
+    }
+
+    /// Отправить токен на сервер (после входа — тоже)
+    static func upload() async {
+        guard let t = token, API.token != nil else { return }
+        #if DEBUG
+        let sandbox = true
+        #else
+        let sandbox = false
+        #endif
+        let _: OK? = try? await API.call("/push/ios", method: "POST", body: ["token": t, "sandbox": sandbox])
+    }
+
+    /// При выходе из аккаунта — чтобы чужие уведомления не приходили на это устройство
+    static func remove() async {
+        guard let t = token else { return }
+        let _: OK? = try? await API.call("/push/ios", method: "DELETE", query: ["token": t])
+    }
+}
+
+/// Показ уведомлений, когда OXION открыт, и переход по нажатию
+final class OxNotifDelegate: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = OxNotifDelegate()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        var route = info["route"] as? String
+        if route == nil, let url = info["url"] as? String {
+            if url.contains("#chat") { route = "chats" }
+            else if url.contains("#post") || url.contains("#feed") { route = "feed" }
+            else if url.contains("#diary") { route = "diary" }
+            else { route = "home" }
+        }
+        if let route { await MainActor.run { PendingRoute.go(route) } }
     }
 }

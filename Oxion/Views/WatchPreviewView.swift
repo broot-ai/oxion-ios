@@ -6,6 +6,7 @@ import WatchConnectivity
 /// Передаёт состояние тренировки на часы. Когда приложение OXION для Apple Watch будет установлено,
 /// часы получат тренировку и смогут управлять ею; при обрыве связи часы продолжают по меткам времени.
 @MainActor
+@Observable
 final class WatchLink: NSObject, WCSessionDelegate {
     static let shared = WatchLink()
     private(set) var paired = false
@@ -20,8 +21,27 @@ final class WatchLink: NSObject, WCSessionDelegate {
     func send(_ s: WorkoutState?) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated,
               WCSession.default.isPaired, WCSession.default.isWatchAppInstalled else { return }
-        var ctx: [String: Any] = ["active": s != nil]
+        var ctx: [String: Any] = ["active": s != nil && s?.phase != .finished, "sent": Date().timeIntervalSince1970]
         if let s, let d = try? JSONEncoder().encode(s) { ctx["state"] = d }
+        // простые поля для приложения на часах
+        if let s {
+            let it = s.currentItem
+            ctx["title"] = s.title
+            ctx["exercise"] = it?.name ?? ""
+            ctx["setNo"] = min((it?.doneSets ?? 0) + 1, it?.sets ?? 0)
+            ctx["sets"] = it?.sets ?? 0
+            ctx["reps"] = it?.reps ?? 0
+            ctx["weight"] = it?.weight ?? 0
+            ctx["unit"] = it?.unit ?? ""
+            ctx["type"] = it?.type ?? ""
+            ctx["phase"] = String(describing: s.phase)
+            ctx["restEndsAt"] = s.restEndsAt?.timeIntervalSince1970 ?? 0
+            ctx["startedAt"] = s.startedAt.timeIntervalSince1970
+            ctx["pausedTotal"] = s.pausedTotal
+            ctx["setsDone"] = s.setsDoneAll
+            ctx["setsTotal"] = s.setsTotalAll
+            ctx["next"] = s.nextItem?.name ?? ""
+        }
         try? WCSession.default.updateApplicationContext(ctx)
     }
 
@@ -36,7 +56,22 @@ final class WatchLink: NSObject, WCSessionDelegate {
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
 
     /// команды с часов: next, pause, resume, complete, finish
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        self.session(session, didReceiveMessage: userInfo)
+    }
+
+    /// Пульс с часов (bpm) — показывается на экране тренировки
+    private(set) var heartRate: Int = 0
+    private(set) var heartRateAt: Date?
+
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        if let hr = message["hr"] as? Int {
+            Task { @MainActor in
+                self.heartRate = hr
+                self.heartRateAt = Date()
+            }
+            return
+        }
         guard let cmd = message["cmd"] as? String else { return }
         Task { @MainActor in
             let e = WorkoutEngine.shared

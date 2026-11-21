@@ -33,6 +33,17 @@ struct OxionApp: App {
                     let route = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/")
                     model.handle(route: route)
                 }
+                // универсальные ссылки …/clip/trainer/34, …/clip/tag/<id> (QR и NFC в зале), если OXION уже установлен
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { a in
+                    guard let u = a.webpageURL else { return }
+                    let p = u.pathComponents.filter { $0 != "/" }
+                    guard let i = p.firstIndex(of: "clip"), p.count > i + 2 else { return }
+                    switch p[i + 1] {
+                    case "trainer": model.handle(route: "trainer/" + p[i + 2])
+                    case "tag": model.handle(route: "checkin/" + p[i + 2])
+                    default: model.handle(route: "diary")
+                    }
+                }
                 .preferredColorScheme(.dark)
                 .tint(.lime)
                 .onReceive(NotificationCenter.default.publisher(for: .oxionUnauthorized)) { _ in
@@ -106,6 +117,19 @@ final class AppModel {
         case "favorites":
             selectedTab = .trainers
             showFavorites = true
+        case "checkin" where parts.count > 1:
+            // отметка в клубе по ссылке с NFC-метки / QR
+            let tag = "oxion:" + parts[1]
+            Task {
+                do {
+                    let r: CheckinResult = try await API.call("/checkin", method: "POST", body: ["tag": tag])
+                    OxHaptics.play(.setDone)
+                    OxAlert.show(icon: "checkmark.seal.fill", title: r.repeat == true ? "Уже отмечены" : "Посещение засчитано",
+                                 message: "\(r.place ?? "Клуб") · в этом месяце: \(r.month ?? 0)")
+                } catch {
+                    OxAlert.error(error.localizedDescription)
+                }
+            }
         case "qr": sheet = .qr
         case "compose":
             selectedTab = .feed
@@ -151,9 +175,11 @@ final class AppModel {
         API.token = token
         Haptic.success()
         await loadMe()
+        await PushRegistrar.upload()
     }
 
     func logout() async {
+        await PushRegistrar.remove()
         let _: OK? = try? await API.call("/logout", method: "POST")
         logoutLocal()
     }
