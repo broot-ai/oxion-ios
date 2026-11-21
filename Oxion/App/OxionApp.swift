@@ -192,6 +192,17 @@ final class AppModel {
         case "vision": showVision = true
         case "run": sheet = .run
         case "devices": sheet = .devices
+        case "book":
+            Task {
+                guard let my: CoachMy = try? await API.call("/coach/my"),
+                      let t = (my.trainers ?? []).first(where: { $0.status == "active" }) ?? my.trainers?.first else {
+                    selectedTab = .trainers
+                    OxAlert.show(icon: "person.crop.circle.badge.questionmark", title: "Сначала выберите тренера", message: "Найдите тренера в каталоге — запись появится в его анкете")
+                    return
+                }
+                bookTrainer = IdBox(id: t.id)
+                bookTrainerName = t.name ?? "Тренер"
+            }
         case "rest":
             let sec = parts.count > 1 ? Int(parts[1]) ?? 90 : 90
             Task {
@@ -208,6 +219,8 @@ final class AppModel {
     }
     var trainerQuery = ""
     var workoutBox: IdBox?
+    var bookTrainer: IdBox?
+    var bookTrainerName = "Тренер"
 
     /// Быстро создать тренировку на сегодня (из Siri / «Команд») и открыть её
     func quickWorkout(title: String, groups: [String]) async {
@@ -451,6 +464,7 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
+        .sheet(item: $model.bookTrainer) { b in BookingSheet(trainerId: b.id, trainerName: model.bookTrainerName) }
         .onChange(of: chats.unread) { QuickActions.update(unread: chats.unread) }
         .overlay(alignment: .bottom) {
             ActiveWorkoutBar { model.showActiveWorkout = true }
