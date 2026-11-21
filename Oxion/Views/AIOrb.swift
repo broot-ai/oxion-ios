@@ -35,13 +35,18 @@ struct BlobShape: Shape {
 struct AIOrb: View {
     var size: CGFloat = 46
     var active = false
+    /// реагирует на касания: тык — сплющивается и отпружинивает, тянешь — тянется за пальцем
+    var interactive = false
     @State private var poke = false
+    @State private var pull: CGSize = .zero
+    @State private var squish: CGFloat = 0
+    @State private var jiggle: Double = 0
 
     var body: some View {
         let live = PowerSaver.allowsNow(.liveBackgrounds)
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !live)) { tl in
             let t = tl.date.timeIntervalSinceReferenceDate * (active ? 2.6 : 1.0)
-            let amp = active ? 0.075 : 0.035
+            let amp = (active ? 0.075 : 0.035) + jiggle * 0.09
             let shape = BlobShape(t: t, amp: amp)
             // сжатие-растяжение (как желе): по ширине больше — по высоте меньше
             let squash = (active ? 0.09 : 0.035) * sin(t * (active ? 2.4 : 1.2))
@@ -71,10 +76,11 @@ struct AIOrb: View {
             }
             .frame(width: size, height: size)
             .glassEffect(.clear.tint(Color.lime.opacity(0.12)), in: shape)
-            .scaleEffect(x: 1 + squash, y: 1 - squash)
+            .scaleEffect(x: 1 + squash + squish * 0.35, y: 1 - squash - squish * 0.35)
             .rotationEffect(.degrees(active ? 6 * sin(t * 0.9) : 0))
         }
         .frame(width: size, height: size)
+        .offset(pull)
         .scaleEffect(poke ? 0.82 : 1)
         .shadow(color: Color.lime.opacity(active ? 0.5 : 0.25), radius: size * (active ? 0.35 : 0.18))
         .animation(.easeInOut(duration: 0.4), value: active)
@@ -83,6 +89,40 @@ struct AIOrb: View {
             withAnimation(.spring(duration: 0.18)) { poke = true }
             withAnimation(.spring(duration: 0.6, bounce: 0.6).delay(0.18)) { poke = false }
         }
+        .contentShape(Circle())
+        .gesture(interactive ? drag : nil)
+        .simultaneousGesture(interactive ? TapGesture().onEnded { bounce() } : nil)
         .accessibilityLabel("ИИ-тренер")
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { v in
+                pull = CGSize(width: v.translation.width * 0.35, height: v.translation.height * 0.35)
+                squish = -min(1, hypot(v.translation.width, v.translation.height) / 160) * 0.8
+            }
+            .onEnded { _ in
+                Haptic.tap(.soft)
+                withAnimation(.spring(duration: 0.6, bounce: 0.6)) { pull = .zero; squish = 0 }
+                wobble()
+            }
+    }
+
+    private func bounce() {
+        Haptic.tap(.rigid)
+        withAnimation(.spring(duration: 0.12)) { squish = 0.9 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(110))
+            withAnimation(.spring(duration: 0.7, bounce: 0.7)) { squish = 0 }
+        }
+        wobble()
+    }
+
+    private func wobble() {
+        withAnimation(.easeOut(duration: 0.1)) { jiggle = 1 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.easeOut(duration: 1.2)) { jiggle = 0 }
+        }
     }
 }
