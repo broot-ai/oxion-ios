@@ -65,7 +65,7 @@ final class FX {
     private func attach() {
         guard window == nil,
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        let w = PassthroughWindow(windowScene: scene)
+        let w = FXPassWindow(windowScene: scene)
         w.windowLevel = .alert + 2
         w.isUserInteractionEnabled = false
         let host = UIHostingController(rootView: FXOverlay())
@@ -128,7 +128,7 @@ final class FX {
     }
 }
 
-private final class PassthroughWindow: UIWindow {
+private final class FXPassWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
 }
 
