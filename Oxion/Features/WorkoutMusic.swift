@@ -29,7 +29,8 @@ final class WorkoutMusic {
     }
 
     func search(_ term: String) async {
-        guard status == .authorized else { await authorize(); guard status == .authorized else { return } }
+        if status != .authorized { await authorize() }
+        guard status == .authorized else { return }
         loading = true
         defer { loading = false }
         do {
