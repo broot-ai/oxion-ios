@@ -1,131 +1,88 @@
 import SwiftUI
 
-/// Мягкая «желейная» форма: радиус гуляет по нескольким гармоникам
+/// Мягкая «капля»: край волнуется, как желе
 struct BlobShape: Shape {
     var t: Double
-    var amp: Double            // сила деформации, 0…0.2
+    var amp: Double
 
     func path(in rect: CGRect) -> Path {
         let c = CGPoint(x: rect.midX, y: rect.midY)
-        let R = Double(min(rect.width, rect.height)) / 2
+        let base = Double(min(rect.width, rect.height)) / 2 / (1 + amp * 1.6)
+        let n = 64
+        var pts: [CGPoint] = []
+        for i in 0..<n {
+            let a = Double(i) / Double(n) * .pi * 2
+            var r = 1.0
+            r += amp * sin(3 * a + t * 1.3)
+            r += amp * 0.6 * sin(5 * a - t * 1.9 + 1.1)
+            r += amp * 0.4 * cos(2 * a + t * 0.8)
+            pts.append(CGPoint(x: c.x + CGFloat(cos(a) * base * r), y: c.y + CGFloat(sin(a) * base * r)))
+        }
+        // гладкий замкнутый контур через середины отрезков
         var p = Path()
-        let n = 72
-        for i in 0...n {
-            let a = Double(i) / Double(n) * 2 * .pi
-            let r = R * (1 - amp * 0.6
-                         + amp * 0.55 * sin(2 * a + t * 1.3)
-                         + amp * 0.35 * sin(3 * a - t * 1.7 + 1.1)
-                         + amp * 0.22 * sin(5 * a + t * 2.3 + 2.4))
-            let pt = CGPoint(x: c.x + CGFloat(cos(a) * r), y: c.y + CGFloat(sin(a) * r))
-            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        func mid(_ a: CGPoint, _ b: CGPoint) -> CGPoint { CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+        p.move(to: mid(pts[n - 1], pts[0]))
+        for i in 0..<n {
+            p.addQuadCurve(to: mid(pts[i], pts[(i + 1) % n]), control: pts[i])
         }
         p.closeSubpath()
         return p
     }
 }
 
-/// Значок ИИ-тренера: живой разноцветный блоб под жидким стеклом.
-/// Сам по себе дышит, переливается и иногда «подпрыгивает»; когда ИИ думает — кривляется сильнее.
-/// `interactive` — реагирует на касания: тык — сплющивается и отпружинивает, тянешь — тянется за пальцем.
+/// Значок ИИ-тренера: живая капля из жидкого стекла с зелёным свечением внутри.
+/// Всё время слегка «дышит» и меняет форму; когда ИИ думает (`active`) — сжимается, тянется и кривляется сильнее.
 struct AIOrb: View {
     var size: CGFloat = 46
     var active = false
-    var interactive = false
-
-    @State private var squish: CGFloat = 0          // -1…1: сплющен / вытянут
-    @State private var pull: CGSize = .zero
-    @State private var poke = 0.0                    // всплеск деформации после тыка
-
-    private let colors: [Color] = [
-        Color.lime, Color(hex: 0x3FD6C9), Color(hex: 0x8E7CFF), Color(hex: 0xFF7BC0), Color(hex: 0x58F670), Color(hex: 0x4CC3F0),
-    ]
+    @State private var poke = false
 
     var body: some View {
         let live = PowerSaver.allowsNow(.liveBackgrounds)
-        TimelineView(.animation(minimumInterval: 1 / 40, paused: !live)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate * (active ? 2.4 : 1.0)
-            // иногда «икает»: короткий подскок раз в несколько секунд
-            let hop = pow(max(0, sin(t * 0.55)), 24)
-            let amp = (active ? 0.13 : 0.06) + hop * 0.08 + poke * 0.12
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !live)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate * (active ? 2.6 : 1.0)
+            let amp = active ? 0.075 : 0.035
             let shape = BlobShape(t: t, amp: amp)
+            // сжатие-растяжение (как желе): по ширине больше — по высоте меньше
+            let squash = (active ? 0.09 : 0.035) * sin(t * (active ? 2.4 : 1.2))
             ZStack {
-                AngularGradient(colors: colors + [colors[0]], center: .center, angle: .radians(t * 0.6))
+                // зелёное свечение внутри, к краю переходит в чистое стекло
+                shape
+                    .fill(RadialGradient(colors: [Color(hex: 0x9BEA3C).opacity(0.85), Color.lime.opacity(0.35), Color.lime.opacity(0.0)],
+                                         center: UnitPoint(x: 0.42 + 0.08 * cos(t * 0.7), y: 0.62 + 0.06 * sin(t * 0.9)),
+                                         startRadius: 0, endRadius: size * 0.62))
+                    .blur(radius: size * 0.05)
+                // второе пятно — бирюзовый отлив
+                Circle()
+                    .fill(Color(hex: 0x3FD6C9).opacity(0.35))
+                    .frame(width: size * 0.42, height: size * 0.42)
+                    .offset(x: CGFloat(cos(t * 1.1)) * size * 0.16, y: CGFloat(sin(t * 0.8)) * size * 0.14 - size * 0.08)
                     .blur(radius: size * 0.12)
-                ForEach(0..<4, id: \.self) { i in blob(i, t: t) }
-                    .blur(radius: size * 0.14)
+                    .mask(shape)
+                // стеклянный край и блик
+                shape
+                    .stroke(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05), Color.lime.opacity(0.5)],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: max(1, size * 0.025))
+                Ellipse()
+                    .fill(LinearGradient(colors: [.white.opacity(0.6), .white.opacity(0)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.42, height: size * 0.2)
+                    .offset(x: -size * 0.08, y: -size * 0.24)
+                    .blur(radius: size * 0.015)
             }
             .frame(width: size, height: size)
-            .clipShape(shape)
-            .overlay { Color.clear.glassEffect(.clear, in: shape) }
-            .overlay(alignment: .top) {
-                Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0)], startPoint: .top, endPoint: .bottom))
-                    .frame(width: size * 0.5, height: size * 0.26)
-                    .offset(x: CGFloat(sin(t * 0.8)) * size * 0.04, y: size * 0.1)
-                    .blur(radius: size * 0.02)
-            }
-            // дыхание + подскок + сплющивание от касаний
-            .scaleEffect(x: 1 + 0.04 * CGFloat(sin(t * 1.9)) + squish * 0.22 - CGFloat(hop) * 0.06,
-                         y: 1 + 0.04 * CGFloat(cos(t * 1.6)) - squish * 0.22 + CGFloat(hop) * 0.1,
-                         anchor: .bottom)
-            .offset(y: -CGFloat(hop) * size * 0.08)
-            .rotationEffect(.degrees(active ? sin(t * 1.3) * 8 : sin(t * 0.7) * 3))
+            .glassEffect(.clear.tint(Color.lime.opacity(0.12)), in: shape)
+            .scaleEffect(x: 1 + squash, y: 1 - squash)
+            .rotationEffect(.degrees(active ? 6 * sin(t * 0.9) : 0))
         }
         .frame(width: size, height: size)
-        .offset(pull)
-        .shadow(color: Color.lime.opacity(active ? 0.55 : 0.3), radius: size * (active ? 0.4 : 0.22))
+        .scaleEffect(poke ? 0.82 : 1)
+        .shadow(color: Color.lime.opacity(active ? 0.5 : 0.25), radius: size * (active ? 0.35 : 0.18))
         .animation(.easeInOut(duration: 0.4), value: active)
-        .contentShape(Circle())
-        .gesture(interactive ? drag : nil)
-        .simultaneousGesture(interactive ? TapGesture().onEnded { bounce() } : nil)
+        .onChange(of: active) {
+            // «подпрыгивает», когда начинает думать
+            withAnimation(.spring(duration: 0.18)) { poke = true }
+            withAnimation(.spring(duration: 0.6, bounce: 0.6).delay(0.18)) { poke = false }
+        }
         .accessibilityLabel("ИИ-тренер")
-    }
-
-    private var drag: some Gesture {
-        DragGesture(minimumDistance: 4)
-            .onChanged { v in
-                // тянется за пальцем с сопротивлением
-                let k: CGFloat = 0.35
-                pull = CGSize(width: v.translation.width * k, height: v.translation.height * k)
-                let d = min(1, hypot(v.translation.width, v.translation.height) / 160)
-                squish = -d * 0.8
-            }
-            .onEnded { _ in
-                Haptic.tap(.soft)
-                withAnimation(.spring(duration: 0.6, bounce: 0.6)) { pull = .zero; squish = 0 }
-                wobble()
-            }
-    }
-
-    private func bounce() {
-        Haptic.tap(.rigid)
-        withAnimation(.spring(duration: 0.12)) { squish = 0.9 }
-        Task {
-            try? await Task.sleep(for: .milliseconds(110))
-            withAnimation(.spring(duration: 0.7, bounce: 0.7)) { squish = 0 }
-        }
-        wobble()
-    }
-
-    private func wobble() {
-        withAnimation(.easeOut(duration: 0.1)) { poke = 1 }
-        Task {
-            try? await Task.sleep(for: .milliseconds(120))
-            withAnimation(.easeOut(duration: 1.2)) { poke = 0 }
-        }
-    }
-
-    private func blob(_ i: Int, t: Double) -> some View {
-        let k = Double(i)
-        let r = Double(size) * 0.26
-        let dx = cos(t * (0.9 + k * 0.23) + k * 1.7) * r
-        let dy = sin(t * (1.1 + k * 0.19) + k * 2.3) * r
-        let d = size * 0.62
-        return Circle()
-            .fill(colors[(i * 2 + 1) % colors.count])
-            .frame(width: d, height: d)
-            .offset(x: CGFloat(dx), y: CGFloat(dy))
-            .blendMode(.plusLighter)
-            .opacity(0.75)
     }
 }
