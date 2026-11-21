@@ -571,6 +571,15 @@ struct ChatView: View {
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .background { ChatWallpaperBackground() }
+            // как в Telegram: сверху нет плашки, переписка мягко растворяется под шапкой
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [Color.black.opacity(0.32), Color.black.opacity(0.12), .clear],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 150)
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
+            }
             .onChange(of: messages.last?.id) {
                 if let id = messages.last?.id {
                     withAnimation { proxy.scrollTo(id, anchor: .bottom) }
@@ -592,6 +601,7 @@ struct ChatView: View {
         .navigationTitle(peer?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbar {
             // шапка как в Telegram: «назад» с числом непрочитанных, имя в стеклянной капсуле, аватар-кружок
             ToolbarItem(placement: .topBarLeading) {
