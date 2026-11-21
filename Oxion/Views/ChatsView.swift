@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 import UIKit
 import PhotosUI
 import Observation
@@ -18,7 +19,12 @@ final class ChatsStore {
             .reduce(0) { $0 + max($1.unread ?? 0, $1.marked == true ? 1 : 0) }
     }
 
-    var active: [ChatItem] { sorted(items.filter { $0.archived != true }) }
+    var active: [ChatItem] {
+        sorted(items.filter { $0.archived != true && (!trainerOnly || $0.peer.trainer == true) })
+    }
+    /// фильтр фокусирования «только чаты с тренерами»
+    private(set) var trainerOnly = OxFocus.trainerChatsOnly
+    func focusChanged() { trainerOnly = OxFocus.trainerChatsOnly }
     var archived: [ChatItem] { sorted(items.filter { $0.archived == true }) }
 
     private func sorted(_ l: [ChatItem]) -> [ChatItem] {
@@ -498,6 +504,7 @@ struct ChatView: View {
     @State private var protectBusy = false
     @FocusState private var focused: Bool
     @Namespace private var zoomNS
+    @State private var translateText: String?
 
     private var shielded: Bool { protect?.on == true }
 
@@ -556,6 +563,11 @@ struct ChatView: View {
                                     } label: {
                                         Label("Скопировать", systemImage: "doc.on.doc")
                                     }
+                                    Button {
+                                        translateText = t
+                                    } label: {
+                                        Label("Перевести", systemImage: "translate")
+                                    }
                                 }
                                 if m.mine && m.deleted != true {
                                     Button(role: .destructive) {
@@ -581,6 +593,8 @@ struct ChatView: View {
         }
         .environment(chats)
         }
+        .translationPresentation(isPresented: Binding(get: { translateText != nil }, set: { if !$0 { translateText = nil } }),
+                                 text: translateText ?? "")
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
             guard shielded else { return }
             Task { await reportScreenshot() }

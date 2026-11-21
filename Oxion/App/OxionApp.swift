@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreSpotlight
 import Observation
 
 extension Color {
@@ -33,6 +34,10 @@ struct OxionApp: App {
                     // ссылки из виджетов и Live Activity: oxion://diary, oxion://trainer/15 …
                     let route = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/")
                     model.handle(route: route)
+                }
+                // нажатие на OXION в поиске iPhone (Spotlight)
+                .onContinueUserActivity(CSSearchableItemActionType) { a in
+                    if let r = SpotlightIndex.route(for: a) { model.handle(route: r) }
                 }
                 // универсальные ссылки …/clip/trainer/34, …/clip/tag/<id> (QR и NFC в зале), если OXION уже установлен
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { a in
@@ -99,9 +104,12 @@ final class AppModel {
     /// Экраны поверх вкладок (из меню иконки, Siri, ссылок)
     var sheet: AppSheet?
     var showVision = false
+    var exerciseBox: IdBox?
+
+    struct IdBox: Identifiable { let id: Int }
 
     enum AppSheet: String, Identifiable {
-        case qr, compose, progress, permissions
+        case qr, compose, progress, permissions, run, scanner, music, screenLock
         var id: String { rawValue }
     }
 
@@ -138,6 +146,9 @@ final class AppModel {
         case "progress": sheet = .progress
         case "permissions": sheet = .permissions
         case "vision": showVision = true
+        case "run": sheet = .run
+        case "exercise" where parts.count > 1:
+            if let id = Int(parts[1]) { exerciseBox = IdBox(id: id) }
         case "trainer":
             selectedTab = .trainers
             if parts.count > 1, let id = Int(parts[1]), id > 0 { openTrainerId = id }
@@ -165,6 +176,7 @@ final class AppModel {
                 meta = mt
             }
             phase = .ready
+            Task { await Catalog.refresh { self.muscleName($0) } }
         } catch let e as APIError where e.status == 401 {
             logoutLocal()
         } catch {
@@ -187,6 +199,7 @@ final class AppModel {
 
     func logoutLocal() {
         WidgetSync.clear()
+        SpotlightIndex.clear()
         API.token = nil
         me = nil
         phase = .loggedOut
@@ -245,6 +258,7 @@ struct MainTabView: View {
     @State private var chats = ChatsStore()
     @State private var showCard = false
     @State private var engine = WorkoutEngine.shared
+    @State private var focusHideFeed = OxFocus.hideFeed
 
     var body: some View {
         @Bindable var model = model
@@ -255,8 +269,11 @@ struct MainTabView: View {
             Tab("Тренеры", systemImage: "figure.strengthtraining.traditional", value: AppTab.trainers) {
                 TrainersView()
             }
-            Tab("Лента", systemImage: "flame.fill", value: AppTab.feed) {
-                FeedView()
+            // фильтр фокусирования «скрыть ленту» (Настройки → Фокусирование → Фильтры → OXION)
+            if !focusHideFeed {
+                Tab("Лента", systemImage: "flame.fill", value: AppTab.feed) {
+                    FeedView()
+                }
             }
             Tab("Дневник", systemImage: "calendar", value: AppTab.diary) {
                 DiaryView()
@@ -269,6 +286,11 @@ struct MainTabView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         .environment(chats)
         .onChange(of: model.selectedTab) { Haptic.tap(.soft) }
+        .onReceive(NotificationCenter.default.publisher(for: .oxionFocusChanged)) { _ in
+            withAnimation { focusHideFeed = OxFocus.hideFeed }
+            if focusHideFeed && model.selectedTab == .feed { model.selectedTab = .home }
+            chats.focusChanged()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .oxionShake)) { _ in
             guard AppSettings.shakeCard, !showCard else { return }
             Haptic.success()
@@ -281,9 +303,14 @@ struct MainTabView: View {
             case .compose: ComposerView(request: ComposeRequest()) { _ in }
             case .progress: NavigationStack { ProgressHubView() }
             case .permissions: NavigationStack { PermissionsView() }
+            case .run: NavigationStack { RunTrackerView() }
+            case .scanner: NavigationStack { LabelScannerView() }
+            case .music: NavigationStack { WorkoutMusicView() }
+            case .screenLock: NavigationStack { ScreenTimeLockView() }
             }
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
+        .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
         .onChange(of: chats.unread) { QuickActions.update(unread: chats.unread) }
         .overlay(alignment: .bottom) {
             ActiveWorkoutBar { model.showActiveWorkout = true }

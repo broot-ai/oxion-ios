@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 import UIKit
 import Observation
 
@@ -467,6 +468,7 @@ struct PostMenu: View {
     var onChange: ((inout Post) -> Void) -> Void
     var onRemove: () -> Void
     var onRemoveAuthor: (Int) -> Void
+    @State private var translate = false
 
     var body: some View {
         Menu {
@@ -536,6 +538,7 @@ struct PostMenu: View {
                     UIPasteboard.general.string = t
                     Haptic.success()
                 } label: { Label("Копировать текст", systemImage: "doc.on.doc") }
+                Button { translate = true } label: { Label("Перевести", systemImage: "translate") }
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -544,6 +547,7 @@ struct PostMenu: View {
                 .frame(width: 34, height: 28)
                 .contentShape(Rectangle())
         }
+        .translationPresentation(isPresented: $translate, text: post.text ?? "")
     }
 
     private func replyToButton(_ key: String, _ title: String) -> some View {

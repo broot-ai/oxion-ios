@@ -33,7 +33,12 @@ enum OxAlarms {
 
     /// Подписка на события тренировки (вызывается при запуске)
     static func attach() {
-        WorkoutEngine.onEvent = { e, s in OxAlarms.handle(e, s) }
+        WorkoutEngine.onEvent = { e, s in
+            OxAlarms.handle(e, s)
+            WorkoutMusic.shared.handle(e)
+            ScreenLock.shared.handle(e)
+            if e == .finished { GameHub.shared.workoutFinished(s) }
+        }
     }
 
     private static func handle(_ e: WorkoutEngine.Event, _ s: WorkoutState) {

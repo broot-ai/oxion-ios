@@ -118,5 +118,11 @@ struct OxionShortcuts: AppShortcutsProvider {
         AppShortcut(intent: OpenFavoritesIntent(),
                     phrases: ["Открой избранных тренеров в \(.applicationName)", "\(.applicationName) избранные"],
                     shortTitle: "Избранные тренеры", systemImageName: "heart.fill")
+        AppShortcut(intent: OpenRepCounterIntent(),
+                    phrases: ["Считай повторы в \(.applicationName)", "\(.applicationName) камера"],
+                    shortTitle: "Счёт повторов", systemImageName: "camera.viewfinder")
+        AppShortcut(intent: StartRunIntent(),
+                    phrases: ["Начни пробежку в \(.applicationName)", "\(.applicationName) пробежка"],
+                    shortTitle: "Пробежка", systemImageName: "figure.run")
     }
 }

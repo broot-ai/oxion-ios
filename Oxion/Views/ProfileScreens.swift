@@ -100,6 +100,9 @@ struct SubscriptionView: View {
                     Text("за \(model.meta?.subDays ?? 30) дней размещения")
                         .foregroundStyle(Color.oxHint)
                 }
+                ProPurchaseBlock {
+                    Task { t = try? await API.call("/my/trainer") as MyTrainer }
+                }
                 Button {
                     OxAlert.paymentsOff()
                 } label: {

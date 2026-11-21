@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 /// Вход через Telegram-бота: приложение создаёт заявку, человек подтверждает её в боте,
 /// приложение каждые 2 секунды спрашивает сервер, подтверждено ли.
@@ -54,6 +55,15 @@ struct LoginView: View {
                 .buttonStyle(.glassProminent)
                 .disabled(busy)
 
+                SignInWithAppleButton(.signIn) { req in
+                    req.requestedScopes = [.fullName]
+                } onCompletion: { result in
+                    Task { await appleLogin(result) }
+                }
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 46)
+                .clipShape(Capsule())
+
                 HStack(spacing: 10) {
                     Button {
                         phoneLogin = true
@@ -93,6 +103,33 @@ struct LoginView: View {
         }
         .onDisappear { pollTask?.cancel() }
         .sheet(isPresented: $phoneLogin) { PhoneVerifyView(mode: .login) }
+    }
+
+    private struct AppleToken: Decodable { let token: String }
+
+    private func appleLogin(_ result: Result<ASAuthorization, Error>) async {
+        errorText = nil
+        switch result {
+        case .failure(let e):
+            let code = (e as? ASAuthorizationError)?.code
+            if code == .canceled { return }
+            errorText = code == .unknown
+                ? "Вход через Apple работает в версии из TestFlight или App Store."
+                : e.localizedDescription
+        case .success(let auth):
+            guard let cred = auth.credential as? ASAuthorizationAppleIDCredential,
+                  let data = cred.identityToken, let jwt = String(data: data, encoding: .utf8) else {
+                errorText = "Apple не прислал токен входа"
+                return
+            }
+            let name = [cred.fullName?.givenName, cred.fullName?.familyName].compactMap { $0 }.joined(separator: " ")
+            do {
+                let r: AppleToken = try await API.call("/login/apple", method: "POST", body: ["token": jwt, "name": name])
+                await model.loggedIn(token: r.token)
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
     }
 
     private func startLogin() async {
