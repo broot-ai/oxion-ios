@@ -88,6 +88,7 @@ struct LoginView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }
+                LegalConsentLine().padding(.top, 4)
             }
             .padding(24)
         }

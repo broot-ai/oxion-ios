@@ -152,14 +152,10 @@ struct ProfileView: View {
                             Label("Написать в поддержку", systemImage: "paperplane.fill")
                         }
                     }
-                    Button {
-                        openURL(API.page("legal/privacy"))
-                    } label: {
+                    NavigationLink { LegalDocView(doc: .privacy) } label: {
                         Label("Политика конфиденциальности", systemImage: "hand.raised.fill")
                     }
-                    Button {
-                        openURL(API.page("legal/terms"))
-                    } label: {
+                    NavigationLink { LegalDocView(doc: .terms) } label: {
                         Label("Пользовательское соглашение", systemImage: "doc.text.fill")
                     }
                 }
@@ -171,10 +167,17 @@ struct ProfileView: View {
                         Label("Выйти", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                     Button(role: .destructive) {
-                        OxAlert.show(icon: "person.crop.circle.badge.xmark", tint: Color(hex: 0xFF5A4E), title: "Удаление аккаунта",
-                                     message: "Аккаунт и все данные будут удалены. В тестовой версии удаление делает поддержка.",
-                                     buttons: [OxAlertButton(title: "Написать в поддержку", role: .destructive) { if let u = supportURL { openURL(u) } },
-                                               OxAlertButton(title: "Отмена", role: .cancel)])
+                        OxAlert.confirm(icon: "person.crop.circle.badge.xmark", title: "Удалить аккаунт?",
+                                        message: "Дневник, вес, фото прогресса, анкета тренера и записи будут удалены с сервера. Это нельзя отменить.",
+                                        action: "Удалить навсегда", destructive: true) {
+                            Task {
+                                do {
+                                    let _: OK = try await API.call("/me", method: "DELETE")
+                                    model.logoutLocal()
+                                    OxAlert.show(icon: "checkmark.circle.fill", title: "Аккаунт удалён")
+                                } catch { OxAlert.error(error.localizedDescription) }
+                            }
+                        }
                     } label: {
                         Label("Удалить аккаунт", systemImage: "person.crop.circle.badge.xmark")
                     }
