@@ -26,6 +26,7 @@ struct HomeView: View {
                     header
                     searchBar
                     weekBlock
+                    HomeMuscleCard()
                     if model.me?.mode == "trainer" {
                         HomeTrainerCard()
                     } else {

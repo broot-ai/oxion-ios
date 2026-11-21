@@ -333,6 +333,8 @@ struct AICoachView: View {
     @State private var enabled = true
     @State private var left: Int?
     @State private var local = OnDeviceCoach.shared
+    /// Готовый запрос, который отправится сразу при открытии (например, из выбора мышц на фигуре)
+    var initial: String? = nil
 
     private let hints = ["Составь тренировку на сегодня", "Как накачать грудь дома?", "Сколько белка мне нужно?", "Разбери мою неделю"]
 
@@ -441,6 +443,10 @@ struct AICoachView: View {
             if let r: AIMessages = try? await API.call("/ai/messages") {
                 items = r.items
                 enabled = r.enabled ?? true
+            }
+            if let initial, !initial.isEmpty, text.isEmpty, !sending {
+                text = initial
+                await send()
             }
         }
     }

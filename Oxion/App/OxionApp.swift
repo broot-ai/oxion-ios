@@ -145,6 +145,7 @@ final class AppModel {
     /// Экраны поверх вкладок (из меню иконки, Siri, ссылок)
     var sheet: AppSheet?
     var showVision = false
+    var showMuscles = false
     var exerciseBox: IdBox?
 
     struct IdBox: Identifiable { let id: Int }
@@ -190,6 +191,7 @@ final class AppModel {
         case "progress": sheet = .progress
         case "permissions": sheet = .permissions
         case "vision": showVision = true
+        case "muscles", "body": showMuscles = true
         case "run": sheet = .run
         case "devices": sheet = .devices
         case "book":
@@ -462,6 +464,7 @@ struct MainTabView: View {
             }
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
+        .fullScreenCover(isPresented: $model.showMuscles) { MusclePickerView() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
         .sheet(item: $model.bookTrainer) { b in BookingSheet(trainerId: b.id, trainerName: model.bookTrainerName) }
