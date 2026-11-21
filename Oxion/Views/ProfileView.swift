@@ -161,6 +161,9 @@ struct ProfileView: View {
                 }
 
                 Section {
+                    NavigationLink { LoginKeysView() } label: {
+                        Label("Ключи входа · \(Biometry.name)", systemImage: Biometry.icon)
+                    }
                     Button(role: .destructive) {
                         confirmLogout = true
                     } label: {
@@ -173,6 +176,7 @@ struct ProfileView: View {
                             Task {
                                 do {
                                     let _: OK = try await API.call("/me", method: "DELETE")
+                                    DeviceLoginKey.remove()
                                     model.logoutLocal()
                                     OxAlert.show(icon: "checkmark.circle.fill", title: "Аккаунт удалён")
                                 } catch { OxAlert.error(error.localizedDescription) }

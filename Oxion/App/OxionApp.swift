@@ -146,6 +146,7 @@ final class AppModel {
     var sheet: AppSheet?
     var showVision = false
     var showMuscles = false
+    var offerLoginKey = false
     var exerciseBox: IdBox?
 
     struct IdBox: Identifiable { let id: Int }
@@ -268,6 +269,10 @@ final class AppModel {
         Haptic.success()
         await loadMe()
         await PushRegistrar.upload()
+        if LoginKeyOfferSheet.shouldOffer {
+            try? await Task.sleep(for: .seconds(1.2))
+            offerLoginKey = true
+        }
     }
 
     func logout() async {
@@ -465,6 +470,7 @@ struct MainTabView: View {
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
         .fullScreenCover(isPresented: $model.showMuscles) { Body3DScreen() }
+        .sheet(isPresented: $model.offerLoginKey) { LoginKeyOfferSheet() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
         .sheet(item: $model.bookTrainer) { b in BookingSheet(trainerId: b.id, trainerName: model.bookTrainerName) }

@@ -71,7 +71,7 @@ targets:
         NSHealthShareUsageDescription: Oxion читает шаги, калории, дистанцию, сон, пульс покоя и вес из «Здоровья», чтобы показать прогресс вам и вашему тренеру.
         NSHealthUpdateUsageDescription: Oxion может сохранять ваши тренировки в «Здоровье».
         NSLocationWhenInUseUsageDescription: Oxion использует геопозицию, чтобы показать тренеров рядом.
-        NSFaceIDUsageDescription: OXION закрывает фото прогресса Face ID, если вы включили эту защиту.
+        NSFaceIDUsageDescription: OXION использует Face ID для входа без пароля и чтобы закрывать фото прогресса, если вы включили эту защиту.
         NSAlarmKitUsageDescription: OXION ставит будильник на конец отдыха между подходами и напоминает о тренировках.
         NSBluetoothAlwaysUsageDescription: OXION подключает датчики пульса, часы и другие устройства по Bluetooth, чтобы показывать пульс во время тренировки.
         NSCalendarsWriteOnlyAccessUsageDescription: OXION добавляет занятия с тренером в ваш календарь, когда вы нажимаете «Добавить в Календарь».
@@ -82,10 +82,13 @@ targets:
           run: Точная геопозиция нужна, чтобы правильно посчитать дистанцию и темп пробежки.
         NSContactsUsageDescription: OXION показывает ваши контакты, чтобы вы могли пригласить друзей. Контакты не отправляются на сервер.
         NSPhotoLibraryAddUsageDescription: OXION сохраняет карточки прогресса и итогов тренировки в «Фото».
+        NSNearbyInteractionUsageDescription: OXION показывает расстояние и направление до пользователей OXION рядом, если вы оба открыли поиск.
         NSLocalNetworkUsageDescription: OXION ищет экраны и тренажёры в вашей сети Wi‑Fi, чтобы показать на них тренировку.
         NSBonjourServices:
           - _airplay._tcp
           - _oxion._tcp
+          - _oxion-near._tcp
+          - _oxion-near._udp
         UIBackgroundModes:
           - fetch
           - location

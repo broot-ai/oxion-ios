@@ -37,6 +37,24 @@ struct LoginView: View {
                         .multilineTextAlignment(.center)
                 }
 
+                if hasKey {
+                    Button {
+                        Task { await keyLogin() }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: Biometry.icon)
+                            Text("Войти по \(Biometry.name)")
+                        }
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(Color.lime)
+                    .foregroundStyle(Color.onLime)
+                    .disabled(busy)
+                }
+
                 Button {
                     Task { await startLogin() }
                 } label: {
@@ -74,6 +92,11 @@ struct LoginView: View {
                         showCode = true
                     } label: {
                         Label("Код из бота", systemImage: "number").frame(maxWidth: .infinity)
+                    }
+                    Button {
+                        Task { await passkeyLogin() }
+                    } label: {
+                        Label("Passkey", systemImage: "person.badge.key.fill").frame(maxWidth: .infinity)
                     }
                 }
                 .font(.subheadline.bold())
@@ -147,6 +170,29 @@ struct LoginView: View {
             errorText = error.localizedDescription
             busy = false
         }
+    }
+
+    @State private var hasKey = DeviceLoginKey.exists
+
+    private func keyLogin() async {
+        errorText = nil
+        do {
+            let t = try await DeviceLoginKey.login()
+            await model.loggedIn(token: t)
+        } catch LoginKeyError.cancelled {
+        } catch {
+            errorText = error.localizedDescription
+            hasKey = DeviceLoginKey.exists
+        }
+    }
+
+    private func passkeyLogin() async {
+        errorText = nil
+        do {
+            let t = try await PasskeyFlow.login()
+            await model.loggedIn(token: t)
+        } catch LoginKeyError.cancelled {
+        } catch { errorText = error.localizedDescription }
     }
 
     private func poll(token: String) async {
