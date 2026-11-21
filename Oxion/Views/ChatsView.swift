@@ -19,6 +19,12 @@ final class ChatsStore {
             .reduce(0) { $0 + max($1.unread ?? 0, $1.marked == true ? 1 : 0) }
     }
 
+    /// Непрочитанные во всех чатах, кроме открытого — для кнопки «назад»
+    func unread(except id: Int) -> Int {
+        items.filter { $0.id != id && $0.muted != true && $0.archived != true }
+            .reduce(0) { $0 + max($1.unread ?? 0, $1.marked == true ? 1 : 0) }
+    }
+
     var active: [ChatItem] {
         sorted(items.filter { $0.archived != true && (!trainerOnly || $0.peer.trainer == true) })
     }
@@ -489,6 +495,7 @@ struct ChatView: View {
     let title: String
 
     @Environment(ChatsStore.self) private var chats
+    @Environment(\.dismiss) private var dismiss
     @State private var messages: [Message] = []
     @State private var peer: Peer?
     @State private var peerReadId = 0
@@ -584,13 +591,36 @@ struct ChatView: View {
         .safeAreaInset(edge: .bottom) { inputBar }
         .navigationTitle(peer?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
-            // шапка как в Telegram: имя и статус в стеклянной капсуле, аватар справа открывает профиль
+            // шапка как в Telegram: «назад» с числом непрочитанных, имя в стеклянной капсуле, аватар-кружок
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left").font(.system(size: 19, weight: .semibold))
+                        let n = chats.unread(except: chatId)
+                        if n > 0 {
+                            Text(n > 999 ? "999+" : "\(n)")
+                                .font(.system(size: 15, weight: .bold).monospacedDigit())
+                                .foregroundStyle(Color(.systemBackground))
+                                .padding(.horizontal, 7)
+                                .frame(minWidth: 26, minHeight: 24)
+                                .background(Color.primary, in: Capsule())
+                                .contentTransition(.numericText())
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.leading, 4)
+                    .animation(.spring(duration: 0.3), value: chats.unread(except: chatId))
+                }
+                .accessibilityLabel("Назад")
+            }
             ToolbarItem(placement: .principal) {
                 NavigationLink {
                     profile
                 } label: {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 1) {
                         HStack(spacing: 4) {
                             Text(peer?.name ?? title).font(.headline).lineLimit(1)
                             if peer?.trainer == true {
@@ -601,25 +631,33 @@ struct ChatView: View {
                             }
                         }
                         Text(PeerStatus.text(peer?.lastSeen))
-                            .font(.caption2)
-                            .foregroundStyle(PeerStatus.online(peer?.lastSeen) ? Color.lime : Color.oxHint)
+                            .font(.caption)
+                            .foregroundStyle(PeerStatus.online(peer?.lastSeen) ? Color.limeInk : Color.secondary)
+                            .lineLimit(1)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
+                    .frame(minWidth: 150)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 6)
+                    .contentShape(Capsule())
+                    .glassEffect(.regular.interactive(), in: .capsule)
                 }
                 .buttonStyle(.plain)
             }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     profile
                         .navigationTransition(.zoom(sourceID: "peer-avatar", in: zoomNS))
                 } label: {
-                    Avatar(url: API.media(peer?.photo), name: peer?.name ?? title, size: 36)
+                    Avatar(url: API.media(peer?.photo), name: peer?.name ?? title, size: 44)
+                        .padding(3)
+                        .glassEffect(.regular.interactive(), in: .circle)
                         .matchedTransitionSource(id: "peer-avatar", in: zoomNS)
                 }
                 .buttonStyle(.plain)
                 .disabled(peer == nil)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .toolbar(.hidden, for: .tabBar)
         .fullScreenCover(item: $call) { CallScreen(req: $0) }
