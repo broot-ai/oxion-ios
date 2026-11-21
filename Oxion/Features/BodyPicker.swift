@@ -416,11 +416,12 @@ struct MusclePickerView: View {
 
     private var topBar: some View {
         HStack(alignment: .top) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44)
+            Button { close() } label: {
+                Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44).contentShape(Circle())
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityLabel("Закрыть")
 
             Spacer()
 
@@ -464,10 +465,16 @@ struct MusclePickerView: View {
                         .glassEffect(on ? .regular.tint(Color.lime) : .regular.interactive(), in: .capsule)
                     }
                 }
-                .padding(.horizontal, 16)
                 .padding(.vertical, 2)
             }
-            .scrollClipDisabled()
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .clipShape(.rect(cornerRadius: 22))
+            .mask {
+                // плавно гасим чипы у краёв панели, чтобы не было резкого обреза
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.04),
+                                       .init(color: .black, location: 0.96), .init(color: .clear, location: 1)],
+                               startPoint: .leading, endPoint: .trailing)
+            }
 
             HStack(spacing: 10) {
                 Button {
@@ -510,11 +517,17 @@ struct MusclePickerView: View {
         }
     }
 
+    private func close() {
+        stage.stopTilt()
+        model.showMuscles = false
+        dismiss()
+    }
+
     private func start() {
         let groups = ordered
         let t = title
         Haptic.success()
-        dismiss()
+        close()
         let model = model
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(450))
