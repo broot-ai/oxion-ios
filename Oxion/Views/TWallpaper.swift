@@ -214,8 +214,6 @@ struct WallPatternLayer: View {
 
 struct TWallpaperView: View {
     let engine: TWallpaperEngine
-    /// для светлой темы: если выбран тёмный набор — берём светлый «Лайм»
-    let lightEngine: TWallpaperEngine
     var pattern: WallPattern = .sport
     var mask = false
     var opacity: Double = 0.5
