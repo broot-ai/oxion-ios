@@ -545,6 +545,10 @@ struct ChatView: View {
                         } else {
                         Bubble(m: m, read: m.mine && m.id <= peerReadId)
                             .id(m.id)
+                            .transition(UserDefaults.standard.object(forKey: "anim_messages") as? Bool ?? true
+                                        ? .asymmetric(insertion: .scale(scale: 0.6, anchor: m.mine ? .bottomTrailing : .bottomLeading).combined(with: .opacity),
+                                                      removal: .opacity)
+                                        : .identity)
                             .contextMenu {
                                 Section {
                                     ForEach(Kinds.reactions, id: \.self) { e in
@@ -740,7 +744,7 @@ struct ChatView: View {
             } else if !r.messages.isEmpty {
                 let have = Set(messages.map(\.id))
                 let fresh = r.messages.filter { !have.contains($0.id) }
-                messages += fresh
+                withAnimation(.spring(duration: 0.4, bounce: 0.25)) { messages += fresh }
                 ChatAutoSave.handle(fresh, trainerChat: r.peer.trainer == true)
             }
             loaded = true
@@ -813,8 +817,10 @@ struct ChatView: View {
             text = ""
             replyTo = nil
             errorText = nil
-            if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
-            Haptic.tap()
+            withAnimation(.spring(duration: 0.4, bounce: 0.25)) {
+                if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
+            }
+            if UserDefaults.standard.object(forKey: "anim_send_haptic") as? Bool ?? true { Haptic.tap() }
         } catch {
             errorText = error.localizedDescription
         }
@@ -865,6 +871,7 @@ struct ChatView: View {
 struct Bubble: View {
     let m: Message
     var read: Bool
+    private var style = BubbleStyle()
 
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true }
 
@@ -924,7 +931,7 @@ struct Bubble: View {
                         .padding(.horizontal, -6)
                 }
                 if let t = m.text, !t.isEmpty {
-                    Text(t).font(.system(size: 16))
+                    Text(t).font(.system(size: style.fontSize))
                 }
             }
             meta.frame(maxWidth: .infinity, alignment: .trailing)
@@ -933,13 +940,13 @@ struct Bubble: View {
         .padding(.vertical, 9)
         .foregroundStyle(m.mine ? Color.oxBg : Color.primary)
         .background(
-            UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: m.mine ? 20 : 6,
-                                   bottomTrailingRadius: m.mine ? 6 : 20, topTrailingRadius: 20, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: style.radius, bottomLeadingRadius: m.mine ? style.radius : style.tail,
+                                   bottomTrailingRadius: m.mine ? style.tail : style.radius, topTrailingRadius: style.radius, style: .continuous)
                 .fill(m.mine ? Color.lime : Color.white.opacity(0.08))
         )
         .overlay(
-            UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: m.mine ? 20 : 6,
-                                   bottomTrailingRadius: m.mine ? 6 : 20, topTrailingRadius: 20, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: style.radius, bottomLeadingRadius: m.mine ? style.radius : style.tail,
+                                   bottomTrailingRadius: m.mine ? style.tail : style.radius, topTrailingRadius: style.radius, style: .continuous)
                 .stroke(m.mine ? Color.clear : Color.white.opacity(0.07))
         )
         .frame(maxWidth: 300, alignment: m.mine ? .trailing : .leading)
