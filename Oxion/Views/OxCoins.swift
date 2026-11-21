@@ -101,7 +101,7 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
 
     // Гравитация следует за наклоном телефона
     private func startMotion() {
-        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
+        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive, PowerSaver.allowsNow(.liveBackgrounds) else { return }
         motion.deviceMotionUpdateInterval = 1 / 30
         motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
             guard let self, let g = m?.gravity else { return }

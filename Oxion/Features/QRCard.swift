@@ -2,7 +2,6 @@ import SwiftUI
 import UIKit
 import CoreImage.CIFilterBuiltins
 import CoreMotion
-import VisionKit
 
 // MARK: - Матрица QR-кода (модули), чтобы рисовать его скруглённым
 
@@ -260,7 +259,7 @@ struct MyCardSheet: View {
                 LinearGradient(colors: [theme.top, theme.bottom], startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea()
                     .animation(.easeInOut(duration: 0.45), value: themeId)
-                EmojiPatternBackground(emoji: emoji)
+                EmojiPatternBackground(emoji: emoji, animated: PowerSaver.allowsNow(.liveBackgrounds))
                     .id(emoji)
                     .ignoresSafeArea()
                     .transition(.opacity.combined(with: .scale(scale: 1.1)))
@@ -483,20 +482,17 @@ struct MyCardSheet: View {
 
     private func handleScan(_ code: String) {
         scanning = false
-        Haptic.success()
-        // свои ссылки: t.me/бот?startapp=t15 / u15 или …/#trainer/15
-        let tId = code.firstMatch(of: /(?:startapp=t|#trainer\/|\/clip\/trainer\/)(\d+)/).flatMap { Int($0.1) }
-        let uId = code.firstMatch(of: /(?:startapp=u|#u\/)(\d+)/).flatMap { Int($0.1) }
-        if let tId {
+        switch QRLinks.parse(code) {
+        case .trainer(let id):
             dismiss()
-            model.handle(route: "trainer/\(tId)")
-        } else if let uId {
-            openUser = uId
-        } else if let u = URL(string: code), u.scheme?.hasPrefix("http") == true || u.scheme == "oxion" {
+            model.handle(route: "trainer/\(id)")
+        case .user(let id):
+            openUser = id
+        case .url(let u):
             openURL(u)
-        } else {
-            UIPasteboard.general.string = code
-            OxAlert.show(icon: "qrcode", title: "Текст из QR скопирован", message: code)
+        case .text(let t):
+            UIPasteboard.general.string = t
+            OxAlert.show(icon: "qrcode", title: "Текст из QR скопирован", message: t)
         }
     }
 }
@@ -521,75 +517,3 @@ final class PhotoSaver: NSObject {
     }
 }
 
-// MARK: - Сканер QR
-
-struct QRScanScreen: View {
-    var onCode: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var torch = false
-
-    var body: some View {
-        ZStack {
-            if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
-                QRScannerRepresentable(onCode: onCode).ignoresSafeArea()
-            } else {
-                Color.black.ignoresSafeArea()
-                ContentUnavailableView("Камера недоступна", systemImage: "camera", description: Text("Разрешите доступ: Настройки → Oxion → Камера"))
-            }
-            RoundedRectangle(cornerRadius: 36, style: .continuous)
-                .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [60, 160]))
-                .frame(width: 250, height: 250)
-                .allowsHitTesting(false)
-            VStack {
-                HStack {
-                    Button { dismiss() } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                        .glassEffect(.regular.interactive(), in: .circle)
-                    Spacer()
-                }
-                Spacer()
-                Text("Наведите камеру на QR-код")
-                    .font(.subheadline.bold())
-                    .padding(.horizontal, 16).padding(.vertical, 9)
-                    .glassEffect(.regular, in: .capsule)
-                    .padding(.bottom, 30)
-            }
-            .padding(16)
-            .foregroundStyle(.white)
-        }
-    }
-}
-
-struct QRScannerRepresentable: UIViewControllerRepresentable {
-    var onCode: (String) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(onCode: onCode) }
-
-    func makeUIViewController(context: Context) -> DataScannerViewController {
-        let vc = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])],
-                                           qualityLevel: .balanced, recognizesMultipleItems: false,
-                                           isHighFrameRateTrackingEnabled: true, isHighlightingEnabled: true)
-        vc.delegate = context.coordinator
-        try? vc.startScanning()
-        return vc
-    }
-
-    func updateUIViewController(_ vc: DataScannerViewController, context: Context) {}
-
-    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let onCode: (String) -> Void
-        private var fired = false
-        init(onCode: @escaping (String) -> Void) { self.onCode = onCode }
-
-        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
-            guard !fired else { return }
-            for item in addedItems {
-                if case .barcode(let b) = item, let s = b.payloadStringValue {
-                    fired = true
-                    dataScanner.stopScanning()
-                    DispatchQueue.main.async { self.onCode(s) }
-                    return
-                }
-            }
-        }
-    }
-}

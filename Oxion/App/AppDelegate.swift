@@ -43,6 +43,7 @@ final class OxAppDelegate: NSObject, UIApplicationDelegate {
     // MARK: Обновление контента в фоне (виджеты и наклейка с непрочитанными)
 
     static func schedule() {
+        guard PowerSaver.allowsNow(.background) else { return }
         let r = BGAppRefreshTaskRequest(identifier: refreshId)
         r.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
         try? BGTaskScheduler.shared.submit(r)

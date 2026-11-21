@@ -12,7 +12,7 @@ enum OxHaptics {
 
     /// 0 — выключено
     static var level: Float {
-        guard AppSettings.haptics else { return 0 }
+        guard AppSettings.haptics, PowerSaver.allowsNow(.haptics) else { return 0 }
         switch UserDefaults.standard.string(forKey: "haptic_level") ?? "normal" {
         case "off": return 0
         case "soft": return 0.55

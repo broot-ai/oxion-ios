@@ -39,7 +39,7 @@ enum Catalog {
     /// Скачать каталог и обновить поиск iPhone (после входа, раз в день)
     @MainActor
     static func refresh(muscleName: (String?) -> String) async {
-        guard API.token != nil else { return }
+        guard API.token != nil, PowerSaver.allowsNow(.preload) else { return }
         let last = UserDefaults.standard.double(forKey: "catalog_at")
         guard Date().timeIntervalSince1970 - last > 6 * 3600 || exercises.isEmpty else { return }
         async let ex: ExercisesResponse? = try? API.call("/exercises")

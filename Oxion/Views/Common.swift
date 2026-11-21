@@ -50,9 +50,7 @@ struct Avatar: View {
     var size: CGFloat = 40
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        OxRemoteImage(url: url) {
             ZStack {
                 Circle().fill(Color.lime.opacity(0.18))
                 Text(String(name.prefix(1)).uppercased())
@@ -70,9 +68,7 @@ struct RemoteImage: View {
     var icon: String = "photo"
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        OxRemoteImage(url: url, gated: true) {
             ZStack {
                 Rectangle().fill(Color.white.opacity(0.06))
                 Image(systemName: icon)

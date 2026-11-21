@@ -37,11 +37,11 @@ enum AppSettings {
 
 enum Haptic {
     static func tap(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
-        guard AppSettings.haptics else { return }
+        guard AppSettings.haptics, PowerSaver.allowsNow(.haptics) else { return }
         UIImpactFeedbackGenerator(style: style).impactOccurred()
     }
     static func success() {
-        guard AppSettings.haptics else { return }
+        guard AppSettings.haptics, PowerSaver.allowsNow(.haptics) else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 }

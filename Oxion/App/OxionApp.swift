@@ -259,6 +259,62 @@ struct MainTabView: View {
     @State private var showCard = false
     @State private var engine = WorkoutEngine.shared
     @State private var focusHideFeed = OxFocus.hideFeed
+    @State private var hold: TabHold.Press?
+    @State private var scanning = false
+    @State private var scanUser: AppModel.IdBox?
+    @Environment(\.openURL) private var openURL
+
+    private var tabOrder: [AppTab] {
+        focusHideFeed ? [.home, .trainers, .diary, .chats] : [.home, .trainers, .feed, .diary, .chats]
+    }
+
+    private func holdActions(_ t: AppTab) -> [TabHoldAction] {
+        switch t {
+        case .home:
+            return [
+                .init(title: "Начать тренировку", icon: "play.fill") { model.handle(route: "workout") },
+                .init(title: "Моя визитка и QR", icon: "qrcode") { showCard = true },
+                .init(title: "Сканировать QR-код", icon: "qrcode.viewfinder") { scanning = true },
+                .init(title: "Прогресс тела", icon: "chart.line.uptrend.xyaxis") { model.sheet = .progress },
+            ]
+        case .trainers:
+            return [
+                .init(title: "Избранные тренеры", icon: "heart.fill") { model.handle(route: "favorites") },
+                .init(title: "Найти тренера", icon: "magnifyingglass") { model.selectedTab = .trainers },
+                .init(title: "Сканировать QR тренера", icon: "qrcode.viewfinder") { scanning = true },
+            ]
+        case .feed:
+            return [
+                .init(title: "Новая публикация", icon: "square.and.pencil") { model.handle(route: "compose") },
+                .init(title: "Открыть ленту", icon: "flame.fill") { model.selectedTab = .feed },
+            ]
+        case .diary:
+            return [
+                .init(title: "Начать тренировку", icon: "play.fill") { model.handle(route: "workout") },
+                .init(title: "Пробежка с GPS", icon: "figure.run") { model.sheet = .run },
+                .init(title: "Сканер этикеток", icon: "text.viewfinder") { model.sheet = .scanner },
+                .init(title: "Музыка для тренировки", icon: "music.note") { model.sheet = .music },
+            ]
+        case .chats:
+            return [
+                .init(title: "Прочитать все", icon: "checkmark.message.fill") { Task { await chats.readAll() } },
+                .init(title: "Моя визитка и QR", icon: "qrcode") { showCard = true },
+                .init(title: "Сканировать QR-код", icon: "qrcode.viewfinder") { scanning = true },
+            ]
+        }
+    }
+
+    private func scanned(_ code: String) {
+        scanning = false
+        switch QRLinks.parse(code) {
+        case .trainer(let id): model.handle(route: "trainer/\(id)")
+        case .user(let id): scanUser = AppModel.IdBox(id: id)
+        case .url(let u): openURL(u)
+        case .text(let t):
+            UIPasteboard.general.string = t
+            OxAlert.show(icon: "qrcode", title: "Текст из QR скопирован", message: t)
+        }
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -285,6 +341,17 @@ struct MainTabView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .environment(chats)
+        .overlay {
+            if let hold, hold.index < tabOrder.count {
+                TabHoldOverlay(press: hold, actions: holdActions(tabOrder[hold.index])) { self.hold = nil }
+            }
+        }
+        .onAppear { TabHold.install { p in hold = p } }
+        .fullScreenCover(isPresented: $scanning) { QRScanScreen { scanned($0) } }
+        .sheet(item: $scanUser) { b in NavigationStack { UserProfileView(userId: b.id) } }
+        .transaction { t in
+            if !PowerSaver.allowsNow(.interface) { t.disablesAnimations = true; t.animation = nil }
+        }
         .onChange(of: model.selectedTab) { Haptic.tap(.soft) }
         .onReceive(NotificationCenter.default.publisher(for: .oxionFocusChanged)) { _ in
             withAnimation { focusHideFeed = OxFocus.hideFeed }

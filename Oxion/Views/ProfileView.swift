@@ -106,6 +106,8 @@ struct ProfileView: View {
                     } label: {
                         Label("Уведомления", systemImage: "bell.badge.fill")
                     }
+                    nav("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
+                    nav("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }
                     if !notifText.isEmpty {
                         Text(notifText)
                             .font(.footnote)

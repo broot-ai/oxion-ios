@@ -88,6 +88,7 @@ enum API {
             throw APIError(message: "Нет связи с сервером. Проверьте интернет или включите VPN.", status: 0)
         }
         let (data, resp) = result
+        Traffic.add(data.count + (req.httpBody?.count ?? 0) + 400, .api)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
 
         if status >= 400 || status == 0 {

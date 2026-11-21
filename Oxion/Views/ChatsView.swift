@@ -652,7 +652,7 @@ struct ChatView: View {
         .task {
             await load(initial: true)
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                try? await Task.sleep(for: .seconds(PowerSaver.allowsNow(.background) ? 3 : 8))
                 if Task.isCancelled { break }
                 await load(initial: false)
             }
@@ -739,7 +739,9 @@ struct ChatView: View {
                 messages = r.messages
             } else if !r.messages.isEmpty {
                 let have = Set(messages.map(\.id))
-                messages += r.messages.filter { !have.contains($0.id) }
+                let fresh = r.messages.filter { !have.contains($0.id) }
+                messages += fresh
+                ChatAutoSave.handle(fresh, trainerChat: r.peer.trainer == true)
             }
             loaded = true
             errorText = nil
