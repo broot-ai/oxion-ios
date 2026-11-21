@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var notifText = ""
     @State private var editing = false
     @State private var showCard = false
+    @State private var avatarStudio = false
 
     var body: some View {
         if embedded {
@@ -24,7 +25,18 @@ struct ProfileView: View {
                 if let me = model.me {
                     Section {
                         HStack(spacing: 16) {
-                            Avatar(url: API.media(me.photoUrl), name: me.displayName, size: 72)
+                            Button { avatarStudio = true } label: {
+                                Avatar(url: API.media(me.photoUrl), name: me.displayName, size: 72)
+                                    .overlay(alignment: .bottomTrailing) {
+                                        Image(systemName: "face.smiling.inverse")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(Color.onLime)
+                                            .frame(width: 26, height: 26)
+                                            .background(Color.lime, in: Circle())
+                                            .overlay(Circle().stroke(Color.oxBg, lineWidth: 2))
+                                    }
+                            }
+                            .buttonStyle(.plain)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(me.displayName)
                                     .font(.title2.bold())
@@ -167,6 +179,7 @@ struct ProfileView: View {
                 }
             }
             .navigationTitle("Профиль")
+            .fullScreenCover(isPresented: $avatarStudio) { AvatarStudio() }
             .oxRefreshable { await model.loadMe() }
             .onChange(of: confirmLogout) {
                 if confirmLogout {
