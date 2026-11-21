@@ -278,6 +278,8 @@ final class ChatWallpaper {
     var moveOnSend: Bool { didSet { save() } }
     var enabled: Bool { didSet { save() } }
     let engine: TWallpaperEngine
+    /// для светлой темы: тёмные наборы заменяются светлым лаймовым
+    let lightEngine: TWallpaperEngine
 
     var preset: WallPreset { WallPreset.all.first { $0.id == presetId } ?? WallPreset.all[0] }
 
