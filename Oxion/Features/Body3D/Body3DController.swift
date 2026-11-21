@@ -386,10 +386,22 @@ final class Body3DController: NSObject, UIGestureRecognizerDelegate, ARSessionDe
             }
             return nil
         }
-        guard let ray = v.ray(through: pt) else { return nil }
+        // луч из камеры через точку касания: в Студии считаем сами по параметрам виртуальной камеры
+        var rayO: SIMD3<Float>, rayD: SIMD3<Float>
+        if mode == .studio {
+            let w = Float(max(1, v.bounds.width)), h = Float(max(1, v.bounds.height))
+            let t = tan(camera.camera.fieldOfViewInDegrees * .pi / 360)
+            let nx = (2 * Float(pt.x) / w - 1) * t * (w / h)
+            let ny = (1 - 2 * Float(pt.y) / h) * t
+            rayO = [0, Self.studioCamY, zoom]
+            rayD = simd_normalize([nx, ny, -1])
+        } else {
+            guard let ray = v.ray(through: pt) else { return nil }
+            rayO = ray.origin; rayD = ray.direction
+        }
         let inv = l.body.transformMatrix(relativeTo: nil).inverse
-        let o4 = inv * SIMD4(ray.origin, 1)
-        let d4 = inv * SIMD4(ray.direction, 0)
+        let o4 = inv * SIMD4(rayO, 1)
+        let d4 = inv * SIMD4(rayD, 0)
         let o = SIMD3(o4.x, o4.y, o4.z), d = simd_normalize(SIMD3(d4.x, d4.y, d4.z))
         guard let id = Body3DAsset.hit(l.meshes, origin: o, dir: d) else { return nil }
         // проверяем, не закрыта ли мышца кожей (кисть, голова)
