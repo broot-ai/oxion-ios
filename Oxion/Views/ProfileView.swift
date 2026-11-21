@@ -76,6 +76,7 @@ struct ProfileView: View {
                     nav("Цели", "target", Color(hex: 0xFF5A4E)) { GoalsView() }
                     nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
                     nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
+                    nav("Рядом", "dot.radiowaves.left.and.right", Color(hex: 0xB2EE37)) { NearbyPeopleView() }
                 }
                 Section("Тренер и здоровье") {
                     nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }

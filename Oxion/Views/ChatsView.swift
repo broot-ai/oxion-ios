@@ -779,6 +779,7 @@ struct ChatView: View {
                 let have = Set(messages.map(\.id))
                 let fresh = r.messages.filter { !have.contains($0.id) }
                 withAnimation(.spring(duration: 0.4, bounce: 0.25)) { messages += fresh }
+                if fresh.contains(where: { !$0.mine }) { OxSound.play(.received) }
                 ChatAutoSave.handle(fresh, trainerChat: r.peer.trainer == true)
             }
             loaded = true
@@ -905,6 +906,7 @@ struct ChatView: View {
                 if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
             }
             if UserDefaults.standard.object(forKey: "anim_send_haptic") as? Bool ?? true { Haptic.tap() }
+            OxSound.play(.sent)
             ChatWallpaper.shared.bump()
         } catch {
             errorText = error.localizedDescription

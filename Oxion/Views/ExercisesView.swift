@@ -24,6 +24,22 @@ struct ExercisesView: View {
     var body: some View {
             List {
                 Section {
+                    NavigationLink {
+                        WorkoutDBCatalogView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.rectangle.on.rectangle.fill")
+                                .font(.title3).foregroundStyle(Color.onLime)
+                                .frame(width: 42, height: 42)
+                                .background(Color.lime, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Каталог с видео").font(.headline)
+                                Text("Тысячи упражнений · WorkoutDB").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(muscleKeys, id: \.self) { key in
@@ -129,7 +145,13 @@ struct ExerciseDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if e.image != nil {
+                if let v = API.media(e.video) {
+                    LoopingVideo(url: v)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 260)
+                        .background(Color.oxCard)
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                } else if e.image != nil {
                     RemoteImage(url: API.media(e.image), icon: "dumbbell")
                         .frame(maxWidth: .infinity)
                         .frame(height: 260)
@@ -151,6 +173,9 @@ struct ExerciseDetailView: View {
                         .font(.headline)
                     Text(tech)
                         .foregroundStyle(.secondary)
+                    if let c = e.imageCredit, !c.isEmpty {
+                        Text("Источник: \(c)").font(.caption).foregroundStyle(.tertiary)
+                    }
                 } else {
                     Text("Описание техники пока не добавлено.")
                         .foregroundStyle(.secondary)

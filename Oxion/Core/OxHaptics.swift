@@ -22,6 +22,12 @@ enum OxHaptics {
     }
 
     static func play(_ kind: Kind) {
+        switch kind {
+        case .setDone: OxSound.play(.setDone)
+        case .restOver: OxSound.play(.restOver)
+        case .workoutDone: OxSound.play(.workoutDone)
+        default: break
+        }
         let k = level
         guard k > 0 else { return }
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {

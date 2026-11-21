@@ -14,6 +14,10 @@ final class ProStore {
     var loaded = false
     var busy = false
     var activeUntil: Date?
+    /// PRO получен от организатора «Семейного доступа», а не куплен самим пользователем
+    var familyShared = false
+    /// Подписку можно разделить с семьёй (включается в App Store Connect у продукта)
+    var familyShareable: Bool { product?.isFamilyShareable ?? false }
     private var listener: Task<Void, Never>?
 
     private struct IapReply: Decodable { let ok: Bool?; let expiresAt: Double?; let paidUntil: Double? }
@@ -33,7 +37,10 @@ final class ProStore {
         product = try? await Product.products(for: [Self.productId]).first
         loaded = true
         for await r in StoreKit.Transaction.currentEntitlements {
-            if case .verified(let t) = r, t.productID == Self.productId { activeUntil = t.expirationDate }
+            if case .verified(let t) = r, t.productID == Self.productId, t.revocationDate == nil {
+                activeUntil = t.expirationDate
+                familyShared = t.ownershipType == .familyShared
+            }
         }
     }
 
@@ -82,8 +89,10 @@ final class ProStore {
     private func handle(_ r: VerificationResult<StoreKit.Transaction>) async -> Bool {
         guard case .verified(let t) = r else { return false }
         do {
-            let reply: IapReply = try await API.call("/iap/apple", method: "POST", body: ["jws": r.jwsRepresentation])
+            let reply: IapReply = try await API.call("/iap/apple", method: "POST",
+                                                     body: ["jws": r.jwsRepresentation, "family": t.ownershipType == .familyShared])
             activeUntil = t.expirationDate
+            familyShared = t.ownershipType == .familyShared
             await t.finish()
             return reply.ok == true
         } catch {
@@ -115,6 +124,13 @@ struct ProPurchaseBlock: View {
             .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.7)
             .disabled(store.busy)
 
+            if store.familyShared {
+                Label("PRO доступен через «Семейный доступ»", systemImage: "person.3.fill")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(Color.limeInk)
+            } else if store.familyShareable {
+                Label("Можно разделить с семьёй — до 5 человек в «Семейном доступе»", systemImage: "person.3")
+                    .font(.caption).foregroundStyle(Color.oxHint)
+            }
             HStack {
                 if let until = store.activeUntil {
                     Text("Подписка до \(until.formatted(date: .abbreviated, time: .omitted))")

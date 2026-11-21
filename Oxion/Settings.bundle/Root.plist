@@ -26,6 +26,12 @@
 		</dict>
 		<dict>
 			<key>Type</key><string>PSToggleSwitchSpecifier</string>
+			<key>Title</key><string>Звуки</string>
+			<key>Key</key><string>sounds</string>
+			<key>DefaultValue</key><true/>
+		</dict>
+		<dict>
+			<key>Type</key><string>PSToggleSwitchSpecifier</string>
 			<key>Title</key><string>Встряхнуть — визитка с QR</string>
 			<key>Key</key><string>shake_card</string>
 			<key>DefaultValue</key><true/>

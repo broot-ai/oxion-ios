@@ -12,6 +12,7 @@ enum AppSettings {
             "start_feed": "foryou",
             "shake_card": true,
             "haptic_level": "normal",
+            "sounds": true,
             "server_url": defaultServer
         ])
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"

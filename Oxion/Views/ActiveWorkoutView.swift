@@ -352,6 +352,12 @@ struct ActiveWorkoutView: View {
             Text("Все подходы сохранены в дневник Oxion")
                 .font(.subheadline).foregroundStyle(Color.oxHint)
             Spacer()
+            ShareWorkoutButton(card: WorkoutResultCard(
+                title: s.title, date: Date(), duration: clock(s.elapsed()), sets: s.setsDoneAll, volume: Int(volume),
+                lines: s.items.filter { $0.doneSets > 0 }.map { it in
+                    let w = (it.weight ?? 0) > 0 ? " × \(Int(it.weight ?? 0)) кг" : ""
+                    return (it.name, "\(min(it.doneSets, it.sets)) × \(it.reps)" + w)
+                }))
             big("Готово", "checkmark") {
                 Task { await WorkoutSync.flush() }
                 engine.clear()

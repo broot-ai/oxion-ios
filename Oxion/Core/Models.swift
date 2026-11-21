@@ -239,6 +239,8 @@ struct Exercise: Decodable, Identifiable, Hashable {
     let technique: String?
     let image: String?
     let own: Bool?
+    var video: String? = nil
+    var imageCredit: String? = nil
 }
 
 struct ExercisesResponse: Decodable { let items: [Exercise] }
