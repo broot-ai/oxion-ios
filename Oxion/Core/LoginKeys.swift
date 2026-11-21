@@ -264,7 +264,7 @@ struct LoginKeysView: View {
                 }
                 .padding(.vertical, 6)
             }
-            Section("Добавить") {
+            Section {
                 Button { Task { await addDevice() } } label: {
                     Label(DeviceLoginKey.exists ? "Пересоздать ключ \(Biometry.name) на этом устройстве" : "Вход по \(Biometry.name) на этом устройстве",
                           systemImage: Biometry.icon)
@@ -274,6 +274,8 @@ struct LoginKeysView: View {
                     Label("Passkey в «Связке ключей iCloud»", systemImage: "person.badge.key.fill")
                 }
                 .disabled(busy)
+            } header: {
+                Text("Добавить")
             } footer: {
                 Text(Biometry.available ? "Passkey синхронизируется на все ваши устройства Apple. Для него нужна подписка Apple Developer у владельца приложения." : "Настройте Face ID или Touch ID в «Настройках» iPhone.")
             }
