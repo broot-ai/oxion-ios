@@ -53,7 +53,7 @@ final class GameHub {
         }
     }
 
-    func openDashboard(_ state: GKAccessPoint.TriggerState = .dashboard) {
+    func openDashboard(_ state: GKGameCenterViewControllerState = .dashboard) {
         GKAccessPoint.shared.trigger(state: state) {}
     }
 

@@ -22,7 +22,7 @@ final class ProStore {
     func start() {
         guard listener == nil else { return }
         listener = Task {
-            for await update in Transaction.updates {
+            for await update in StoreKit.Transaction.updates {
                 await self.handle(update)
             }
         }
@@ -32,7 +32,7 @@ final class ProStore {
         start()
         product = try? await Product.products(for: [Self.productId]).first
         loaded = true
-        for await r in Transaction.currentEntitlements {
+        for await r in StoreKit.Transaction.currentEntitlements {
             if case .verified(let t) = r, t.productID == Self.productId { activeUntil = t.expirationDate }
         }
     }
@@ -70,7 +70,7 @@ final class ProStore {
         defer { busy = false }
         do { try await AppStore.sync() } catch { OxAlert.error(error.localizedDescription); return }
         var found = false
-        for await r in Transaction.currentEntitlements where r.unsafePayloadValue.productID == Self.productId {
+        for await r in StoreKit.Transaction.currentEntitlements where r.unsafePayloadValue.productID == Self.productId {
             found = await handle(r) || found
         }
         OxAlert.show(icon: found ? "checkmark.seal.fill" : "info.circle.fill",
@@ -79,7 +79,7 @@ final class ProStore {
 
     /// Отправить транзакцию на сервер и завершить её
     @discardableResult
-    private func handle(_ r: VerificationResult<Transaction>) async -> Bool {
+    private func handle(_ r: VerificationResult<StoreKit.Transaction>) async -> Bool {
         guard case .verified(let t) = r else { return false }
         do {
             let reply: IapReply = try await API.call("/iap/apple", method: "POST", body: ["jws": r.jwsRepresentation])
