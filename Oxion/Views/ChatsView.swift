@@ -879,7 +879,7 @@ struct ChatView: View {
 struct Bubble: View {
     let m: Message
     var read: Bool
-    private var style = BubbleStyle()
+    var style = BubbleStyle()
 
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true }
 
