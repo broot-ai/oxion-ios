@@ -45,7 +45,7 @@ struct StartWorkoutSheet: View {
                         }
                     } header: {
                         HStack(spacing: 10) {
-                            MuscleThumb(key: it.muscle, size: 30)
+                            MuscleThumb(key: it.muscle, size: 30, name: it.name)
                             Text(it.name)
                         }
                     }
@@ -225,7 +225,7 @@ struct ActiveWorkoutView: View {
                     }
                     .frame(width: 200, height: 200)
                 } else {
-                    MuscleFigure(key: it?.muscle, height: 150)
+                    MuscleFigure(key: it?.muscle, height: 150, name: it?.name)
                 }
                 Text(it?.name ?? "").font(.title2.bold()).multilineTextAlignment(.center)
                 if let it {

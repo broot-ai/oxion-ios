@@ -49,6 +49,15 @@ struct QRView: View {
 // MARK: - Картинки групп мышц (из PWA: m-chest, m-back …)
 
 enum MuscleArt {
+    /// бег, пробежка, спринт — бегущий человек вместо общей кардио-картинки
+    static func image(_ key: String?, name: String?) -> String? {
+        let n = (name ?? "").lowercased()
+        if ["бег", "пробеж", "спринт", "run", "jog", "sprint"].contains(where: { n.contains($0) }) && !n.contains("на месте") {
+            return "runner"
+        }
+        return image(key)
+    }
+
     /// имя картинки в ассетах для ключа группы мышц
     static func image(_ key: String?) -> String? {
         switch key {
@@ -59,7 +68,7 @@ enum MuscleArt {
         case "abs": return "m-abs"
         case "legs", "glutes": return "m-legs"
         case "cardio": return "cardio-man"
-        case "run", "walk": return "runner"
+        case "run": return "runner"
         default: return nil
         }
     }
@@ -98,9 +107,10 @@ enum MuscleArt {
 struct MuscleFigure: View {
     let key: String?
     var height: CGFloat = 120
+    var name: String? = nil
 
     var body: some View {
-        if let name = MuscleArt.image(key) {
+        if let name = MuscleArt.image(key, name: self.name) {
             Image(name)
                 .resizable()
                 .scaledToFit()
@@ -117,12 +127,13 @@ struct MuscleFigure: View {
 struct MuscleThumb: View {
     let key: String?
     var size: CGFloat = 52
+    var name: String? = nil
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
                 .fill(LinearGradient(colors: [Color.lime.opacity(0.22), Color.oxCard2], startPoint: .bottom, endPoint: .top))
-            if let name = MuscleArt.image(key) {
+            if let name = MuscleArt.image(key, name: self.name) {
                 Image(name)
                     .resizable()
                     .scaledToFill()

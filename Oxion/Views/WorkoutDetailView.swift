@@ -334,7 +334,7 @@ struct ExercisePickerSheet: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 12) {
-                            MuscleThumb(key: e.muscle, size: 44)
+                            MuscleThumb(key: e.muscle, size: 44, name: e.name)
                             VStack(alignment: .leading) {
                                 Text(e.name).foregroundStyle(.primary)
                                 Text(model.muscleName(e.muscle))

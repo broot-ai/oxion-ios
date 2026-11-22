@@ -86,7 +86,7 @@ struct ExercisesView: View {
                                         .frame(width: 52, height: 52)
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 } else {
-                                    MuscleThumb(key: e.muscle, size: 52)
+                                    MuscleThumb(key: e.muscle, size: 52, name: e.name)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(e.name)
@@ -157,7 +157,7 @@ struct ExerciseDetailView: View {
                         .frame(height: 260)
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 } else {
-                    MuscleFigure(key: e.muscle, height: 240)
+                    MuscleFigure(key: e.muscle, height: 240, name: e.name)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))

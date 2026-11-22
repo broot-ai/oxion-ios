@@ -224,7 +224,7 @@ struct WorkoutRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            MuscleThumb(key: w.groups?.first, size: 52)
+            MuscleThumb(key: w.groups?.first, size: 52, name: w.title)
             VStack(alignment: .leading, spacing: 3) {
                 Text((w.title?.isEmpty == false ? w.title : nil) ?? "Тренировка")
                     .font(.headline)
