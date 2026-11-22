@@ -334,7 +334,6 @@ struct AICoachView: View {
     @State private var left: Int?
     @State private var local = OnDeviceCoach.shared
     @State private var typingId: Int?
-    @State private var typed = 0
     @AppStorage("ox.ai.last") private var lastPreview = ""
     /// Готовый запрос, который отправится сразу при открытии (например, из выбора мышц на фигуре)
     var initial: String? = nil
@@ -344,9 +343,9 @@ struct AICoachView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
                     VStack(spacing: 10) {
-                        AIAvatar(size: 92, active: sending)
+                        AIAvatar(size: 92, active: sending || typingId != nil)
                             .padding(.bottom, 6)
                         Text("OXION AI").font(.title2.bold())
                         Text("Твой тренер и помощник по приложению: составит тренировку, разберёт статистику, подберёт тренера и откроет нужный раздел")
@@ -367,6 +366,7 @@ struct AICoachView: View {
                                 Button { text = h; Task { await send() } } label: { Chip(text: h) }.buttonStyle(.plain)
                             }
                         }
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
                     }
                     ForEach(Array(items.enumerated()), id: \.element.id) { i, m in
                         let next = i + 1 < items.count ? items[i + 1].role : (sending && m.role == "user" ? "assistant" : nil)
@@ -374,6 +374,7 @@ struct AICoachView: View {
                         messageRow(m, last: last)
                             .id(m.id)
                             .padding(.bottom, last ? 6 : 0)
+                            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity))
                     }
                     if sending {
                         HStack(alignment: .bottom, spacing: 8) {
@@ -382,14 +383,19 @@ struct AICoachView: View {
                             Spacer()
                         }
                         .id("thinking")
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .bottomLeading)))
                     }
+                    Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
             }
-            .onChange(of: items.count) { if let id = items.last?.id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
-            .onChange(of: sending) { if sending { withAnimation { proxy.scrollTo("thinking", anchor: .bottom) } } }
-            .onChange(of: typed) { if let id = typingId, typed % 40 < 4 { proxy.scrollTo(id, anchor: .bottom) } }
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: sending)
+            .scrollDismissesKeyboard(.interactively)
+            // чат «прилипает» к низу, пока растёт ответ: без ручных прокруток и рывков
+            .defaultScrollAnchor(.top, for: .alignment)
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            .onChange(of: items.count) { withAnimation(.smooth(duration: 0.35)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: sending) { if sending { withAnimation(.smooth(duration: 0.35)) { proxy.scrollTo("bottom", anchor: .bottom) } } }
         }
         .background(Color.oxBg)
         .navigationTitle("OXION AI")
@@ -453,17 +459,6 @@ struct AICoachView: View {
         }
     }
 
-    /// Живая печать: текст появляется кусочками примерно за 1–3 секунды
-    private func typeOut(_ total: Int) async {
-        let step = max(2, total / 110)
-        while typed < total {
-            typed = min(total, typed + step)
-            if typed % 60 < step { Haptic.tap(.soft) }
-            try? await Task.sleep(for: .milliseconds(16))
-        }
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { typingId = nil }
-    }
-
     @ViewBuilder
     private func messageRow(_ m: AIMessage, last: Bool) -> some View {
         if m.role == "user" {
@@ -479,10 +474,13 @@ struct AICoachView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 if last { AIAvatar(size: 34, active: typing) } else { Color.clear.frame(width: 34, height: 1) }
                 VStack(alignment: .leading, spacing: 10) {
-                    AIRichText(text: typing ? String(m.content.prefix(typed)) : m.content)
+                    AITypingText(text: m.content, animate: typing) {
+                        withAnimation(.smooth(duration: 0.45)) { typingId = nil }
+                        Haptic.success()
+                    }
                     if !typing {
-                        if let plan = m.plan { AIPlanCard(plan: plan).transition(.move(edge: .bottom).combined(with: .opacity)) }
-                        if let b = m.buttons, !b.isEmpty { AIActionButtons(buttons: b).transition(.opacity) }
+                        if let plan = m.plan { AIPlanCard(plan: plan).transition(.opacity.combined(with: .offset(y: 10))) }
+                        if let b = m.buttons, !b.isEmpty { AIActionButtons(buttons: b).transition(.opacity.combined(with: .offset(y: 6))) }
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
@@ -497,13 +495,18 @@ struct AICoachView: View {
         guard !t.isEmpty else { return }
         if !enabled && !local.useLocal { OxAlert.soon("ИИ-тренер"); return }
         text = ""
-        items.append(AIMessage(id: -Int(Date().timeIntervalSince1970), role: "user", content: t, plan: nil, createdAt: nil))
-        sending = true
-        defer { sending = false }
+        withAnimation(.smooth(duration: 0.35)) {
+            items.append(AIMessage(id: -Int(Date().timeIntervalSince1970), role: "user", content: t, plan: nil, createdAt: nil))
+            sending = true
+        }
+        defer { if sending { withAnimation(.smooth(duration: 0.3)) { sending = false } } }
         if local.useLocal {
             // ответ на iPhone: показываем текст по мере генерации
             let id = -Int(Date().timeIntervalSince1970 * 10)
-            items.append(AIMessage(id: id, role: "assistant", content: "…", plan: nil, createdAt: nil))
+            withAnimation(.smooth(duration: 0.35)) {
+                sending = false
+                items.append(AIMessage(id: id, role: "assistant", content: "…", plan: nil, createdAt: nil))
+            }
             do {
                 _ = try await local.ask(t) { part in
                     if let i = items.firstIndex(where: { $0.id == id }) {
@@ -519,14 +522,14 @@ struct AICoachView: View {
         }
         do {
             let r: AIReply = try await API.call("/ai/chat", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
-            sending = false
-            typingId = r.id
-            typed = 0
-            items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt, buttons: r.buttons))
             left = r.left
             lastPreview = String(r.content.prefix(120))
-            await typeOut(r.content.count)
-            Haptic.success()
+            // «думает» плавно сменяется ответом, который печатается по словам
+            withAnimation(.smooth(duration: 0.4)) {
+                sending = false
+                typingId = r.id
+                items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt, buttons: r.buttons))
+            }
         } catch { OxAlert.error(error.localizedDescription) }
     }
 }

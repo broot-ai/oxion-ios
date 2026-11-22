@@ -111,12 +111,7 @@ struct ProfileView: View {
                 }
                 Section("Тренер и здоровье") {
                     nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }
-                    NavigationLink { AICoachView() } label: {
-                        HStack(spacing: 14) {
-                            AIAvatar(size: 30)
-                            Text("ИИ-тренер")
-                        }
-                    }
+                    nav("ИИ-тренер", "sparkles", Color.lime) { AICoachView() }
                     nav("Здоровье", "heart.text.square.fill", Color(hex: 0xFF3B5C)) { HealthView() }
                 }
                 Section("Инструменты") {

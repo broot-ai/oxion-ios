@@ -43,20 +43,64 @@ struct AIDots: View {
     }
 }
 
-/// Круглая аватарка ИИ, как в Telegram
+/// Круглая аватарка ИИ, как в Telegram: звёзды ИИ на зелёном градиенте.
+/// `active` — ИИ думает/печатает: звёзды мягко пульсируют.
 struct AIAvatar: View {
     var size: CGFloat = 40
     var active = false
     var body: some View {
         ZStack {
-            Circle().fill(LinearGradient(colors: [Color(hex: 0x24301A), Color(hex: 0x0D120B)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Circle().strokeBorder(Color.lime.opacity(active ? 0.55 : 0.22), lineWidth: max(1, size * 0.025))
-            AIDots(size: size * 0.78, active: active)
+            Circle().fill(LinearGradient(colors: [Color(hex: 0xC6F94A), Color(hex: 0x58F670), Color(hex: 0x22B8A6)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+            Image(systemName: "sparkles")
+                .font(.system(size: size * 0.46, weight: .semibold))
+                .foregroundStyle(Color(hex: 0x0B1407))
+                .symbolEffect(.breathe.pulse.byLayer, options: .repeating, isActive: active)
         }
         .frame(width: size, height: size)
-        .shadow(color: Color.lime.opacity(active ? 0.45 : 0), radius: size * 0.25)
-        .animation(.easeInOut(duration: 0.3), value: active)
+        .shadow(color: Color.lime.opacity(active ? 0.45 : 0), radius: size * 0.22)
+        .animation(.easeInOut(duration: 0.35), value: active)
         .accessibilityLabel("OXION AI")
+    }
+}
+
+/// Живая печать без рывков: состояние печати живёт только внутри этого вида,
+/// поэтому весь чат не перерисовывается на каждую букву. Текст раскрывается по словам.
+struct AITypingText: View {
+    let text: String
+    var animate: Bool
+    var onDone: () -> Void = {}
+    @State private var shown = 0
+
+    var body: some View {
+        AIRichText(text: animate ? String(text.prefix(shown)) : text)
+            .task(id: animate) {
+                guard animate else { return }
+                // границы слов
+                var stops: [Int] = []
+                var i = 0
+                var prevSpace = false
+                for ch in text {
+                    let sp = ch == " " || ch == "\n"
+                    if sp && !prevSpace { stops.append(i) }
+                    prevSpace = sp
+                    i += 1
+                }
+                stops.append(text.count)
+                // ~30 мс на слово, но не дольше ~7 секунд на весь ответ
+                let per = max(1, Int((Double(stops.count) / 230).rounded(.up)))
+                var k = 0
+                var lastHaptic = Date()
+                while k < stops.count {
+                    k = min(stops.count, k + per)
+                    shown = stops[k - 1]
+                    if Date().timeIntervalSince(lastHaptic) > 0.35 { Haptic.tap(.soft); lastHaptic = Date() }
+                    try? await Task.sleep(for: .milliseconds(30))
+                    if Task.isCancelled { return }
+                }
+                shown = text.count
+                onDone()
+            }
     }
 }
 
