@@ -146,6 +146,7 @@ final class AppModel {
     var sheet: AppSheet?
     var showVision = false
     var showMuscles = false
+    var showCatalog = false
     var offerLoginKey = false
     var exerciseBox: IdBox?
 
@@ -193,6 +194,7 @@ final class AppModel {
         case "permissions": sheet = .permissions
         case "vision": showVision = true
         case "muscles", "body": showMuscles = true
+        case "exercises", "catalog": showCatalog = true
         case "run": sheet = .run
         case "devices": sheet = .devices
         case "book":
@@ -470,6 +472,12 @@ struct MainTabView: View {
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
         .fullScreenCover(isPresented: $model.showMuscles) { Body3DScreen() }
+        .sheet(isPresented: $model.showCatalog) {
+            NavigationStack {
+                WorkoutDBCatalogView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.showCatalog = false } } }
+            }
+        }
         .sheet(isPresented: $model.offerLoginKey) { LoginKeyOfferSheet() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }

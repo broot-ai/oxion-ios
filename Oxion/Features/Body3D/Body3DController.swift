@@ -151,7 +151,6 @@ final class Body3DController: NSObject, UIGestureRecognizerDelegate, ARSessionDe
             MainActor.assumeIsolated { self?.tick(Float(e.deltaTime)) }
         }
         Task { await load() }
-        startTilt()
         return v
     }
 

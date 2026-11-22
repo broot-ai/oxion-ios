@@ -282,5 +282,10 @@ struct OxionWidgetBundle: WidgetBundle {
         HeartControl()
         DevicesControl()
         Rest90Control()
+        RunLiveActivity()
+        RingsWidget()
+        TodayWidget()
+        StreakWidget()
+        QuickActionsWidget()
     }
 }

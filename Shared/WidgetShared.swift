@@ -38,6 +38,8 @@ struct WidgetSnapshot: Codable {
     var achievementsTotal: Int = 0
     var lastWorkout: String?
     var isDemo: Bool = false
+    /// группы мышц сегодняшней тренировки — для фигуры в виджете
+    var todayGroups: [String]? = nil
 
     static let quotes: [(String, String?)] = [
         ("Дисциплина — это мост между целями и результатом.", "Джим Рон"),

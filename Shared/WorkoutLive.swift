@@ -27,6 +27,12 @@ struct OxionWorkoutAttributes: ActivityAttributes {
         var pausedRestLeft: Int?
         /// пульс с датчика по Bluetooth (если подключён)
         var heartRate: Int? = nil
+        /// группа мышц текущего упражнения (chest, back, …) — для картинки в Dynamic Island
+        var muscle: String? = nil
+        /// длительность отдыха в секундах — для кольца обратного отсчёта
+        var restTotal: Int? = nil
+        /// номер упражнения (с 1)
+        var exerciseIndex: Int? = nil
 
         var progress: Double { setsTotalAll > 0 ? Double(setsDoneAll) / Double(setsTotalAll) : 0 }
         var setsLeft: Int { max(0, setsTotal - setIndex + 1) }
@@ -119,6 +125,9 @@ struct WorkoutState: Codable {
                      timerStart: startedAt.addingTimeInterval(pausedTotal),
                      restEnd: phase == .resting ? restEndsAt : nil,
                      pausedElapsed: phase == .paused ? Int(elapsed()) : nil,
-                     pausedRestLeft: phase == .paused && pausedFrom == .resting ? Int(restLeftOnPause ?? 0) : nil)
+                     pausedRestLeft: phase == .paused && pausedFrom == .resting ? Int(restLeftOnPause ?? 0) : nil,
+                     muscle: it?.muscle,
+                     restTotal: it?.restSec,
+                     exerciseIndex: current + 1)
     }
 }

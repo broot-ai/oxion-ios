@@ -93,6 +93,7 @@ enum WidgetSync {
         }
         if let w: WorkoutsResponse = try? await API.call("/workouts", query: ["from": today, "to": today]), let first = w.items.first {
             s.todayTitle = first.title ?? "Тренировка"
+            s.todayGroups = first.groups
             s.todayTime = first.time
             s.reminder = "Сегодня: \(s.todayTitle ?? "тренировка")" + (first.time.map { " в \($0)" } ?? "")
         } else if s.weekDone >= s.weekGoal {

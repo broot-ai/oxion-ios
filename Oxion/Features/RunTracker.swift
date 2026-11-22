@@ -39,6 +39,23 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         manager.activityType = .fitness
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 5
+        // кнопка паузы в Dynamic Island
+        NotificationCenter.default.addObserver(forName: .oxRunTogglePause, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.running else { return }
+                self.togglePause()
+            }
+        }
+    }
+
+    /// Обновить Live Activity: время, дистанция, темп, пульс, маршрут
+    func pushIsland(force: Bool = false) {
+        guard running, let s = startedAt else { return }
+        let hub = BLEHub.shared
+        let hr: Int? = (hub.heartAt.map { Date().timeIntervalSince($0) < 15 } ?? false) && hub.heartRate > 0 ? hub.heartRate : nil
+        RunIsland.update(kind: kind.rawValue, paused: paused, timerStart: s.addingTimeInterval(pausedTotal),
+                         elapsed: Int(elapsed(Date())), distance: distance, heartRate: hr, calories: calories,
+                         coords: coords, force: force)
     }
 
     func elapsed(_ now: Date) -> TimeInterval {
@@ -93,6 +110,7 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         manager.pausesLocationUpdatesAutomatically = false
         manager.startUpdatingLocation()
         OxHaptics.play(.setDone)
+        RunIsland.start(kind: kind.rawValue, title: kind.title)
     }
 
     func togglePause() {
@@ -107,13 +125,16 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
             manager.startUpdatingLocation()
         }
         OxHaptics.play(.select)
+        pushIsland(force: true)
     }
 
     func stop() {
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
+        pushIsland(force: true)
         running = false
         if paused { pausedTotal += Date().timeIntervalSince(pausedAt ?? Date()); paused = false }
+        RunIsland.end()
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -126,6 +147,7 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
                 self.last = l
                 self.coords.append(l.coordinate)
             }
+            self.pushIsland()
         }
     }
 
