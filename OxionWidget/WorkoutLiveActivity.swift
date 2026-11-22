@@ -19,20 +19,20 @@ struct WorkoutLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 6) {
                         MuscleFigure(muscle: st.muscle, phase: st.phase)
-                            .frame(width: 46, height: 78)
+                            .frame(width: 38, height: 62)
                     }
                     .padding(.leading, 6)
                     .padding(.top, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    PhaseRing(st: st, stale: context.isStale, size: 78, line: 7, big: 24)
+                    PhaseRing(st: st, stale: context.isStale, size: 62, line: 6, big: 19)
                         .padding(.trailing, 6)
                         .padding(.top, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(st.phase == "finished" ? "Готово!" : st.exercise)
-                            .font(.system(size: 17, weight: .bold)).lineLimit(2).minimumScaleFactor(0.8)
+                            .font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.75)
                         Text(subtitle(st, stale: context.isStale))
                             .font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
                         SetDots(done: st.setIndex - 1, total: st.setsTotal, current: st.setIndex)
@@ -41,19 +41,10 @@ struct WorkoutLiveActivity: Widget {
                     .padding(.top, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 6) {
-                        if let n = st.nextExercise, st.phase != "finished" {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.turn.down.right").font(.caption2)
-                                Text("Далее: \(n)").lineLimit(1)
-                                Spacer()
-                                if let hr = st.heartRate { HeartBadge(hr: hr) }
-                            }
-                            .font(.caption2).foregroundStyle(.secondary)
-                        }
-                        Controls(st: st, stale: context.isStale, compact: true)
-                    }
-                    .padding(.horizontal, 6)
+                    // только кнопки: высота развёрнутого острова ограничена, лишнее система обрезает
+                    Controls(st: st, stale: context.isStale, compact: true)
+                        .padding(.horizontal, 6)
+                        .padding(.top, 2)
                 }
             } compactLeading: {
                 ZStack {
@@ -309,7 +300,7 @@ struct Controls: View {
                 if !title.isEmpty { Text(title).lineLimit(1) }
             }
             .font(.system(size: 13, weight: .semibold))
-            .frame(maxWidth: title.isEmpty ? 42 : .infinity, minHeight: 32)
+            .frame(maxWidth: title.isEmpty ? 40 : .infinity, minHeight: compact ? 28 : 32)
             .foregroundStyle(primary ? Color.black : Color.white)
             .background(primary ? Color.oxLime : Color.white.opacity(0.15), in: Capsule())
         }

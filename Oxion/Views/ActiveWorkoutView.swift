@@ -422,3 +422,92 @@ struct ActiveWorkoutBar: View {
         }
     }
 }
+
+// MARK: - Идущая тренировка как системная полоса над таббаром (как мини-плеер в «Музыке»)
+
+struct WorkoutAccessory: ViewModifier {
+    @State private var engine = WorkoutEngine.shared
+    var open: () -> Void
+
+    private var active: Bool { (engine.state?.phase ?? .notStarted) != .notStarted }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: active) {
+                WorkoutAccessoryContent(open: open)
+            }
+        } else {
+            content.overlay(alignment: .bottom) {
+                ActiveWorkoutBar(onOpen: open).padding(.bottom, 92)
+            }
+        }
+    }
+}
+
+struct WorkoutAccessoryContent: View {
+    @State private var engine = WorkoutEngine.shared
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    var open: () -> Void
+
+    var body: some View {
+        if let s = engine.state, s.phase != .notStarted {
+            HStack(spacing: 10) {
+                Button(action: open) {
+                    HStack(spacing: 10) {
+                        Image(systemName: s.phase == .resting ? "hourglass" : s.phase == .paused ? "pause.fill" : "dumbbell.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.lime)
+                            .frame(width: 28, height: 28)
+                            .background(Color.lime.opacity(0.18), in: Circle())
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(s.phase == .finished ? "Тренировка завершена" : (s.currentItem?.name ?? s.title))
+                                .font(.subheadline.weight(.semibold)).lineLimit(1)
+                            if placement != .inline {
+                                Text(statusText(s)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 4)
+                        timer(s)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if placement != .inline, s.phase == .exercising {
+                    Button { engine.completeSet() } label: {
+                        Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color.onLime)
+                            .frame(width: 32, height: 32)
+                            .background(Color.lime, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Подход сделан")
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    @ViewBuilder private func timer(_ s: WorkoutState) -> some View {
+        if s.phase == .resting, let end = s.restEndsAt, end > Date() {
+            Text(timerInterval: Date()...end, countsDown: true)
+                .font(.subheadline.weight(.bold).monospacedDigit()).foregroundStyle(Color.lime)
+                .frame(width: 52, alignment: .trailing)
+        } else if s.phase == .exercising {
+            Text(timerInterval: s.startedAt.addingTimeInterval(s.pausedTotal)...Date.distantFuture, countsDown: false)
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .frame(width: 60, alignment: .trailing)
+        }
+    }
+
+    private func statusText(_ s: WorkoutState) -> String {
+        switch s.phase {
+        case .resting: return s.restOver() ? "Отдых окончен — следующий подход" : "Отдых"
+        case .paused: return "Пауза"
+        case .finished: return "Нажмите, чтобы посмотреть итоги"
+        default:
+            let it = s.currentItem
+            return "Подход \(min((it?.doneSets ?? 0) + 1, it?.sets ?? 1)) из \(it?.sets ?? 0)"
+        }
+    }
+}

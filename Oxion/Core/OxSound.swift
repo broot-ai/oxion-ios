@@ -1,30 +1,43 @@
 import AudioToolbox
 import Foundation
 
-/// Системные звуки iOS для событий OXION.
-/// Звучат только если включён переключатель «Звуки» (Настройки → Oxion) и iPhone не в беззвучном режиме —
-/// системные звуки сами подчиняются переключателю «Звонок / Бесшумно».
+/// Свои короткие звуки OXION (файлы Oxion/Sounds/*.wav): мягкие «колокольчики» под каждое действие.
+/// Играем как системные звуки: они не прерывают музыку и молчат в беззвучном режиме.
+/// Выключаются в Настройки iPhone → Oxion → «Звуки».
 enum OxSound {
-    enum Kind {
-        case tap, sent, received, setDone, restOver, workoutDone, success, error
-        var id: SystemSoundID {
-            switch self {
-            case .tap: 1104          // Tock — короткий щелчок
-            case .sent: 1004         // отправка сообщения
-            case .received: 1003     // входящее сообщение
-            case .setDone: 1057      // Tink — подход сделан
-            case .restOver: 1021     // Bloom — отдых закончился
-            case .workoutDone: 1025  // Fanfare — тренировка завершена
-            case .success: 1394      // короткий «успех»
-            case .error: 1073        // ошибка
-            }
-        }
+    enum Kind: String, CaseIterable {
+        case tap = "ox_tap"                  // лёгкий щелчок
+        case sent = "ox_sent"                // сообщение улетело
+        case received = "ox_received"        // пришло сообщение
+        case setDone = "ox_set_done"         // подход сделан — «дзинь»
+        case restOver = "ox_rest_over"       // отдых закончился — три ноты вверх
+        case workoutDone = "ox_workout_done" // тренировка завершена — короткие фанфары
+        case success = "ox_success"
+        case error = "ox_error"
     }
+
+    private static var ids: [Kind: SystemSoundID] = [:]
+    private static let lock = NSLock()
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: "sounds") && PowerSaver.allowsNow(.interface) }
 
+    private static func id(_ k: Kind) -> SystemSoundID? {
+        lock.lock(); defer { lock.unlock() }
+        if let i = ids[k] { return i }
+        guard let url = Bundle.main.url(forResource: k.rawValue, withExtension: "wav") else { return nil }
+        var sid: SystemSoundID = 0
+        guard AudioServicesCreateSystemSoundID(url as CFURL, &sid) == noErr else { return nil }
+        ids[k] = sid
+        return sid
+    }
+
     static func play(_ k: Kind) {
-        guard enabled else { return }
-        AudioServicesPlaySystemSound(k.id)
+        guard enabled, let sid = id(k) else { return }
+        AudioServicesPlaySystemSound(sid)
+    }
+
+    /// Подготовить звуки заранее, чтобы первый не опаздывал
+    static func preload() {
+        DispatchQueue.global(qos: .utility).async { for k in Kind.allCases { _ = id(k) } }
     }
 }

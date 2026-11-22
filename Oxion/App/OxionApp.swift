@@ -483,10 +483,7 @@ struct MainTabView: View {
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
         .sheet(item: $model.bookTrainer) { b in BookingSheet(trainerId: b.id, trainerName: model.bookTrainerName) }
         .onChange(of: chats.unread) { QuickActions.update(unread: chats.unread) }
-        .overlay(alignment: .bottom) {
-            ActiveWorkoutBar { model.showActiveWorkout = true }
-                .padding(.bottom, 92)
-        }
+        .modifier(WorkoutAccessory { model.showActiveWorkout = true })
         .fullScreenCover(isPresented: $model.showActiveWorkout) { ActiveWorkoutView() }
         .onAppear { WatchLink.shared.activate() }
         .onChange(of: engine.state?.phase) { WatchLink.shared.send(engine.state) }

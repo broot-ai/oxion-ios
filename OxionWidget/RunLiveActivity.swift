@@ -15,28 +15,37 @@ struct RunLiveActivity: Widget {
             let st = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Label(st.kind == "walk" ? "Ходьба" : "Бег", systemImage: st.kind == "walk" ? "figure.walk" : "figure.run")
                             .font(.caption2.weight(.bold)).foregroundStyle(Color.oxLime)
                         RunTimer(st: st)
-                            .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
-                        Text("\(st.km) км").font(.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit())
+                            .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
+                        Text("\(st.km) км").font(.system(size: 14, weight: .semibold, design: .rounded).monospacedDigit())
                     }
                     .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     MiniMap(points: st.points, paused: st.paused)
-                        .frame(width: 92, height: 74)
+                        .frame(width: 88, height: 60)
                         .padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 8) {
-                        HStack {
-                            metric(st.pace, "темп /км", "speedometer", .white)
-                            metric(st.heartRate.map(String.init) ?? "—", "пульс", "heart.fill", Color(red: 1, green: 0.3, blue: 0.38))
-                            metric("\(st.calories)", "ккал", "flame.fill", Color(red: 1, green: 0.62, blue: 0.26))
+                    // одна строка: показатели + круглые кнопки — чтобы ничего не обрезалось
+                    HStack(spacing: 4) {
+                        metric(st.pace, "темп", "speedometer", .white)
+                        metric(st.heartRate.map(String.init) ?? "—", "пульс", "heart.fill", Color(red: 1, green: 0.3, blue: 0.38))
+                        metric("\(st.calories)", "ккал", "flame.fill", Color(red: 1, green: 0.62, blue: 0.26))
+                        Button(intent: RunTogglePauseIntent()) {
+                            Image(systemName: st.paused ? "play.fill" : "pause.fill")
+                                .font(.system(size: 14, weight: .bold)).foregroundStyle(.black)
+                                .frame(width: 36, height: 36).background(Color.oxLime, in: Circle())
                         }
-                        RunButtons(st: st)
+                        .buttonStyle(.plain)
+                        Link(destination: URL(string: "oxion://run")!) {
+                            Image(systemName: "flag.checkered")
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(width: 36, height: 36).background(Color.white.opacity(0.16), in: Circle())
+                        }
                     }
                     .padding(.horizontal, 6)
                 }

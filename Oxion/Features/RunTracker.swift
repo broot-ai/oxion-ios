@@ -215,7 +215,6 @@ struct RunTrackerView: View {
             .mapControls { }
             .ignoresSafeArea(.container, edges: .top)
         }
-        .mapScope(mapScope)
         .safeAreaInset(edge: .bottom) {
                 // панель снизу: значок «Карты» и кнопки карты поднимаются над ней, а не прячутся
                 panel
@@ -243,6 +242,7 @@ struct RunTrackerView: View {
                     .padding(.top, 8)
                 }
             }
+        .mapScope(mapScope)     // кнопки «моё место» и компас работают только внутри общей области карты
         .toolbar(.hidden, for: .tabBar)
         .navigationTitle(t.kind == .run ? "Пробежка" : "Прогулка")
         .navigationBarTitleDisplayMode(.inline)
