@@ -32,6 +32,32 @@ struct BlobShape: Shape {
 
 /// Значок ИИ-тренера: живая капля из жидкого стекла с зелёным свечением внутри.
 /// Всё время слегка «дышит» и меняет форму; когда ИИ думает (`active`) — сжимается, тянется и кривляется сильнее.
+/// Силуэт пламени: капля с качающимся кончиком. t — время, amp — сила колыхания.
+struct GlassFlameShape: Shape {
+    var t: Double
+    var amp: Double
+
+    func path(in r: CGRect) -> Path {
+        let w = r.width, h = r.height
+        func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: r.minX + CGFloat(x) * w, y: r.minY + CGFloat(y) * h) }
+        let sway = sin(t * 1.7) * amp * 1.6 + sin(t * 3.1) * amp * 0.6     // кончик гуляет
+        let breathe = sin(t * 2.3) * amp * 0.5                              // бока «дышат»
+        let tipY = 0.02 + abs(sin(t * 2.9)) * amp * 0.8
+        var path = Path()
+        path.move(to: p(0.5 + sway, tipY))
+        path.addCurve(to: p(0.86 + breathe, 0.58),
+                      control1: p(0.6 + sway * 0.5, 0.2), control2: p(0.92 + breathe, 0.38))
+        path.addCurve(to: p(0.5, 1.0),
+                      control1: p(0.88 + breathe, 0.84), control2: p(0.72, 1.0))
+        path.addCurve(to: p(0.14 - breathe, 0.6),
+                      control1: p(0.28, 1.0), control2: p(0.1 - breathe, 0.82))
+        path.addCurve(to: p(0.5 + sway, tipY),
+                      control1: p(0.16 - breathe, 0.4), control2: p(0.4 + sway * 0.5, 0.22))
+        path.closeSubpath()
+        return path
+    }
+}
+
 struct AIOrb: View {
     var size: CGFloat = 46
     var active = false
@@ -45,44 +71,48 @@ struct AIOrb: View {
     var body: some View {
         let live = PowerSaver.allowsNow(.liveBackgrounds)
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !live)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate * (active ? 2.6 : 1.0)
-            let amp = (active ? 0.075 : 0.035) + jiggle * 0.09
-            let shape = BlobShape(t: t, amp: amp)
-            // сжатие-растяжение (как желе): по ширине больше — по высоте меньше
-            let squash = (active ? 0.09 : 0.035) * sin(t * (active ? 2.4 : 1.2))
+            let t = tl.date.timeIntervalSinceReferenceDate * (active ? 2.4 : 0.9)
+            let amp = (active ? 0.07 : 0.025) + jiggle * 0.08
+            let shape = GlassFlameShape(t: t, amp: amp)
+            // лёгкое «дыхание» пламени: вытягивается вверх и оседает
+            let stretch = (active ? 0.06 : 0.025) * sin(t * (active ? 2.2 : 1.1))
             ZStack {
-                // зелёное свечение внутри, к краю переходит в чистое стекло
+                // спокойное состояние: мягкое зелёное свечение у основания, к краю — чистое стекло
                 shape
-                    .fill(RadialGradient(colors: [Color(hex: 0x9BEA3C).opacity(0.85), Color.lime.opacity(0.35), Color.lime.opacity(0.0)],
-                                         center: UnitPoint(x: 0.42 + 0.08 * cos(t * 0.7), y: 0.62 + 0.06 * sin(t * 0.9)),
-                                         startRadius: 0, endRadius: size * 0.62))
-                    .blur(radius: size * 0.05)
-                // второе пятно — бирюзовый отлив
-                Circle()
-                    .fill(Color(hex: 0x3FD6C9).opacity(0.35))
-                    .frame(width: size * 0.42, height: size * 0.42)
-                    .offset(x: CGFloat(cos(t * 1.1)) * size * 0.16, y: CGFloat(sin(t * 0.8)) * size * 0.14 - size * 0.08)
-                    .blur(radius: size * 0.12)
-                    .mask(shape)
+                    .fill(RadialGradient(colors: [Color(hex: 0x9BEA3C).opacity(0.8), Color.lime.opacity(0.28), Color.lime.opacity(0.0)],
+                                         center: UnitPoint(x: 0.5 + 0.04 * cos(t * 0.8), y: 0.74),
+                                         startRadius: 0, endRadius: size * 0.6))
+                    .blur(radius: size * 0.04)
+                    .opacity(active ? 0.45 : 1)
+                // думает: внутри стекла горит настоящий огонь OXION
+                if active && live {
+                    AnimatedFire(size: size * 1.45, loop: 1.8)
+                        .frame(width: size, height: size)
+                        .offset(y: size * 0.06)
+                        .blendMode(.screen)
+                        .mask(shape)
+                        .transition(.opacity)
+                }
                 // стеклянный край и блик
                 shape
-                    .stroke(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05), Color.lime.opacity(0.5)],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: max(1, size * 0.025))
+                    .stroke(LinearGradient(colors: [.white.opacity(0.8), .white.opacity(0.08), Color.lime.opacity(0.55)],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: max(1, size * 0.024))
                 Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.6), .white.opacity(0)], startPoint: .top, endPoint: .bottom))
-                    .frame(width: size * 0.42, height: size * 0.2)
-                    .offset(x: -size * 0.08, y: -size * 0.24)
-                    .blur(radius: size * 0.015)
+                    .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.16, height: size * 0.3)
+                    .rotationEffect(.degrees(-18))
+                    .offset(x: -size * 0.12, y: -size * 0.02)
+                    .blur(radius: size * 0.012)
             }
-            .frame(width: size, height: size)
-            .glassEffect(.clear.tint(Color.lime.opacity(0.12)), in: shape)
-            .scaleEffect(x: 1 + squash + squish * 0.35, y: 1 - squash - squish * 0.35)
-            .rotationEffect(.degrees(active ? 6 * sin(t * 0.9) : 0))
+            .compositingGroup()
+            .frame(width: size * 0.82, height: size)
+            .glassEffect(.clear.tint(Color.lime.opacity(active ? 0.06 : 0.12)), in: shape)
+            .scaleEffect(x: 1 - stretch * 0.6 - squish * 0.3, y: 1 + stretch + squish * 0.3, anchor: .bottom)
         }
         .frame(width: size, height: size)
         .offset(pull)
         .scaleEffect(poke ? 0.82 : 1)
-        .shadow(color: Color.lime.opacity(active ? 0.5 : 0.25), radius: size * (active ? 0.35 : 0.18))
+        .shadow(color: Color.lime.opacity(active ? 0.6 : 0.25), radius: size * (active ? 0.4 : 0.16))
         .animation(.easeInOut(duration: 0.4), value: active)
         .onChange(of: active) {
             // «подпрыгивает», когда начинает думать
