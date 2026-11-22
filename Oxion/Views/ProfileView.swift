@@ -34,6 +34,7 @@ struct ProfileView: View {
             OxBottomSearchBar(text: $query, focused: $searchFocused, prompt: "Поиск: видео, тренер, Face ID…")
         }
             .navigationTitle("Профиль")
+            .toolbar(.hidden, for: .tabBar)   // в профиле внизу только строка поиска
             .fullScreenCover(isPresented: $avatarStudio) { AvatarStudio() }
             .oxRefreshable { await model.loadMe() }
             .onChange(of: confirmLogout) {
