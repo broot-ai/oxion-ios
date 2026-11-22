@@ -58,6 +58,8 @@ enum MuscleArt {
         case "biceps", "triceps", "arms": return "m-arms"
         case "abs": return "m-abs"
         case "legs", "glutes": return "m-legs"
+        case "cardio": return "cardio-man"
+        case "run", "walk": return "runner"
         default: return nil
         }
     }

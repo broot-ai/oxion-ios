@@ -314,6 +314,22 @@ struct RunTrackerView: View {
         }
         .padding(16)
         .glassEffect(.regular, in: .rect(cornerRadius: 28))
+        .overlay(alignment: .topTrailing) {
+            // герой раздела: бегун (бег) или шаг на месте (ходьба)
+            if !t.running {
+                Image(t.kind == .run ? "runner" : "cardio-man")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 150)
+                    .shadow(color: .black.opacity(0.35), radius: 12, y: 8)
+                    .offset(x: -6, y: -138)
+                    .allowsHitTesting(false)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .id(t.kind)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: t.kind)
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: t.running)
     }
 
     private func stat(_ v: String, _ t: String) -> some View {

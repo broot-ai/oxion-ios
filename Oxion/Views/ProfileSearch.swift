@@ -104,11 +104,7 @@ struct OxSearchRow: View {
     let item: OxSearchItem
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: item.icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.black)
-                .frame(width: 30, height: 30)
-                .background(item.tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            OxRowIcon(icon: item.icon, tint: item.tint)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).foregroundStyle(.primary)
                 Text(item.path).font(.caption).foregroundStyle(.secondary)
@@ -151,5 +147,27 @@ struct OxBottomSearchBar: View {
         .padding(.bottom, 6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: text.isEmpty)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: focused.wrappedValue)
+    }
+}
+
+/// Значок строки в стиле «Настроек»: SF Symbol на цветной плашке или картинка из ассетов (например, бегун)
+struct OxRowIcon: View {
+    let icon: String
+    let tint: Color
+    var body: some View {
+        if UIImage(named: icon) != nil {
+            Image(icon)
+                .resizable()
+                .scaledToFit()
+                .padding(1)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.22), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(width: 30, height: 30)
+                .background(tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 }

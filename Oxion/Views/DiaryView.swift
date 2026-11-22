@@ -69,9 +69,14 @@ struct DiaryView: View {
                             }
                         }
                     } else if stats != nil && !loading {
-                        ContentUnavailableView("Тренировок пока нет",
-                                               systemImage: "figure.run",
-                                               description: Text("Нажмите «+», чтобы записать первую"))
+                        ContentUnavailableView {
+                            VStack(spacing: 8) {
+                                Image("runner").resizable().scaledToFit().frame(height: 120)
+                                Text("Тренировок пока нет")
+                            }
+                        } description: {
+                            Text("Нажмите «+», чтобы записать первую")
+                        }
                     }
 
                     if loading && stats == nil {

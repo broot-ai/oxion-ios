@@ -16,8 +16,11 @@ struct RunLiveActivity: Widget {
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Label(st.kind == "walk" ? "Ходьба" : "Бег", systemImage: st.kind == "walk" ? "figure.walk" : "figure.run")
-                            .font(.caption2.weight(.bold)).foregroundStyle(Color.oxLime)
+                        HStack(spacing: 4) {
+                            Image(st.kind == "walk" ? "cardio-man" : "runner").resizable().scaledToFit().frame(height: 16)
+                            Text(st.kind == "walk" ? "Ходьба" : "Бег")
+                        }
+                        .font(.caption2.weight(.bold)).foregroundStyle(Color.oxLime)
                         RunTimer(st: st)
                             .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
                         Text("\(st.km) км").font(.system(size: 14, weight: .semibold, design: .rounded).monospacedDigit())
@@ -50,9 +53,9 @@ struct RunLiveActivity: Widget {
                     .padding(.horizontal, 6)
                 }
             } compactLeading: {
-                Image(systemName: st.kind == "walk" ? "figure.walk" : "figure.run")
-                    .font(.system(size: 13, weight: .bold)).foregroundStyle(Color.oxLime)
-                    .padding(.leading, 4)
+                Image(st.kind == "walk" ? "cardio-man" : "runner")
+                    .resizable().scaledToFit().frame(height: 22)
+                    .padding(.leading, 2)
             } compactTrailing: {
                 Text("\(st.km) км")
                     .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
@@ -84,7 +87,7 @@ struct RunLockScreen: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
-                    Image(systemName: st.kind == "walk" ? "figure.walk" : "figure.run").foregroundStyle(Color.oxLime)
+                    Image(st.kind == "walk" ? "cardio-man" : "runner").resizable().scaledToFit().frame(height: 28)
                     RunTimer(st: st).font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
                     if st.paused { Text("пауза").font(.caption2.bold()).foregroundStyle(.secondary) }
                 }
