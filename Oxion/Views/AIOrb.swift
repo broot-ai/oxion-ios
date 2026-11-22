@@ -42,17 +42,16 @@ struct GlassFlameShape: Shape {
         func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: r.minX + CGFloat(x) * w, y: r.minY + CGFloat(y) * h) }
         let sway = sin(t * 1.7) * amp * 1.6 + sin(t * 3.1) * amp * 0.6     // кончик гуляет
         let breathe = sin(t * 2.3) * amp * 0.5                              // бока «дышат»
-        let tipY = 0.02 + abs(sin(t * 2.9)) * amp * 0.8
+        let tongue = sin(t * 2.6 + 1) * amp * 0.8                           // малый язычок слева
+        let tipY = abs(sin(t * 2.9)) * amp * 0.8
         var path = Path()
-        path.move(to: p(0.5 + sway, tipY))
-        path.addCurve(to: p(0.86 + breathe, 0.58),
-                      control1: p(0.6 + sway * 0.5, 0.2), control2: p(0.92 + breathe, 0.38))
-        path.addCurve(to: p(0.5, 1.0),
-                      control1: p(0.88 + breathe, 0.84), control2: p(0.72, 1.0))
-        path.addCurve(to: p(0.14 - breathe, 0.6),
-                      control1: p(0.28, 1.0), control2: p(0.1 - breathe, 0.82))
-        path.addCurve(to: p(0.5 + sway, tipY),
-                      control1: p(0.16 - breathe, 0.4), control2: p(0.4 + sway * 0.5, 0.22))
+        path.move(to: p(0.56 + sway, tipY))
+        path.addCurve(to: p(0.85 + breathe, 0.56), control1: p(0.64 + sway * 0.4, 0.2), control2: p(0.88 + breathe, 0.3))
+        path.addCurve(to: p(0.5, 1.0), control1: p(0.83 + breathe, 0.82), control2: p(0.7, 1.0))
+        path.addCurve(to: p(0.15 - breathe, 0.6), control1: p(0.29, 1.0), control2: p(0.13 - breathe, 0.84))
+        path.addCurve(to: p(0.3 + tongue, 0.24), control1: p(0.16 - breathe, 0.45), control2: p(0.24 + tongue, 0.33))
+        path.addCurve(to: p(0.42, 0.45), control1: p(0.32 + tongue, 0.36), control2: p(0.37, 0.42))
+        path.addCurve(to: p(0.56 + sway, tipY), control1: p(0.42, 0.3), control2: p(0.5 + sway * 0.5, 0.15))
         path.closeSubpath()
         return path
     }
