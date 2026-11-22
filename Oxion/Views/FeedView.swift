@@ -134,7 +134,22 @@ struct FeedView: View {
             }
             .background(Color.oxBg)
             .navigationTitle("Лента")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    // логотип по центру, как в Threads; нажатие — наверх и обновить
+                    Button {
+                        Haptic.tap(.soft)
+                        Task { await store.load(reset: true) }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "bolt.heart.fill").font(.headline).foregroundStyle(Color.limeInk)
+                            Text("oxion").font(.system(.title3, design: .rounded).weight(.heavy)).foregroundStyle(Color.primary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Лента OXION")
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button { compose = ComposeRequest() } label: { Image(systemName: "square.and.pencil") }
                         .accessibilityLabel("Новая публикация")
@@ -281,6 +296,10 @@ struct ThreadPost: View {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     header(p)
+                    if let l = p.location, !l.isEmpty {
+                        Label(l, systemImage: "mappin").font(.caption).foregroundStyle(Color.oxHint).lineLimit(1)
+                            .padding(.top, -4)
+                    }
                     if p.trainerAnswer == true {
                         Text("🎓 Ответ тренера").font(.caption.bold()).foregroundStyle(Color.limeInk)
                     }
@@ -311,6 +330,10 @@ struct ThreadPost: View {
                                         .transition(.scale.combined(with: .opacity))
                                 }
                             }
+                    }
+                    if let m = p.music { PostMusicCard(music: m) }
+                    if p.aiLabel == true {
+                        Label("Данные ИИ", systemImage: "sparkles").font(.caption2).foregroundStyle(Color.oxHint)
                     }
                     if let w = p.workout { PostWorkoutCard(w: w) }
                     if let pr = p.product { PostProductCard(p: pr) }
@@ -356,6 +379,10 @@ struct ThreadPost: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
+            if p.expiresAt != nil {
+                Image(systemName: "timer").font(.caption2).foregroundStyle(Color.oxHint)
+                    .accessibilityLabel("Исчезающая ветка")
+            }
             if let at = p.at {
                 Text(FeedTime.ago(at)).font(.caption).foregroundStyle(Color.oxHint)
             }
@@ -371,7 +398,8 @@ struct ThreadPost: View {
             actionButton("bubble.right", p.replies ?? 0, tint: Color.oxHint) {
                 if p.canReply == false {
                     OxAlert.show(icon: "lock.fill", title: "Ответы закрыты",
-                                 message: p.replyTo == "none" ? "Автор закрыл ответы" : "Отвечать могут только те, на кого подписан автор")
+                                 message: p.replyTo == "none" ? "Автор закрыл ответы" : p.replyTo == "followers" ? "Отвечать могут только подписчики автора"
+                                    : p.replyTo == "mentioned" ? "Отвечать могут только упомянутые профили" : "Отвечать могут только те, на кого подписан автор")
                 } else {
                     onCompose(ComposeRequest(parent: p))
                 }
@@ -472,7 +500,28 @@ struct PostMenu: View {
 
     var body: some View {
         Menu {
+            Section {
+                if let t = post.text, !t.isEmpty {
+                    Button { translate = true } label: { Label("Показать перевод", systemImage: "translate") }
+                }
+                Button {
+                    UIPasteboard.general.string = FeedTime.link(post.id)
+                    Haptic.success()
+                } label: { Label("Копировать ссылку", systemImage: "link") }
+                Button {
+                    let was = post.saved ?? false
+                    onChange { $0.saved = !was }
+                    Task { _ = await PostActions.toggle("save", id: post.id, on: !was) }
+                } label: { Label(post.saved == true ? "Убрать из сохранённых" : "Сохранить", systemImage: post.saved == true ? "bookmark.fill" : "bookmark") }
+                if let t = post.text, !t.isEmpty {
+                    Button {
+                        UIPasteboard.general.string = t
+                        Haptic.success()
+                    } label: { Label("Копировать текст", systemImage: "doc.on.doc") }
+                }
+            }
             if post.mine == true {
+                Section {
                 Button {
                     Task {
                         if await PostActions.toggle("pin", id: post.id, on: true) {
@@ -481,9 +530,7 @@ struct PostMenu: View {
                     }
                 } label: { Label("Закрепить в профиле", systemImage: "pin") }
                 Menu {
-                    replyToButton("all", "Все")
-                    replyToButton("following", "Те, на кого я подписан")
-                    replyToButton("none", "Никто")
+                    ForEach(PublishParamsSheet.options, id: \.0) { o in replyToButton(o.0, o.1) }
                 } label: { Label("Кто может отвечать", systemImage: "bubble.left.and.exclamationmark.bubble.right") }
                 Button(role: .destructive) {
                     OxAlert.confirm(icon: "trash.fill", title: "Удалить ветку?", message: "Ответы и репосты тоже исчезнут", action: "Удалить", destructive: true) {
@@ -492,53 +539,48 @@ struct PostMenu: View {
                         }
                     }
                 } label: { Label("Удалить", systemImage: "trash") }
+                }
             } else {
-                Button {
-                    Task { await follow() }
-                } label: { Label("Подписаться на автора", systemImage: "person.badge.plus") }
-                Button {
-                    Task {
-                        if await PostActions.toggle("hide", id: post.id, on: true) { onRemove() }
-                    }
-                } label: { Label("Не интересно", systemImage: "eye.slash") }
-                Button {
-                    Task {
-                        if await userAction("mute") { onRemoveAuthor(post.author.id) }
-                    }
-                } label: { Label("Скрыть автора", systemImage: "speaker.slash") }
-                Button(role: .destructive) {
-                    OxAlert.confirm(icon: "hand.raised.fill", title: "Заблокировать \(post.author.name ?? "автора")?",
-                                    message: "Вы не будете видеть друг друга в ленте и чатах", action: "Заблокировать", destructive: true) {
-                        Task { if await userAction("block") { onRemoveAuthor(post.author.id) } }
-                    }
-                } label: { Label("Заблокировать", systemImage: "hand.raised") }
-                Menu {
-                    ForEach(ReportReason.allCases) { r in
-                        Button(r.title) {
-                            Task {
-                                let msg = await PostActions.report(post.id, reason: r)
-                                OxAlert.show(icon: "checkmark.shield.fill", title: "Жалоба отправлена", message: msg)
+                Section {
+                    Button {
+                        Task {
+                            if await PostActions.toggle("interested", id: post.id, on: true) {
+                                OxAlert.show(icon: "hand.thumbsup.fill", title: "Учтём", message: "Будем чаще показывать похожие ветки")
                             }
                         }
-                    }
-                } label: { Label("Пожаловаться", systemImage: "exclamationmark.bubble") }
-            }
-            Divider()
-            Button {
-                let was = post.saved ?? false
-                onChange { $0.saved = !was }
-                Task { _ = await PostActions.toggle("save", id: post.id, on: !was) }
-            } label: { Label(post.saved == true ? "Убрать из сохранённых" : "Сохранить", systemImage: post.saved == true ? "bookmark.fill" : "bookmark") }
-            Button {
-                UIPasteboard.general.string = FeedTime.link(post.id)
-                Haptic.success()
-            } label: { Label("Копировать ссылку", systemImage: "link") }
-            if let t = post.text, !t.isEmpty {
-                Button {
-                    UIPasteboard.general.string = t
-                    Haptic.success()
-                } label: { Label("Копировать текст", systemImage: "doc.on.doc") }
-                Button { translate = true } label: { Label("Перевести", systemImage: "translate") }
+                    } label: { Label("Интересует", systemImage: "hand.thumbsup") }
+                    Button {
+                        Task {
+                            if await PostActions.toggle("hide", id: post.id, on: true) { onRemove() }
+                        }
+                    } label: { Label("Не интересует", systemImage: "hand.thumbsdown") }
+                }
+                Section {
+                    Button {
+                        Task { await follow() }
+                    } label: { Label("Подписаться", systemImage: "person.badge.plus") }
+                    Button {
+                        Task {
+                            if await userAction("mute") { onRemoveAuthor(post.author.id) }
+                        }
+                    } label: { Label("Скрыть пользователя", systemImage: "speaker.slash") }
+                    Button(role: .destructive) {
+                        OxAlert.confirm(icon: "hand.raised.fill", title: "Заблокировать \(post.author.name ?? "автора")?",
+                                        message: "Вы не будете видеть друг друга в ленте и чатах", action: "Заблокировать", destructive: true) {
+                            Task { if await userAction("block") { onRemoveAuthor(post.author.id) } }
+                        }
+                    } label: { Label("Заблокировать", systemImage: "hand.raised") }
+                    Menu {
+                        ForEach(ReportReason.allCases) { r in
+                            Button(r.title) {
+                                Task {
+                                    let msg = await PostActions.report(post.id, reason: r)
+                                    OxAlert.show(icon: "checkmark.shield.fill", title: "Жалоба отправлена", message: msg)
+                                }
+                            }
+                        }
+                    } label: { Label("Пожаловаться", systemImage: "exclamationmark.bubble") }
+                }
             }
         } label: {
             Image(systemName: "ellipsis")

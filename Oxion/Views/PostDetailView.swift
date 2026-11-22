@@ -142,6 +142,14 @@ struct ComposerView: View {
     @State private var topic: String?
     @State private var replyTo = "all"
     @State private var sending = false
+    @State private var music: PostMusic?
+    @State private var location: String?
+    @State private var aiLabel = false
+    @State private var ephemeral = false
+    @State private var showParams = false
+    @State private var showMusic = false
+    @State private var showLocation = false
+    @State private var showCamera = false
     @FocusState private var focused: UUID?
 
     private var isReply: Bool { request.parent != nil }
@@ -150,7 +158,7 @@ struct ComposerView: View {
         if sending { return false }
         let hasText = parts.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !$0.images.isEmpty }
         let pollOk = pollOn && pollOptions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count >= 2
-        return hasText || pollOk || workout != nil || request.quote != nil
+        return hasText || pollOk || workout != nil || music != nil || request.quote != nil
     }
 
     var body: some View {
@@ -175,7 +183,7 @@ struct ComposerView: View {
                             Avatar(url: API.media(model.me?.photoUrl), name: model.me?.displayName ?? "?", size: 22)
                                 .opacity(0.5)
                                 .frame(width: 40)
-                            Text("Добавить в ветку")
+                            Text("Дополните ветку")
                                 .foregroundStyle(Color.oxHint)
                             Spacer()
                         }
@@ -197,17 +205,48 @@ struct ComposerView: View {
                 .padding(.top, 8)
             }
             .background(Color.oxBg)
-            .navigationTitle(isReply ? "Ответ" : (request.quote != nil ? "Цитата" : "Новая ветка"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isReply ? "Ответить" : "Опубликовать") { Task { await send() } }
-                        .bold()
-                        .disabled(sending)
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text(isReply ? "Ответ" : (request.quote != nil ? "Цитата" : (ephemeral ? "Новая исчезающая публикация" : "Новая ветка")))
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        if ephemeral && !isReply {
+                            Text("Архивируется через 24 часа").font(.caption2).foregroundStyle(Color.oxHint)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                    .animation(.smooth(duration: 0.25), value: ephemeral)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Toggle(isOn: $aiLabel.animation(.smooth(duration: 0.2))) { Label("Добавить метку ИИ", systemImage: "sparkles") }
+                        if !isReply {
+                            Menu {
+                                Button("Без темы") { topic = nil }
+                                ForEach(model.meta?.feedTopics ?? []) { t in
+                                    Button("\(t.icon ?? "") \(t.name)") { topic = t.key }
+                                }
+                            } label: { Label("Тема", systemImage: "number") }
+                            Button { choosingWorkout = true } label: { Label("Прикрепить тренировку", systemImage: "dumbbell") }
+                        }
+                    } label: { Image(systemName: "ellipsis") }
+                }
+            }
+            .sheet(isPresented: $showParams) { PublishParamsSheet(replyTo: $replyTo) }
+            .sheet(isPresented: $showMusic) { MusicPickerSheet { m in withAnimation(.smooth(duration: 0.3)) { music = m } } }
+            .sheet(isPresented: $showLocation) { LocationPickerSheet { l in withAnimation(.smooth(duration: 0.3)) { location = l } } }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPicker { img in
+                    if let i = parts.firstIndex(where: { $0.id == (pickFor ?? parts.first?.id) }), parts[i].images.count < 4 {
+                        parts[i].images.append(PickedImage(image: img))
+                    }
+                }
+                .ignoresSafeArea()
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
             .photosPicker(isPresented: $showPicker, selection: $picks, maxSelectionCount: 4, matching: .images)
@@ -241,10 +280,19 @@ struct ComposerView: View {
             }
             .frame(width: 40)
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
+                HStack(spacing: 4) {
                     Text(model.me?.displayName ?? "Вы").font(.subheadline.weight(.semibold))
                     if isFirst && !isReply, let t = topic, let tp = model.meta?.feedTopics?.first(where: { $0.key == t }) {
                         Text("› \(tp.icon ?? "") \(tp.name)").font(.caption).foregroundStyle(Color.oxHint)
+                    } else if isFirst && !isReply {
+                        Menu {
+                            Button("Без темы") { topic = nil }
+                            ForEach(model.meta?.feedTopics ?? []) { t in
+                                Button("\(t.icon ?? "") \(t.name)") { topic = t.key }
+                            }
+                        } label: {
+                            Text("› Добавить тему").font(.caption).foregroundStyle(Color.oxHint)
+                        }
                     }
                     Spacer()
                     if !isFirst {
@@ -283,6 +331,21 @@ struct ComposerView: View {
                         }
                     }
                 }
+                if isFirst && (location != nil || aiLabel) {
+                    HStack(spacing: 8) {
+                        if let l = location {
+                            chip("mappin.and.ellipse", l) { withAnimation(.smooth(duration: 0.25)) { location = nil } }
+                        }
+                        if aiLabel {
+                            chip("sparkles", "Данные ИИ") { withAnimation(.smooth(duration: 0.25)) { aiLabel = false } }
+                        }
+                    }
+                    .transition(.opacity)
+                }
+                if isFirst, let m = music {
+                    PostMusicCard(music: m) { withAnimation(.smooth(duration: 0.25)) { music = nil } }
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+                }
                 if isFirst && pollOn { pollEditor }
                 if isFirst, let w = workout {
                     HStack {
@@ -290,25 +353,26 @@ struct ComposerView: View {
                         Button { workout = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.oxHint) }
                     }
                 }
-                HStack(spacing: 2) {
+                HStack(spacing: 0) {
                     tool("photo.on.rectangle") {
                         pickFor = part.wrappedValue.id
                         showPicker = true
                     }
+                    tool("camera") {
+                        pickFor = part.wrappedValue.id
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) { showCamera = true }
+                    }
+                    if isFirst {
+                        tool("music.note", on: music != nil) { showMusic = true }
+                    }
                     if isFirst && !isReply {
-                        tool("chart.bar.xaxis") { pollOn.toggle() }
-                        tool("dumbbell") { choosingWorkout = true }
-                        Menu {
-                            Button("Без темы") { topic = nil }
-                            ForEach(model.meta?.feedTopics ?? []) { t in
-                                Button("\(t.icon ?? "") \(t.name)") { topic = t.key }
-                            }
-                        } label: {
-                            Image(systemName: "number")
-                                .font(.system(size: 17))
-                                .foregroundStyle(topic == nil ? Color.oxHint : Color.lime)
-                                .frame(width: 38, height: 38)
-                        }
+                        tool("chart.bar.xaxis", on: pollOn) { withAnimation(.smooth(duration: 0.25)) { pollOn.toggle() } }
+                    }
+                    if isFirst {
+                        tool("mappin.and.ellipse", on: location != nil) { showLocation = true }
+                    }
+                    if isFirst && !isReply {
+                        tool("dumbbell", on: workout != nil) { choosingWorkout = true }
                     }
                 }
                 .padding(.leading, -8)
@@ -318,14 +382,29 @@ struct ComposerView: View {
         .padding(.horizontal, 16)
     }
 
-    private func tool(_ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func tool(_ icon: String, on: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptic.tap(.soft)
+            action()
+        } label: {
             Image(systemName: icon)
                 .font(.system(size: 17))
-                .foregroundStyle(Color.oxHint)
+                .foregroundStyle(on ? Color.limeInk : Color.oxHint)
                 .frame(width: 38, height: 38)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func chip(_ icon: String, _ text: String, remove: @escaping () -> Void) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.caption2)
+            Text(text).font(.caption).lineLimit(1)
+            Button(action: remove) { Image(systemName: "xmark").font(.caption2.bold()) }.buttonStyle(.plain)
+        }
+        .foregroundStyle(Color.oxHint)
+        .padding(.horizontal, 9).padding(.vertical, 5)
+        .background(Color.primary.opacity(0.06), in: Capsule())
     }
 
     private var pollEditor: some View {
@@ -358,21 +437,40 @@ struct ComposerView: View {
     }
 
     private var bottomBar: some View {
-        HStack {
+        HStack(spacing: 10) {
             if !isReply {
-                Menu {
-                    Picker("Кто может отвечать", selection: $replyTo) {
-                        Text("Все").tag("all")
-                        Text("Те, на кого я подписан").tag("following")
-                        Text("Никто").tag("none")
+                Button { showParams = true } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "slider.horizontal.3").font(.subheadline)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Параметры").font(.caption.weight(.semibold))
+                            Text(PublishParamsSheet.title(replyTo)).font(.caption2).lineLimit(1)
+                        }
                     }
-                } label: {
-                    Text(replyTo == "all" ? "Отвечать могут все" : (replyTo == "following" ? "Только мои подписки" : "Ответы закрыты"))
-                        .font(.subheadline)
-                        .foregroundStyle(Color.oxHint)
+                    .foregroundStyle(Color.oxHint)
                 }
+                .buttonStyle(.plain)
+                Spacer(minLength: 4)
+                // исчезающая ветка: видна 24 часа
+                Button {
+                    withAnimation(.snappy(duration: 0.28)) { ephemeral.toggle() }
+                    Haptic.tap(.soft)
+                } label: {
+                    ZStack(alignment: ephemeral ? .trailing : .leading) {
+                        Capsule().fill(ephemeral ? Color.lime.opacity(0.9) : Color.primary.opacity(0.1)).frame(width: 58, height: 32)
+                        Image(systemName: "timer")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(ephemeral ? Color.onLime : Color.oxHint)
+                            .frame(width: 28, height: 28)
+                            .background(.background, in: Circle())
+                            .padding(2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ephemeral ? "Исчезающая ветка включена" : "Сделать исчезающей на 24 часа")
+            } else {
+                Spacer()
             }
-            Spacer()
             Button {
                 Task { await send() }
             } label: {
@@ -430,6 +528,10 @@ struct ComposerView: View {
             if let q = request.quote { body["quote_id"] = q.id }
             if let topic, !isReply { body["topic"] = topic }
             if let workout { body["workout_id"] = workout.id }
+            if let music { body["music"] = music.dict }
+            if let location { body["location"] = location }
+            if aiLabel { body["ai_label"] = true }
+            if ephemeral && !isReply { body["ephemeral"] = true }
             if pollOn {
                 let opts = pollOptions.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                 if opts.count >= 2 { body["poll"] = ["options": opts] }

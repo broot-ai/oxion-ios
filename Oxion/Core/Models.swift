@@ -111,7 +111,30 @@ struct Post: Decodable, Identifiable {
     var quotes: Int?
     var replyTo: String?
     let trainerAnswer: Bool?
+    var music: PostMusic? = nil
+    var location: String? = nil
+    var aiLabel: Bool? = nil
+    var expiresAt: Double? = nil
 }
+
+/// Трек, прикреплённый к ветке (из поиска iTunes)
+struct PostMusic: Codable, Hashable {
+    var title: String
+    var artist: String?
+    var art: String?
+    var preview: String?
+    var url: String?
+    var dict: [String: Any] {
+        var d: [String: Any] = ["title": title]
+        if let artist { d["artist"] = artist }
+        if let art { d["art"] = art }
+        if let preview { d["preview"] = preview }
+        if let url { d["url"] = url }
+        return d
+    }
+}
+
+struct FTodo: Decodable, Hashable { let key: String; let title: String; let text: String?; let done: Bool? }
 
 struct PollOption: Decodable, Hashable { let text: String; let votes: Int? }
 struct PostPoll: Decodable, Hashable {
@@ -140,6 +163,8 @@ struct FUser: Decodable {
     let streak: Int?
     let monthWorkouts: Int?
     let pinned: Post?
+    var note: String? = nil
+    var todo: [FTodo]? = nil
 }
 
 struct FPerson: Decodable, Identifiable {

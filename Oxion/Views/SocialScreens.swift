@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: - Профиль человека в ленте
 
@@ -13,20 +14,28 @@ struct UserProfileView: View {
     @State private var chat: ChatRef?
     @State private var compose: ComposeRequest?
     @State private var showCard = false
+    @State private var showNote = false
+    @State private var showBio = false
+    @State private var photoPick: PhotosPickerItem?
+    @State private var showPhotoPick = false
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if let u {
                     header(u)
-                    Picker("", selection: $tab) {
-                        Text("Ветки").tag("posts")
-                        Text("Ответы").tag("replies")
-                        Text("Медиа").tag("media")
-                        Text("Репосты").tag("reposts")
+                    UnderlineTabs(tabs: [("posts", "Ветки"), ("replies", "Ответы"), ("media", "Медиа"), ("reposts", "Репосты")], selection: $tab)
+                        .padding(.top, 4)
+                    if u.me == true, tab == "posts", let todo = u.todo {
+                        ProfileTodoCards(todo: todo) { key in
+                            switch key {
+                            case "post": compose = ComposeRequest()
+                            case "photo": showPhotoPick = true
+                            case "bio": showBio = true
+                            default: route = .search
+                            }
+                        }
                     }
-                    .pickerStyle(.segmented)
-                    .padding(16)
                     if let pin = u.pinned, tab == "posts" {
                         Label("Закреплено", systemImage: "pin.fill").font(.caption).foregroundStyle(Color.oxHint).padding(.horizontal, 16)
                         ThreadPost(post: pin, onOpen: { route = .post(pin.id) }, onUser: { _ in }, onCompose: { compose = $0 })
@@ -58,6 +67,10 @@ struct UserProfileView: View {
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await loadPosts() } } }
         .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
+        .sheet(isPresented: $showNote) { NoteComposerSheet(current: u?.note) { nu in withAnimation(.smooth(duration: 0.3)) { u = nu } } }
+        .sheet(isPresented: $showBio) { BioEditSheet(current: u?.bio ?? "") { nu in withAnimation(.smooth(duration: 0.3)) { u = nu } } }
+        .photosPicker(isPresented: $showPhotoPick, selection: $photoPick, matching: .images)
+        .onChange(of: photoPick) { Task { await uploadPhoto() } }
         .toolbar {
             if let u, u.me != true {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -82,6 +95,17 @@ struct UserProfileView: View {
         .task { await load() }
     }
 
+    private func uploadPhoto() async {
+        guard let item = photoPick else { return }
+        photoPick = nil
+        guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data), let jpg = API.jpeg(img) else { return }
+        do {
+            let nu: FUser = try await API.upload("/feed/me/photo", data: jpg)
+            Haptic.success()
+            withAnimation(.smooth(duration: 0.3)) { u = nu }
+        } catch { OxAlert.error(error.localizedDescription) }
+    }
+
     private func header(_ u: FUser) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
@@ -94,6 +118,17 @@ struct UserProfileView: View {
                 }
                 Spacer()
                 Avatar(url: API.media(u.photo), name: u.name ?? "?", size: 76)
+                    .overlay(alignment: .topLeading) {
+                        // заметка над аватаркой (видна 24 часа), как в Threads
+                        if u.me == true || (u.note?.isEmpty == false) {
+                            Button { if u.me == true { showNote = true } } label: {
+                                NoteBubble(text: u.note, mine: u.me == true)
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: -44, y: -12)
+                            .transition(.scale(scale: 0.6, anchor: .bottomTrailing).combined(with: .opacity))
+                        }
+                    }
             }
             if let b = u.bio, !b.isEmpty { Text(b) }
             HStack(spacing: 16) {
