@@ -460,6 +460,17 @@ enum JSONValue: Decodable, Hashable {
         if case .array(let a) = self { return a }
         return []
     }
+    /// обратно в обычный JSON-объект — для отправки на сервер
+    var any: Any {
+        switch self {
+        case .string(let s): return s
+        case .number(let n): return n
+        case .bool(let b): return b
+        case .array(let a): return a.map(\.any)
+        case .object(let o): return o.mapValues(\.any)
+        case .null: return NSNull()
+        }
+    }
 }
 
 // MARK: - Вложения в чат

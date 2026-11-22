@@ -333,6 +333,9 @@ struct AICoachView: View {
     @State private var enabled = true
     @State private var left: Int?
     @State private var local = OnDeviceCoach.shared
+    @State private var typingId: Int?
+    @State private var typed = 0
+    @AppStorage("ox.ai.last") private var lastPreview = ""
     /// Готовый запрос, который отправится сразу при открытии (например, из выбора мышц на фигуре)
     var initial: String? = nil
 
@@ -343,10 +346,10 @@ struct AICoachView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     VStack(spacing: 10) {
-                        AIOrb(size: 92, active: sending, interactive: true)
+                        AIAvatar(size: 92, active: sending)
                             .padding(.bottom, 6)
-                        Text("ИИ-тренер").font(.title2.bold())
-                        Text("Составит тренировку на сегодня и ответит на вопросы о питании и технике")
+                        Text("OXION AI").font(.title2.bold())
+                        Text("Твой тренер и помощник по приложению: составит тренировку, разберёт статистику, подберёт тренера и откроет нужный раздел")
                             .font(.subheadline).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
                         Label(local.useLocal ? "Думает на iPhone · без интернета" : "Думает на сервере OXION",
                               systemImage: local.useLocal ? "iphone.gen3" : "cloud.fill")
@@ -365,32 +368,31 @@ struct AICoachView: View {
                             }
                         }
                     }
-                    ForEach(items) { m in
-                        HStack {
-                            if m.role == "user" { Spacer(minLength: 50) } else { AIOrb(size: 26).padding(.top, 4) }
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(m.content)
-                                if let plan = m.plan, m.role != "user" {
-                                    AIPlanCard(plan: plan)
-                                }
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .foregroundStyle(m.role == "user" ? Color.onLime : Color.primary)
-                            .background(m.role == "user" ? Color.lime : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            if m.role != "user" { Spacer(minLength: 30) }
-                        }
-                        .id(m.id)
+                    ForEach(Array(items.enumerated()), id: \.element.id) { i, m in
+                        let next = i + 1 < items.count ? items[i + 1].role : (sending && m.role == "user" ? "assistant" : nil)
+                        let last = next != m.role
+                        messageRow(m, last: last)
+                            .id(m.id)
+                            .padding(.bottom, last ? 6 : 0)
                     }
                     if sending {
-                        HStack(spacing: 10) { AIOrb(size: 28, active: true); Text("Думаю…").foregroundStyle(Color.oxHint) }
+                        HStack(alignment: .bottom, spacing: 8) {
+                            AIAvatar(size: 34, active: true)
+                            AIThinkingBubble()
+                            Spacer()
+                        }
+                        .id("thinking")
                     }
                 }
                 .padding(16)
             }
             .onChange(of: items.count) { if let id = items.last?.id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
+            .onChange(of: sending) { if sending { withAnimation { proxy.scrollTo("thinking", anchor: .bottom) } } }
+            .onChange(of: typed) { if let id = typingId, typed % 40 < 4 { proxy.scrollTo(id, anchor: .bottom) } }
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: sending)
         }
         .background(Color.oxBg)
-        .navigationTitle("ИИ-тренер")
+        .navigationTitle("OXION AI")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
@@ -451,6 +453,45 @@ struct AICoachView: View {
         }
     }
 
+    /// Живая печать: текст появляется кусочками примерно за 1–3 секунды
+    private func typeOut(_ total: Int) async {
+        let step = max(2, total / 110)
+        while typed < total {
+            typed = min(total, typed + step)
+            if typed % 60 < step { Haptic.tap(.soft) }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { typingId = nil }
+    }
+
+    @ViewBuilder
+    private func messageRow(_ m: AIMessage, last: Bool) -> some View {
+        if m.role == "user" {
+            HStack {
+                Spacer(minLength: 56)
+                Text(m.content)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .foregroundStyle(Color.onLime)
+                    .background(Color.lime, in: TailBubbleShape(mine: true, radius: 18, tail: last))
+            }
+        } else {
+            let typing = typingId == m.id
+            HStack(alignment: .bottom, spacing: 8) {
+                if last { AIAvatar(size: 34, active: typing) } else { Color.clear.frame(width: 34, height: 1) }
+                VStack(alignment: .leading, spacing: 10) {
+                    AIRichText(text: typing ? String(m.content.prefix(typed)) : m.content)
+                    if !typing {
+                        if let plan = m.plan { AIPlanCard(plan: plan).transition(.move(edge: .bottom).combined(with: .opacity)) }
+                        if let b = m.buttons, !b.isEmpty { AIActionButtons(buttons: b).transition(.opacity) }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Color.primary.opacity(0.08), in: TailBubbleShape(mine: false, radius: 18, tail: last))
+                Spacer(minLength: 24)
+            }
+        }
+    }
+
     private func send() async {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
@@ -478,8 +519,13 @@ struct AICoachView: View {
         }
         do {
             let r: AIReply = try await API.call("/ai/chat", method: "POST", body: ["text": t, "today": RU.dayFormatter.string(from: Date())])
-            items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt))
+            sending = false
+            typingId = r.id
+            typed = 0
+            items.append(AIMessage(id: r.id, role: r.role, content: r.content, plan: r.plan, createdAt: r.createdAt, buttons: r.buttons))
             left = r.left
+            lastPreview = String(r.content.prefix(120))
+            await typeOut(r.content.count)
             Haptic.success()
         } catch { OxAlert.error(error.localizedDescription) }
     }
@@ -487,32 +533,76 @@ struct AICoachView: View {
 
 struct AIPlanCard: View {
     let plan: JSONValue
+    @State private var shown = 0
+    @State private var saved = false
+    @State private var saving = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(plan["title"]?.string ?? "План тренировки", systemImage: "list.bullet.clipboard.fill")
-                .font(.headline).foregroundStyle(Color.limeInk)
-            ForEach(Array((plan["exercises"]?.array ?? []).enumerated()), id: \.offset) { _, e in
-                HStack {
-                    Text(e["name"]?.string ?? "").font(.subheadline)
-                    Spacer()
-                    Text([e["sets"]?.string.map { "\($0)×" }, e["reps"]?.string].compactMap { $0 }.joined())
-                        .font(.caption).foregroundStyle(Color.oxHint)
+        let ex = plan["exercises"]?.array ?? []
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "list.bullet.clipboard.fill").foregroundStyle(Color.limeInk)
+                Text(plan["title"]?.string ?? "План тренировки").font(.headline).foregroundStyle(Color.limeInk)
+            }
+            ForEach(Array(ex.enumerated()), id: \.offset) { i, e in
+                if i < shown {
+                    HStack(spacing: 10) {
+                        Text("\(i + 1)").font(.caption.bold().monospacedDigit()).foregroundStyle(Color.onLime)
+                            .frame(width: 20, height: 20).background(Color.lime, in: Circle())
+                        Text(e["name"]?.string ?? "").font(.subheadline)
+                        Spacer()
+                        Text(detail(e)).font(.caption.monospacedDigit()).foregroundStyle(Color.oxHint)
+                    }
+                    .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
             Button {
-                Task {
-                    do {
-                        let _: OK = try await API.call("/ai/apply", method: "POST", body: ["date": RU.dayFormatter.string(from: Date())])
-                        Haptic.success()
-                        OxAlert.show(icon: "checkmark.circle.fill", title: "Добавлено в дневник", message: "Тренировка появилась на сегодня")
-                    } catch { OxAlert.error(error.localizedDescription) }
-                }
+                Task { await save() }
             } label: {
-                Label("В дневник на сегодня", systemImage: "calendar.badge.plus").font(.subheadline.bold())
+                HStack(spacing: 6) {
+                    if saving { ProgressView().controlSize(.small) }
+                    Image(systemName: saved ? "checkmark.circle.fill" : "calendar.badge.plus")
+                    Text(saved ? "Добавлено в дневник" : "В дневник на сегодня")
+                }
+                .font(.subheadline.bold())
+                .frame(maxWidth: .infinity, minHeight: 40)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.glassProminent)
+            .tint(Color.lime)
+            .foregroundStyle(Color.onLime)
+            .disabled(saved || saving)
+            .padding(.top, 4)
+            .opacity(shown >= ex.count ? 1 : 0)
         }
         .padding(12)
         .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .task {
+            guard shown == 0 else { return }
+            for i in 0...ex.count {
+                try? await Task.sleep(for: .milliseconds(i == 0 ? 120 : 140))
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { shown = i + 1 }
+                if i < ex.count { Haptic.tap(.soft) }
+            }
+        }
+    }
+
+    private func detail(_ e: JSONValue) -> String {
+        var s = [e["sets"]?.string.map { "\($0)×" }, e["reps"]?.string].compactMap { $0 }.joined()
+        if let sec = e["seconds"]?.int, sec > 0 { s += (s.isEmpty ? "" : " ") + "\(sec) с" }
+        if let km = e["km"]?.string, km != "0" { s += (s.isEmpty ? "" : " ") + "\(km) км" }
+        if let w = e["weight"]?.string, w != "0" { s += " · \(w) кг" }
+        return s
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            let _: OK = try await API.call("/ai/apply", method: "POST",
+                                           body: ["date": RU.dayFormatter.string(from: Date()), "plan": plan.any])
+            Haptic.success()
+            withAnimation { saved = true }
+            OxAlert.show(icon: "checkmark.circle.fill", title: "Добавлено в дневник", message: "Тренировка появилась на сегодня")
+        } catch { OxAlert.error(error.localizedDescription) }
     }
 }

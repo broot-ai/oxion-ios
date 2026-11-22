@@ -113,7 +113,7 @@ struct ProfileView: View {
                     nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }
                     NavigationLink { AICoachView() } label: {
                         HStack(spacing: 14) {
-                            AIOrb(size: 30)
+                            AIAvatar(size: 30)
                             Text("ИИ-тренер")
                         }
                     }

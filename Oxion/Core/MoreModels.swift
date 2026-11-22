@@ -173,6 +173,7 @@ struct AIMessage: Decodable, Identifiable {
     let content: String
     let plan: JSONValue?
     let createdAt: Double?
+    var buttons: [AIButton]? = nil
 }
 struct AIMessages: Decodable { let items: [AIMessage]; let enabled: Bool? }
 struct AIReply: Decodable {
@@ -182,6 +183,7 @@ struct AIReply: Decodable {
     let plan: JSONValue?
     let createdAt: Double?
     let left: Int?
+    var buttons: [AIButton]? = nil
 }
 
 // MARK: - Заказы магазина

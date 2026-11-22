@@ -132,7 +132,7 @@ struct ChatsView: View {
     @State private var path: [ChatRoute] = []
     @State private var protectAll = false
 
-    enum ChatRoute: Hashable { case chat(ChatRef), archive }
+    enum ChatRoute: Hashable { case chat(ChatRef), archive, ai }
 
     private var filtered: [ChatItem] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -148,6 +148,10 @@ struct ChatsView: View {
                         Task { await store.load() }
                     }
                     .listRowBackground(Color.clear)
+                }
+                if query.isEmpty && !editing {
+                    Button { path.append(.ai) } label: { AIChatRow() }
+                        .selectionDisabled()
                 }
                 if !store.archived.isEmpty && query.isEmpty && !editing {
                     Button { path.append(.archive) } label: {
@@ -217,6 +221,7 @@ struct ChatsView: View {
                 switch r {
                 case .chat(let ref): ChatView(chatId: ref.id, title: ref.name)
                 case .archive: ArchivedChatsView { path.append(.chat($0)) }
+                case .ai: AICoachView()
                 }
             }
             .searchable(text: $query, prompt: "Поиск по чатам")
@@ -1229,5 +1234,27 @@ struct CallScreen: View {
             .glassEffect(on ? .regular.tint(Color.primary.opacity(0.9)).interactive() : .regular.interactive(), in: .circle)
             Text(title).font(.caption).foregroundStyle(Color.oxHint)
         }
+    }
+}
+
+/// Закреплённый чат с OXION AI в списке чатов
+struct AIChatRow: View {
+    @AppStorage("ox.ai.last") private var last = ""
+    var body: some View {
+        HStack(spacing: 12) {
+            AIAvatar(size: 52)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text("OXION AI").font(.headline).foregroundStyle(.primary)
+                    Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
+                    Spacer()
+                    Image(systemName: "pin.fill").font(.caption).foregroundStyle(.secondary).rotationEffect(.degrees(45))
+                }
+                Text(last.isEmpty ? "Тренер и помощник: тренировки, статистика, тренеры, разделы" : last.replacingOccurrences(of: "**", with: ""))
+                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }

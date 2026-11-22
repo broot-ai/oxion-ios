@@ -300,7 +300,7 @@ struct HomeView: View {
             push = .coach
         } label: {
             HStack(spacing: 14) {
-                AIOrb(size: 50)
+                AIAvatar(size: 50)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("ИИ-тренер")
                         .font(.headline)
