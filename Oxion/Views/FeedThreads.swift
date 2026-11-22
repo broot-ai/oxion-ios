@@ -178,8 +178,8 @@ struct MusicPickerSheet: View {
         var c = URLComponents(string: "https://itunes.apple.com/search")!
         c.queryItems = [.init(name: "term", value: term), .init(name: "entity", value: "song"),
                         .init(name: "country", value: "ru"), .init(name: "limit", value: "40")]
-        guard let url = c.url, let (data, _) = try? await URLSession.shared.data(from: url),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard let url = c.url, let resp = try? await URLSession.shared.data(from: url),
+              let obj = try? JSONSerialization.jsonObject(with: resp.0) as? [String: Any],
               let res = obj["results"] as? [[String: Any]] else { items = []; return }
         let out: [Track] = res.compactMap { r in
             guard let id = r["trackId"] as? Int, let n = r["trackName"] as? String else { return nil }
