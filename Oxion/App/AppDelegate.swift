@@ -54,8 +54,7 @@ final class OxAppDelegate: NSObject, UIApplicationDelegate {
         schedule()
         let work = Task { @MainActor in
             if API.token != nil, let r: ChatsResponse = try? await API.call("/chats") {
-                let n = r.items.filter { $0.muted != true && $0.archived != true }
-                    .reduce(0) { $0 + max($1.unread ?? 0, $1.marked == true ? 1 : 0) }
+                let n = NotifPrefs.badge(r.items)
                 AppBadge.set(n)
                 QuickActions.update(unread: n)
                 await LocalChatNotifier.notifyNew(r.items)
@@ -179,16 +178,16 @@ enum LocalChatNotifier {
 
     static func notifyNew(_ items: [ChatItem]) async {
         let center = UNUserNotificationCenter.current()
-        guard await center.notificationSettings().authorizationStatus == .authorized else { markSeen(items); return }
+        guard await center.notificationSettings().authorizationStatus == .authorized, NotifPrefs.all else { markSeen(items); return }
         let s = seen
         let first = s.isEmpty
-        for c in items where c.muted != true && c.archived != true && c.mine != true && (c.unread ?? 0) > 0 {
+        for c in items where c.muted != true && c.archived != true && c.mine != true && (c.unread ?? 0) > 0 && NotifPrefs.isOn(NotifPrefs.Kind.of(c)) {
             guard let last = c.lastId, last > (s[String(c.id)] ?? 0), !first else { continue }
             let content = UNMutableNotificationContent()
-            content.title = c.peer.name ?? "Новое сообщение"
+            content.title = NotifPrefs.names ? (c.peer.name ?? "Новое сообщение") : "Oxion"
             let n = c.unread ?? 1
-            content.body = (c.last?.isEmpty == false ? c.last! : "Новое сообщение") + (n > 1 ? " (+\(n - 1))" : "")
-            content.sound = .default
+            content.body = (NotifPrefs.preview && c.last?.isEmpty == false ? c.last! : "Новое сообщение") + (n > 1 ? " (+\(n - 1))" : "")
+            content.sound = UserDefaults.standard.bool(forKey: "sounds") ? .default : nil
             content.threadIdentifier = "chat\(c.id)"
             content.userInfo = ["route": "chats", "url": "/#chat/\(c.id)"]
             let req = UNNotificationRequest(identifier: "chat\(c.id)-\(last)", content: content, trigger: nil)

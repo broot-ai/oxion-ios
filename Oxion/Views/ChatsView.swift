@@ -46,7 +46,7 @@ final class ChatsStore {
             let r: ChatsResponse = try await API.call("/chats")
             items = r.items
             errorText = nil
-            AppBadge.set(unread)
+            AppBadge.update(items)
             LocalChatNotifier.markSeen(r.items)
         } catch {
             errorText = error.localizedDescription
@@ -57,12 +57,12 @@ final class ChatsStore {
 
     func markRead(_ id: Int) {
         for i in items.indices where items[i].id == id { items[i].unread = 0; items[i].marked = false }
-        AppBadge.set(unread)
+        AppBadge.update(items)
     }
 
     private func update(_ id: Int, _ f: (inout ChatItem) -> Void) {
         for i in items.indices where items[i].id == id { f(&items[i]) }
-        AppBadge.set(unread)
+        AppBadge.update(items)
     }
 
     // MARK: действия (сохраняются на сервере OXION — одинаково в приложении и PWA)
@@ -93,7 +93,7 @@ final class ChatsStore {
     func hide(_ c: ChatItem) async {
         let backup = items
         items.removeAll { $0.id == c.id }
-        AppBadge.set(unread)
+        AppBadge.update(items)
         do {
             let _: OK = try await API.call("/chats/\(c.id)/hide", method: "POST")
         } catch {
@@ -103,7 +103,7 @@ final class ChatsStore {
     }
     func readAll() async {
         for i in items.indices { items[i].unread = 0; items[i].marked = false }
-        AppBadge.set(unread)
+        AppBadge.update(items)
         let _: OK? = try? await API.call("/chats/read-all", method: "POST")
     }
 

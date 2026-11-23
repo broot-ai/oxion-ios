@@ -156,11 +156,7 @@ struct ProfileView: View {
                 }
 
                 Section {
-                    Button {
-                        Task { await askNotifications() }
-                    } label: {
-                        Label("Уведомления", systemImage: "bell.badge.fill")
-                    }
+                    nav("Уведомления", "bell.badge.fill", Color(hex: 0xFF5A4E)) { NotificationSettingsView() }
                     nav("Оформление", "paintbrush.fill", Color(hex: 0x8E7CFF)) { AppearanceSettingsView() }
                     nav("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
                     nav("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }
@@ -309,7 +305,7 @@ struct ProfileView: View {
             list.append(OxSearchItem("Моя визитка и QR", E, "qrcode", Color.lime, ["qr", "куар", "визитка", "код", "поделиться профилем", "ссылка на профиль"], run: { showCard = true }))
             list.append(OxSearchItem("Пригласить друзей", E, "person.badge.plus", Color.lime, ["контакты", "друзья", "пригласить", "приглашение", "реферал"], push: { ContactsInviteView() }))
             list.append(OxSearchItem("Работа в Oxion", E, "briefcase.fill", Color(hex: 0x3FD6C9), ["вакансии", "работа", "карьера", "стать тренером"], push: { WorkView() }))
-            list.append(OxSearchItem("Уведомления", S, "bell.badge.fill", Color(hex: 0xFF5A4E), ["push", "пуши", "оповещения", "уведомления"], run: { Task { await askNotifications() } }))
+            list.append(OxSearchItem("Уведомления", S, "bell.badge.fill", Color(hex: 0xFF5A4E), ["push", "пуши", "оповещения", "уведомления"], push: { NotificationSettingsView() }))
             list.append(OxSearchItem("Умные уведомления", S, "bell.and.waves.left.and.right", Color(hex: 0xFF5A4E), ["напоминания", "умные", "уведомления"], push: { SmartNotifySettingsView() }))
             list.append(OxSearchItem("Оформление", S, "paintbrush.fill", Color(hex: 0x8E7CFF), ["тема", "темная", "светлая", "иконка приложения", "шрифт", "размер текста", "пузыри", "цвет"], push: { AppearanceSettingsView() }))
             list.append(OxSearchItem("Обои чата", S, "photo.artframe", Color(hex: 0x8E7CFF), ["обои", "фон чата", "wallpaper", "узор"], push: { ChatWallpaperSettingsView() }))
