@@ -209,9 +209,20 @@ enum BrowserWindow {
 
     final class BrowserPassWindow: UIWindow {
         // пустые места пропускают нажатия в приложение (когда браузер свёрнут)
+        // SwiftUI рисует кнопки внутри одного общего вида, поэтому решаем по режиму, а не по виду под пальцем:
+        // открыт — окно ловит все нажатия; свёрнут — только плашку; скрыт — ничего
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-            let v = super.hitTest(point, with: event)
-            return v === rootViewController?.view ? nil : v
+            let mode = MainActor.assumeIsolated { OxBrowser.shared.mode }
+            switch mode {
+            case .open:
+                return super.hitTest(point, with: event)
+            case .minimized:
+                let maxY = bounds.height - safeAreaInsets.bottom - 62
+                let bar = CGRect(x: 12, y: maxY - 52, width: bounds.width - 24, height: 52)
+                return bar.insetBy(dx: 0, dy: -6).contains(point) ? super.hitTest(point, with: event) : nil
+            case .hidden:
+                return nil
+            }
         }
     }
 
