@@ -311,11 +311,19 @@ struct ThreadPost: View {
                         Text("Скрыто модератором — видите только вы").font(.caption).foregroundStyle(.orange)
                     }
                     if let t = p.text, !t.isEmpty {
-                        Text(Linkify.attributed(t, color: Color.limeInk))
-                            .font(big ? .title3 : .body)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onOpen?() }
+                        let linked = Linkify.attributed(t, color: Color.limeInk)
+                        if linked.runs.contains(where: { $0.link != nil }) {
+                            // в тексте есть ссылка — нажатие по ней открывает встроенный браузер
+                            Text(linked)
+                                .font(big ? .title3 : .body)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(t)
+                                .font(big ? .title3 : .body)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onOpen?() }
+                        }
                     }
                     if AppSettings.autoloadPhotos, let photos = p.photos, !photos.isEmpty {
                         PhotoStrip(urls: photos.compactMap { API.media($0) })
