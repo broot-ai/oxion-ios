@@ -353,10 +353,6 @@ struct ProgramBuilderView: View {
     }
 }
 
-extension Array {
-    subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
-}
-
 // MARK: - «Твой статус»
 
 struct StatusArea: Decodable, Identifiable {
