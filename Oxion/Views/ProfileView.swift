@@ -4,6 +4,7 @@ import UserNotifications
 
 struct ProfileView: View {
     var embedded = false
+    @AppStorage("ox.browser.inapp") private var inAppBrowser = true
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var confirmLogout = false
@@ -161,6 +162,12 @@ struct ProfileView: View {
                     nav("Оформление", "paintbrush.fill", Color(hex: 0x8E7CFF)) { AppearanceSettingsView() }
                     nav("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
                     nav("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }
+                    Toggle(isOn: $inAppBrowser) {
+                        HStack(spacing: 14) {
+                            OxRowIcon(icon: "safari.fill", tint: Color(hex: 0x3478F6))
+                            Text("Открывать ссылки в Oxion")
+                        }
+                    }
                     if !notifText.isEmpty {
                         Text(notifText)
                             .font(.footnote)

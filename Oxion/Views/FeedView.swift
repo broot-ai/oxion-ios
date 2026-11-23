@@ -311,7 +311,7 @@ struct ThreadPost: View {
                         Text("Скрыто модератором — видите только вы").font(.caption).foregroundStyle(.orange)
                     }
                     if let t = p.text, !t.isEmpty {
-                        Text(t)
+                        Text(Linkify.attributed(t, color: Color.limeInk))
                             .font(big ? .title3 : .body)
                             .fixedSize(horizontal: false, vertical: true)
                             .contentShape(Rectangle())

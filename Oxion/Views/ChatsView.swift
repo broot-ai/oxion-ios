@@ -1286,7 +1286,7 @@ struct Bubble: View {
                 }
                 if let t = m.text, !t.isEmpty {
                     // время встаёт в конец последней строки, пузырь — по ширине текста
-                    (Text(t) + timeSpacer)
+                    (Text(Linkify.attributed(t, color: m.mine ? Color.onLime : Color.limeInk, underline: true)) + timeSpacer)
                         .font(.system(size: style.fontSize))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)

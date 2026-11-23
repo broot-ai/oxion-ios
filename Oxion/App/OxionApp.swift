@@ -71,6 +71,8 @@ struct OxionApp: App {
             RootView()
                 .environment(model)
                 .modifier(AppTextSize())
+                // ссылки открываются во встроенном браузере, как в Telegram
+                .modifier(InAppBrowserLinks())
                 .onOpenURL { url in
                     // ссылки из виджетов и Live Activity: oxion://diary, oxion://trainer/15 …
                     let route = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/")
