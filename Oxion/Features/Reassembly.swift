@@ -169,6 +169,7 @@ private struct ReassembleCard: ViewModifier {
             }
             .overlay {
                 FlashRim(trigger: ra.flash, delay: delay, radius: radius)
+                    .padding(ghost ? 0 : -4)
                     .allowsHitTesting(false)
             }
     }
@@ -274,7 +275,7 @@ extension View {
 
     /// Строка списка или поста: разлёт поменьше, без «гнезда»
     func reassemblesRow() -> some View {
-        modifier(ReassembleCard(index: nil, radius: 0, amplitude: 0.45, ghost: false))
+        modifier(ReassembleCard(index: nil, radius: 20, amplitude: 0.45, ghost: false))
     }
 
     /// Фон карточки Oxion + участие в разлёте
