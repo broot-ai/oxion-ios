@@ -977,6 +977,12 @@ struct ChatView: View {
     private func bubbleRow(_ m: Message) -> some View {
                 Bubble(m: m, read: m.mine && m.id <= peerReadId, tail: tailIds.contains(m.id),
                        sender: group?.kind == "group" && !m.mine ? m.fromId.flatMap { senders[$0] } : nil,
+                       dragProvider: {
+                           // iOS вызывает это уже при долгом нажатии (вместе с меню) — панель пока не показываем
+                           fwdPending = (!shielded && m.deleted != true) ? m.id : nil
+                           return NSItemProvider(object: "oxion-msg:\(m.id)" as NSString)
+                       },
+                       menu: { AnyView(messageMenu(m)) },
                        groupMode: group?.kind == "group") { action in
                     switch action {
                     case .product(let id): productBox = AppModel.IdBox(id: id)
@@ -985,13 +991,11 @@ struct ChatView: View {
                 }
                     .id(m.id)
                     .transition(Self.bubbleTransition(mine: m.mine))
-                    // зажал и потащил — слева выезжают чаты, бросил на чат — переслано
-                    .onDrag {
-                        // iOS вызывает это уже при долгом нажатии (вместе с меню) — панель пока не показываем
-                        fwdPending = (!shielded && m.deleted != true) ? m.id : nil
-                        return NSItemProvider(object: "oxion-msg:\(m.id)" as NSString)
-                    }
-                    .contextMenu {
+    }
+
+    /// меню сообщения по долгому нажатию
+    @ViewBuilder
+    private func messageMenu(_ m: Message) -> some View {
                         Section {
                             ForEach(Kinds.reactions, id: \.self) { e in
                                 Button(e) { Task { await react(m, e) } }
@@ -1029,7 +1033,6 @@ struct ChatView: View {
                                 Label("Удалить", systemImage: "trash")
                             }
                         }
-                    }
     }
 
     static func bubbleTransition(mine: Bool) -> AnyTransition {
@@ -1147,6 +1150,10 @@ struct Bubble: View {
     var tail = true
     /// автор сообщения в группе (имя над пузырём и аватарка слева)
     var sender: GSender? = nil
+    /// перетаскивание для пересылки
+    var dragProvider: (() -> NSItemProvider)? = nil
+    /// меню по долгому нажатию — превью повторяет форму пузыря
+    var menu: (() -> AnyView)? = nil
     var groupMode = false
     var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
@@ -1193,6 +1200,8 @@ struct Bubble: View {
                     }
                 }
                 .frame(width: isCardOnly && !["vnote", "voice"].contains(m.kind ?? "") ? 294 : nil)
+                // перетаскивать для пересылки только сам пузырь — без пустого места строки вокруг
+                .modifier(BubbleDrag(provider: dragProvider, menu: menu, shape: dragShape))
                 if let rs = m.reactions, !rs.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(rs, id: \.self) { r in
@@ -1213,6 +1222,12 @@ struct Bubble: View {
     static func nameColor(_ id: Int) -> Color {
         let palette: [Color] = [Color(hex: 0xFF5E57), Color(hex: 0xFF9F0A), Color(hex: 0xA25AFF), Color(hex: 0x30B0C7), Color(hex: 0x34C759), Color(hex: 0x0A84FF), Color(hex: 0xFF375F)]
         return palette[abs(id) % palette.count]
+    }
+
+    private var dragShape: AnyShape {
+        if isCardOnly && m.kind == "vnote" { return AnyShape(Circle()) }
+        if isCardOnly && m.kind != "voice" { return AnyShape(RoundedRectangle(cornerRadius: style.radius, style: .continuous)) }
+        return AnyShape(shape)
     }
 
     private var shape: TailBubbleShape { TailBubbleShape(mine: m.mine, radius: style.radius, tail: tail) }
@@ -1438,5 +1453,24 @@ struct AIChatRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+}
+
+
+/// перетаскивание пузыря: превью повторяет форму пузыря, без белой подложки на всю ширину
+struct BubbleDrag: ViewModifier {
+    let provider: (() -> NSItemProvider)?
+    let menu: (() -> AnyView)?
+    let shape: AnyShape
+    func body(content: Content) -> some View {
+        if let provider, let menu {
+            content
+                .contentShape(.dragPreview, shape)
+                .contentShape(.contextMenuPreview, shape)
+                .contextMenu { menu() }
+                .onDrag(provider)
+        } else {
+            content
+        }
     }
 }
