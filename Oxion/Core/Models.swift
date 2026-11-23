@@ -372,7 +372,11 @@ struct Message: Decodable, Identifiable {
     let deleted: Bool?
     let reactions: [MsgReaction]?
     let card: JSONValue?
+    var forward: MsgForward? = nil
 }
+
+/// «Переслано от …»: автор оригинала
+struct MsgForward: Decodable, Hashable { let id: Int?; let name: String?; let mine: Bool? }
 
 struct ChatDetail: Decodable {
     let id: Int

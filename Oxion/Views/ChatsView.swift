@@ -519,6 +519,15 @@ struct ChatView: View {
     @Namespace private var zoomNS
     @State private var translateText: String?
     @State private var productBox: AppModel.IdBox?
+    // пересылка перетаскиванием и через меню
+    @State private var fwdDrag: Int?
+    @State private var fwdSheet: Message?
+    // «потяни вверх» — краткое содержание
+    @State private var pull: CGFloat = 0
+    @State private var pullArmed = false
+    @State private var scrollDragging = false
+    @State private var showSummary = false
+    private let pullNeed: CGFloat = 90
 
     /// у последнего сообщения в серии от одного человека — «хвостик»
     private var tailIds: Set<Int> {
@@ -576,6 +585,36 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            // насколько переписку протянули вверх за последний сообщение
+            .onScrollGeometryChange(for: CGFloat.self) { g in
+                let rest = max(-g.contentInsets.top, g.contentSize.height + g.contentInsets.bottom - g.containerSize.height)
+                return max(0, g.contentOffset.y - rest)
+            } action: { _, v in
+                pull = v
+                guard scrollDragging, loaded, !messages.isEmpty else { return }
+                if v >= pullNeed && !pullArmed {
+                    pullArmed = true
+                    Haptic.tap(.medium)
+                } else if v < pullNeed * 0.8 && pullArmed {
+                    pullArmed = false
+                    Haptic.tap(.soft)
+                }
+            }
+            .onScrollPhaseChange { old, new in
+                scrollDragging = new == .interacting
+                if old == .interacting && new != .interacting && pullArmed {
+                    pullArmed = false
+                    Haptic.success()
+                    showSummary = true
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if scrollDragging && pull > 6 && loaded && !messages.isEmpty {
+                    PullSummaryHint(progress: pull / pullNeed)
+                        .padding(.bottom, 10)
+                        .transition(.opacity)
+                }
+            }
             .background { ChatWallpaperBackground() }
             // как в Telegram: сверху нет плашки, переписка мягко растворяется под шапкой
             .scrollEdgeEffectStyle(.soft, for: .top)
@@ -594,6 +633,14 @@ struct ChatView: View {
         }
         .environment(chats)
         }
+        .overlay {
+            if let id = fwdDrag {
+                ForwardDragPanel(currentChatId: chatId, messageId: id) { fwdDrag = nil }
+                    .environment(chats)
+            }
+        }
+        .sheet(item: $fwdSheet) { m in ForwardSheet(currentChatId: chatId, messageId: m.id).environment(chats) }
+        .sheet(isPresented: $showSummary) { ChatSummarySheet(chatId: chatId, title: peer?.name ?? title) }
         .sheet(item: $productBox) { b in
             NavigationStack { ProductView(productId: b.id, onCart: { _ in }) }
         }
@@ -855,6 +902,14 @@ struct ChatView: View {
                 }
                     .id(m.id)
                     .transition(Self.bubbleTransition(mine: m.mine))
+                    // зажал и потащил — слева выезжают чаты, бросил на чат — переслано
+                    .onDrag {
+                        if !shielded && m.deleted != true {
+                            Haptic.tap(.medium)
+                            withAnimation { fwdDrag = m.id }
+                        }
+                        return NSItemProvider(object: "oxion-msg:\(m.id)" as NSString)
+                    }
                     .contextMenu {
                         Section {
                             ForEach(Kinds.reactions, id: \.self) { e in
@@ -877,6 +932,13 @@ struct ChatView: View {
                                 translateText = t
                             } label: {
                                 Label("Перевести", systemImage: "translate")
+                            }
+                        }
+                        if m.deleted != true && !shielded {
+                            Button {
+                                fwdSheet = m
+                            } label: {
+                                Label("Переслать", systemImage: "arrowshape.turn.up.right")
                             }
                         }
                         if m.mine && m.deleted != true {
@@ -1002,7 +1064,7 @@ struct Bubble: View {
     var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
 
-    private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true }
+    private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true && m.forward == nil }
     private var fill: Color { m.mine ? Color.lime : Color.oxBubble.opacity(0.94) }
     private var ink: Color { m.mine ? Color.onLime : Color.primary }
     private var buttons: [InlineBtn] { m.kind.map { ChatCard.buttons(kind: $0, card: m.card, mine: m.mine) } ?? [] }
@@ -1070,6 +1132,20 @@ struct Bubble: View {
 
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let f = m.forward {
+                // «Переслано от …», как в Telegram
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Переслано от").font(.caption).opacity(0.75)
+                    Text(f.mine == true ? "Вас" : (f.name ?? "Пользователь"))
+                        .font(.caption.bold())
+                        .foregroundStyle(m.mine ? Color.onLime : Color.limeInk)
+                        .lineLimit(1)
+                }
+                .padding(.leading, 8)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(m.mine ? Color.black.opacity(0.45) : Color.lime).frame(width: 3)
+                }
+            }
             if let r = m.reply {
                 HStack(spacing: 6) {
                     Capsule().fill(m.mine ? Color.black.opacity(0.45) : Color.lime).frame(width: 3)
