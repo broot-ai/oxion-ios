@@ -32,7 +32,14 @@ enum OxSound {
     }
 
     static func play(_ k: Kind) {
-        guard enabled, let sid = id(k) else { return }
+        guard enabled else { return }
+        // сообщения звучат как в iMessage: системные «вжух» при отправке и «дзынь» при получении
+        switch k {
+        case .sent: AudioServicesPlaySystemSound(1004); return       // SentMessage.caf
+        case .received: AudioServicesPlaySystemSound(1003); return   // ReceivedMessage.caf
+        default: break
+        }
+        guard let sid = id(k) else { return }
         AudioServicesPlaySystemSound(sid)
     }
 

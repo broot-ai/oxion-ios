@@ -1073,6 +1073,7 @@ struct ChatView: View {
             replyTo = nil
             withAnimation(.spring(duration: 0.4, bounce: 0.25)) { if !messages.contains(where: { $0.id == m.id }) { messages.append(m) } }
             Haptic.success()
+            OxSound.play(.sent)
             ChatWallpaper.shared.bump()
         } catch { errorText = error.localizedDescription }
         try? FileManager.default.removeItem(at: url)
@@ -1090,6 +1091,7 @@ struct ChatView: View {
             replyTo = nil
             withAnimation(.spring(duration: 0.4, bounce: 0.25)) { if !messages.contains(where: { $0.id == m.id }) { messages.append(m) } }
             Haptic.success()
+            OxSound.play(.sent)
             ChatWallpaper.shared.bump()
         } catch { errorText = error.localizedDescription }
         try? FileManager.default.removeItem(at: url)
@@ -1108,6 +1110,7 @@ struct ChatView: View {
             let m: Message = try await API.upload("/chats/\(chatId)/messages", fields: fields, data: jpg)
             replyTo = nil
             if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
+            OxSound.play(.sent)
         } catch {
             errorText = error.localizedDescription
         }

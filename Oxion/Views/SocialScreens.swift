@@ -534,6 +534,7 @@ struct AICoachView: View {
             items.append(AIMessage(id: -Int(Date().timeIntervalSince1970), role: "user", content: t, plan: nil, createdAt: nil))
             sending = true
         }
+        OxSound.play(.sent)
         defer { if sending { withAnimation(.smooth(duration: 0.3)) { sending = false } } }
         if local.useLocal {
             // ответ на iPhone: показываем текст по мере генерации
