@@ -182,6 +182,9 @@ struct ChatsView: View {
             }
             .listStyle(.plain)
             .environment(\.editMode, .constant(editing ? .active : .inactive))
+            .oxIntro(.sensitive,
+                     onContinue: { UserDefaults.standard.set(true, forKey: SensitiveGuard.enabledKey) },
+                     onLater: { UserDefaults.standard.set(false, forKey: SensitiveGuard.enabledKey) })
             .overlay {
                 if store.loaded && store.items.isEmpty && store.errorText == nil {
                     ContentUnavailableView("Сообщений пока нет",

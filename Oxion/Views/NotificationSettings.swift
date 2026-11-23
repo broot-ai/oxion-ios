@@ -69,6 +69,11 @@ struct NotificationSettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                OxSettingsHeader(icon: "bell.badge.fill", tint: Color(hex: 0xFF5A4E), title: "Уведомления",
+                                 text: "Выберите, о чём сообщать: личные сообщения, группы, каналы и тренировки. Без перехода в настройки iPhone.")
+                    .oxHeaderRow()
+            }
             if status != .authorized && status != .provisional && status != .ephemeral {
                 Section {
                     HStack(spacing: 14) {

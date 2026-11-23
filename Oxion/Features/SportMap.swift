@@ -131,6 +131,7 @@ struct SportMapView: View {
     @State private var addShop = false
     @State private var openStore: Int?
     @State private var locator = MapLocator()
+    @State private var locIntro = false
     @State private var movedSinceSearch = false
     @FocusState private var searchFocused: Bool
 
@@ -227,6 +228,11 @@ struct SportMapView: View {
                 .presentationBackgroundInteraction(.enabled(upThrough: .height(250)))
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled()
+                .sheet(isPresented: $locIntro) {
+                    OxIntroSheet(intro: .location, primary: "Показать рядом со мной",
+                                 onContinue: { locIntro = false; locator.start() },
+                                 onLater: { locIntro = false })
+                }
                 .sheet(isPresented: $addShop) {
                     AddShopPlaceSheet(stores: my?.stores ?? [], center: region?.center ?? locator.location?.coordinate) { _ in
                         Task { await loadMy() }
@@ -237,7 +243,11 @@ struct SportMapView: View {
                 }
         }
         .task {
-            locator.start()
+            if locator.manager.authorizationStatus == .notDetermined && !OxIntro.location.seen {
+                locIntro = true
+            } else {
+                locator.start()
+            }
             await loadShops()
             await loadMy()
         }

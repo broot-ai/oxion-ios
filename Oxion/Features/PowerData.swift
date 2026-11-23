@@ -277,12 +277,21 @@ struct OxRemoteImage<Placeholder: View>: View {
     @ViewBuilder var placeholder: () -> Placeholder
     @State private var img: UIImage?
     @State private var waiting = false
+    @State private var sensitive = false
+    @State private var revealed = false
 
     var body: some View {
         ZStack {
             if let img {
                 Image(uiImage: img).resizable().scaledToFill()
+                    .blur(radius: sensitive && !revealed ? 40 : 0, opaque: true)
                     .transition(.opacity)
+                if sensitive && !revealed {
+                    GeometryReader { g in
+                        SensitiveCover(compact: g.size.width < 180 || g.size.height < 160) { revealed = true }
+                    }
+                    .transition(.opacity)
+                }
             } else {
                 placeholder()
                 if waiting {
@@ -304,9 +313,14 @@ struct OxRemoteImage<Placeholder: View>: View {
 
     private func fetch(force: Bool) async {
         guard let url else { return }
-        if let c = MediaLoader.shared.cached(url) { img = c; return }
+        if let c = MediaLoader.shared.cached(url) {
+            if gated { sensitive = await SensitiveGuard.shared.check(c, url: url) }
+            img = c; return
+        }
         if gated && !force && !MediaLoader.autoPhotos { waiting = true; return }
         if let i = await MediaLoader.shared.load(url) {
+            // откровенные фото размываем ещё до показа
+            if gated { sensitive = await SensitiveGuard.shared.check(i, url: url) }
             withAnimation(.easeOut(duration: 0.25)) { img = i }
         }
     }
@@ -327,6 +341,11 @@ struct DataStorageView: View {
 
     var body: some View {
         List {
+            Section {
+                OxSettingsHeader(icon: "internaldrive.fill", tint: Color(hex: 0x3478F6), title: "Данные и память",
+                                 text: "Сколько места занимает Oxion, сколько трафика тратит и когда загружать фото.")
+                    .oxHeaderRow()
+            }
             Section {
                 NavigationLink {
                     storage

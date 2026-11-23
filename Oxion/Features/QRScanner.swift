@@ -173,6 +173,7 @@ struct QRScanScreen: View {
     @State private var pick: PhotosPickerItem?
     @State private var scanPhase = false
     @State private var appear = false
+    @State private var camIntro = false
 
     var body: some View {
         GeometryReader { geo in
@@ -234,11 +235,25 @@ struct QRScanScreen: View {
         .statusBarHidden()
         .task {
             cam.onCode = { code in onCode(code) }
+            if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined && !OxIntro.camera.seen {
+                camIntro = true
+                return
+            }
             await cam.start()
             withAnimation(.spring(duration: 0.6, bounce: 0.3)) { appear = true }
             scanPhase = true
         }
         .onDisappear { cam.stop() }
+        .sheet(isPresented: $camIntro) {
+            OxIntroSheet(intro: .camera, primary: "Включить камеру", onContinue: {
+                camIntro = false
+                Task {
+                    await cam.start()
+                    withAnimation(.spring(duration: 0.6, bounce: 0.3)) { appear = true }
+                    scanPhase = true
+                }
+            }, onLater: { camIntro = false; dismiss() })
+        }
         .onChange(of: pick) {
             guard let pick else { return }
             Task {
