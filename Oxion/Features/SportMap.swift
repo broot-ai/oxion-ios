@@ -162,23 +162,47 @@ struct SportMapView: View {
             guard let c = f.pointOfInterestCategory else { return true }
             return !Self.sportPOI.contains(c)
         }
-        .mapControls {
-            MapCompass(scope: mapScope)
-            MapPitchToggle(scope: mapScope)
+        .mapControls { MapScaleView(scope: mapScope) }
+        .mapScope(mapScope)
+        // карта под статус-баром, а кнопки — ниже «острова»
+        .ignoresSafeArea()
+        .overlay(alignment: .topLeading) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).frame(width: 46, height: 46)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .padding(.leading, 14).padding(.top, 6)
         }
         .overlay(alignment: .topTrailing) {
-            VStack(spacing: 8) {
-                Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44) }
-                    .buttonStyle(.glass).buttonBorderShape(.circle)
-                MapUserLocationButton(scope: mapScope)
-                    .buttonBorderShape(.circle)
+            // одна стеклянная «таблетка» с кнопками, как в Картах Apple
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.smooth(duration: 0.5)) { position = .userLocation(fallback: .automatic) }
+                    Haptic.tap(.soft)
+                } label: {
+                    Image(systemName: position.followsUserLocation ? "location.fill" : "location")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.limeInk)
+                        .frame(width: 46, height: 46)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Моё местоположение")
                 if my?.stores.isEmpty == false {
-                    Button { addShop = true } label: { Image(systemName: "plus").font(.headline).frame(width: 44, height: 44) }
-                        .buttonStyle(.glass).buttonBorderShape(.circle)
-                        .accessibilityLabel("Добавить магазин на карту")
+                    Divider().frame(width: 26)
+                    Button { addShop = true } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Color.limeInk)
+                            .frame(width: 46, height: 46)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Добавить магазин на карту")
                 }
             }
-            .padding(.trailing, 12)
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .padding(.trailing, 14).padding(.top, 6)
         }
         .overlay(alignment: .top) {
             if movedSinceSearch && category != .shop && picked == nil && pickedShop == nil {
@@ -186,12 +210,10 @@ struct SportMapView: View {
                     Label("Искать здесь", systemImage: "magnifyingglass").font(.subheadline.bold()).padding(.horizontal, 6)
                 }
                 .buttonStyle(.glass)
-                .padding(.top, 8)
+                .padding(.top, 10)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .mapScope(mapScope)
-        .ignoresSafeArea()
         .onMapCameraChange(frequency: .onEnd) { ctx in
             let first = region == nil
             region = ctx.region
