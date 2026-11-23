@@ -131,6 +131,7 @@ struct ChatsView: View {
     @State private var selection = Set<Int>()
     @State private var path: [ChatRoute] = []
     @State private var protectAll = false
+    @State private var newChat = false
 
     enum ChatRoute: Hashable { case chat(ChatRef), archive, ai }
 
@@ -201,6 +202,10 @@ struct ChatsView: View {
                 }
                 if !editing {
                     ToolbarItem(placement: .topBarTrailing) {
+                        Button { newChat = true } label: { Image(systemName: "square.and.pencil") }
+                            .accessibilityLabel("Написать сообщение")
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button { Task { await store.readAll() }; OxHaptics.play(.select) } label: {
                                 Label("Прочитать все", systemImage: "checkmark.message")
@@ -222,6 +227,15 @@ struct ChatsView: View {
                 case .chat(let ref): ChatView(chatId: ref.id, title: ref.name)
                 case .archive: ArchivedChatsView { path.append(.chat($0)) }
                 case .ai: AICoachView()
+                }
+            }
+            .sheet(isPresented: $newChat) {
+                NewMessageSheet { ref in
+                    Task {
+                        await store.load()
+                        try? await Task.sleep(for: .milliseconds(350))
+                        path.append(.chat(ref))
+                    }
                 }
             }
             .searchable(text: $query, prompt: "Поиск по чатам")
@@ -356,9 +370,16 @@ struct ChatRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Avatar(url: API.media(c.peer.photo), name: c.peer.name ?? "?", size: 52)
+            if c.peer.group != nil {
+                GroupAvatar(photo: c.peer.photo, title: c.peer.name ?? "?", kind: c.peer.group, size: 52)
+            } else {
+                Avatar(url: API.media(c.peer.photo), name: c.peer.name ?? "?", size: 52)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
+                    if let g = c.peer.group {
+                        Image(systemName: g == "channel" ? "megaphone.fill" : "person.2.fill").font(.caption).foregroundStyle(.secondary)
+                    }
                     Text(c.peer.name ?? "Пользователь")
                         .font(.headline)
                         .lineLimit(1)
@@ -529,13 +550,16 @@ struct ChatView: View {
     @State private var pullArmed = false
     @State private var scrollDragging = false
     @State private var showSummary = false
+    // группа или канал
+    @State private var group: GroupInfo?
+    @State private var senders: [Int: GSender] = [:]
     /// сколько тянуть: примерно до середины экрана пальцем (из‑за «резинки» это ~40 pt прокрутки)
     private let pullNeed: CGFloat = 40
 
     /// у последнего сообщения в серии от одного человека — «хвостик»
     private var tailIds: Set<Int> {
         var out = Set<Int>()
-        let list = messages.filter { $0.kind != "shot" }
+        let list = messages.filter { $0.kind != "shot" && $0.kind != "svc" }
         for (i, m) in list.enumerated() {
             if i == list.count - 1 || list[i + 1].mine != m.mine { out.insert(m.id) }
         }
@@ -566,9 +590,11 @@ struct ChatView: View {
                             .padding(.bottom, 4)
                     }
                     ForEach(messages) { m in
-                        if m.kind == "shot" {
+                        if m.kind == "shot" || m.kind == "svc" {
                             HStack(spacing: 6) {
-                                Image(systemName: (m.text ?? "").contains("снимок") && !(m.text ?? "").contains("защит") ? "camera.viewfinder" : "lock.shield")
+                                if m.kind == "shot" {
+                                    Image(systemName: (m.text ?? "").contains("снимок") && !(m.text ?? "").contains("защит") ? "camera.viewfinder" : "lock.shield")
+                                }
                                 Text(m.text ?? "Снимок экрана")
                             }
                             .font(.caption.bold())
@@ -660,7 +686,13 @@ struct ChatView: View {
             guard shielded else { return }
             Task { await reportScreenshot() }
         }
-        .safeAreaInset(edge: .bottom) { inputBar }
+        .safeAreaInset(edge: .bottom) {
+            if let g = group, g.canPost != true {
+                channelBar
+            } else {
+                inputBar
+            }
+        }
         .navigationTitle(peer?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -703,10 +735,15 @@ struct ChatView: View {
                                 Image(systemName: "lock.shield.fill").font(.caption2).foregroundStyle(Color.limeInk)
                             }
                         }
-                        Text(PeerStatus.text(peer?.lastSeen))
-                            .font(.caption)
-                            .foregroundStyle(PeerStatus.online(peer?.lastSeen) ? Color.limeInk : Color.secondary)
-                            .lineLimit(1)
+                        if let g = group {
+                            Text(GroupText.count(g.membersCount ?? 0, channel: g.isChannel))
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text(PeerStatus.text(peer?.lastSeen))
+                                .font(.caption)
+                                .foregroundStyle(PeerStatus.online(peer?.lastSeen) ? Color.limeInk : Color.secondary)
+                                .lineLimit(1)
+                        }
                     }
                     .frame(minWidth: 150)
                     .padding(.horizontal, 22)
@@ -722,7 +759,13 @@ struct ChatView: View {
                     profile
                         .navigationTransition(.zoom(sourceID: "peer-avatar", in: zoomNS))
                 } label: {
-                    Avatar(url: API.media(peer?.photo), name: peer?.name ?? title, size: 44)
+                    Group {
+                        if group != nil || peer?.group != nil {
+                            GroupAvatar(photo: peer?.photo, title: peer?.name ?? title, kind: group?.kind ?? peer?.group, size: 44)
+                        } else {
+                            Avatar(url: API.media(peer?.photo), name: peer?.name ?? title, size: 44)
+                        }
+                    }
                         .padding(3)
                         .glassEffect(.regular.interactive(), in: .circle)
                         .matchedTransitionSource(id: "peer-avatar", in: zoomNS)
@@ -753,6 +796,25 @@ struct ChatView: View {
         .onChange(of: photoPick) {
             Task { await sendPhoto() }
         }
+    }
+
+    /// подписчик канала не пишет — внизу только «Выключить/включить звук», как в Telegram
+    private var channelBar: some View {
+        let muted = chats.items.first(where: { $0.id == chatId })?.muted == true
+        return Button {
+            Task {
+                let _: OK? = try? await API.call("/chats/\(chatId)/prefs", method: "POST", body: ["muted": !muted])
+                await chats.load()
+                Haptic.tap(.soft)
+            }
+        } label: {
+            Label(muted ? "Включить звук" : "Выключить звук", systemImage: muted ? "bell" : "bell.slash")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 46)
+        }
+        .buttonStyle(.glass)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
     }
 
     private var inputBar: some View {
@@ -833,6 +895,8 @@ struct ChatView: View {
         do {
             let r: ChatDetail = try await API.call("/chats/\(chatId)", query: q)
             peer = r.peer
+            if let g = r.group { group = g }
+            for s in r.senders ?? [] { senders[s.id] = s }
             if let p = r.protect { protect = p }
             peerReadId = r.peerReadId ?? peerReadId
             if after == 0 {
@@ -858,7 +922,12 @@ struct ChatView: View {
 
     @ViewBuilder
     private var profile: some View {
-        if let p = peer {
+        if group != nil || peer?.group != nil {
+            GroupInfoView(chatId: chatId) {
+                Task { await chats.load() }
+                dismiss()
+            }
+        } else if let p = peer {
             ChatPeerProfileView(peer: p, chatId: chatId, messages: messages, shielded: shielded,
                                 shieldLockedByPeer: protect?.by == "peer",
                                 onCall: { video in call = CallRequest(name: p.name ?? title, photo: p.photo, video: video) },
@@ -904,7 +973,9 @@ struct ChatView: View {
 
     @ViewBuilder
     private func bubbleRow(_ m: Message) -> some View {
-                Bubble(m: m, read: m.mine && m.id <= peerReadId, tail: tailIds.contains(m.id)) { action in
+                Bubble(m: m, read: m.mine && m.id <= peerReadId, tail: tailIds.contains(m.id),
+                       sender: group?.kind == "group" && !m.mine ? m.fromId.flatMap { senders[$0] } : nil,
+                       groupMode: group?.kind == "group") { action in
                     switch action {
                     case .product(let id): productBox = AppModel.IdBox(id: id)
                     case .call(let video): call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: video)
@@ -1069,6 +1140,9 @@ struct Bubble: View {
     var read: Bool
     /// последнее сообщение в серии от одного человека — с «хвостиком»
     var tail = true
+    /// автор сообщения в группе (имя над пузырём и аватарка слева)
+    var sender: GSender? = nil
+    var groupMode = false
     var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
 
@@ -1078,8 +1152,16 @@ struct Bubble: View {
     private var buttons: [InlineBtn] { m.kind.map { ChatCard.buttons(kind: $0, card: m.card, mine: m.mine) } ?? [] }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
+        HStack(alignment: .bottom, spacing: 6) {
             if m.mine { Spacer(minLength: 56) }
+            if groupMode && !m.mine {
+                // аватар автора — у последнего сообщения серии, как в Telegram
+                if tail, let s = sender {
+                    Avatar(url: API.media(s.photo), name: s.name ?? "?", size: 30)
+                } else {
+                    Color.clear.frame(width: 30, height: 1)
+                }
+            }
             VStack(alignment: m.mine ? .trailing : .leading, spacing: 4) {
                 VStack(spacing: 4) {
                     if isCardOnly, m.kind == "vnote" {
@@ -1123,6 +1205,11 @@ struct Bubble: View {
         .padding(m.mine ? .trailing : .leading, tail ? 0 : 0)
     }
 
+    static func nameColor(_ id: Int) -> Color {
+        let palette: [Color] = [Color(hex: 0xFF5E57), Color(hex: 0xFF9F0A), Color(hex: 0xA25AFF), Color(hex: 0x30B0C7), Color(hex: 0x34C759), Color(hex: 0x0A84FF), Color(hex: 0xFF375F)]
+        return palette[abs(id) % palette.count]
+    }
+
     private var shape: TailBubbleShape { TailBubbleShape(mine: m.mine, radius: style.radius, tail: tail) }
 
     // карточка (товар, звонок, тренировка…) в пузыре
@@ -1140,6 +1227,12 @@ struct Bubble: View {
 
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let s = sender {
+                Text(s.name ?? "Участник")
+                    .font(.caption.bold())
+                    .foregroundStyle(Bubble.nameColor(s.id))
+                    .lineLimit(1)
+            }
             if let f = m.forward {
                 // «Переслано от …», как в Telegram
                 VStack(alignment: .leading, spacing: 0) {

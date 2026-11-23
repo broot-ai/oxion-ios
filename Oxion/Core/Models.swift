@@ -338,10 +338,14 @@ struct Peer: Decodable {
     let photo: String?
     let trainer: Bool?
     let lastSeen: Double?
+    /// "group" | "channel" — это группа или канал, а не человек
+    var group: String? = nil
+    var members: Int? = nil
 }
 
 struct ChatItem: Decodable, Identifiable {
     let id: Int
+    var kind: String? = nil
     let peer: Peer
     let last: String?
     let mine: Bool?
@@ -373,6 +377,7 @@ struct Message: Decodable, Identifiable {
     let reactions: [MsgReaction]?
     let card: JSONValue?
     var forward: MsgForward? = nil
+    var fromId: Int? = nil
 }
 
 /// «Переслано от …»: автор оригинала
@@ -385,7 +390,56 @@ struct ChatDetail: Decodable {
     let messages: [Message]
     let changed: [Message]?
     let peerReadId: Int?
+    var group: GroupInfo? = nil
+    var senders: [GSender]? = nil
 }
+
+// MARK: - Группы и каналы
+
+struct GSender: Decodable, Hashable, Identifiable { let id: Int; let name: String?; let photo: String? }
+
+struct GMember: Decodable, Hashable, Identifiable {
+    let id: Int
+    let name: String?
+    let username: String?
+    let photo: String?
+    let lastSeen: Double?
+    let role: String?
+}
+
+struct GroupInfo: Decodable, Identifiable {
+    let id: Int
+    let kind: String
+    let title: String?
+    let about: String?
+    let photo: String?
+    let `public`: Bool?
+    let membersCount: Int?
+    let role: String?
+    let canPost: Bool?
+    let canEdit: Bool?
+    let members: [GMember]?
+    var isChannel: Bool { kind == "channel" }
+}
+
+struct Contact: Decodable, Hashable, Identifiable {
+    let id: Int
+    let name: String?
+    let username: String?
+    let photo: String?
+    let lastSeen: Double?
+}
+
+struct ContactChat: Decodable, Hashable, Identifiable {
+    let id: Int
+    let kind: String
+    let title: String?
+    let photo: String?
+    let members: Int?
+    let joined: Bool?
+}
+
+struct ContactsResponse: Decodable { let items: [Contact]; let chats: [ContactChat]? }
 
 enum Kinds {
     static let label: [String: String] = [
