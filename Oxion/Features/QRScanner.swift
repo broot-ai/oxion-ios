@@ -214,56 +214,6 @@ struct QRScanScreen: View {
                         .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: scanPhase)
                 }
 
-                VStack(spacing: 0) {
-                    HStack {
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark").font(.headline).frame(width: 46, height: 46)
-                        }
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        Spacer()
-                        Text("Сканер QR").font(.headline)
-                        Spacer()
-                        Color.clear.frame(width: 46, height: 46)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, geo.safeAreaInsets.top + 6)
-
-                    Spacer()
-
-                    Text(cam.denied ? "Нет доступа к камере" : cam.found == nil ? "Наведите камеру на QR-код" : "Нашли!")
-                        .font(.subheadline.bold())
-                        .contentTransition(.opacity)
-                        .padding(.horizontal, 16).padding(.vertical, 9)
-                        .glassEffect(.regular, in: .capsule)
-                        .padding(.bottom, 26)
-
-                    HStack(spacing: 40) {
-                        PhotosPicker(selection: $pick, matching: .images) {
-                            VStack(spacing: 6) {
-                                Image(systemName: "photo.on.rectangle").font(.title3).frame(width: 60, height: 60)
-                                    .glassEffect(.regular.interactive(), in: .circle)
-                                Text("Из фото").font(.caption.bold())
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        Button { cam.toggleTorch() } label: {
-                            VStack(spacing: 6) {
-                                Image(systemName: cam.torch ? "flashlight.on.fill" : "flashlight.off.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(cam.torch ? .black : .white)
-                                    .frame(width: 60, height: 60)
-                                    .background(cam.torch ? Color.white : .clear, in: Circle())
-                                    .glassEffect(.regular.interactive(), in: .circle)
-                                    .contentTransition(.symbolEffect(.replace))
-                                Text("Фонарик").font(.caption.bold())
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.bottom, geo.safeAreaInsets.bottom + 24)
-                }
-                .foregroundStyle(.white)
-
                 if cam.denied {
                     VStack(spacing: 14) {
                         Image(systemName: "camera.fill").font(.system(size: 44))
@@ -280,6 +230,7 @@ struct QRScanScreen: View {
             .animation(.spring(duration: 0.45, bounce: 0.3), value: cam.found)
         }
         .ignoresSafeArea()
+        .overlay { controls }
         .statusBarHidden()
         .task {
             cam.onCode = { code in onCode(code) }
@@ -295,5 +246,72 @@ struct QRScanScreen: View {
                 self.pick = nil
             }
         }
+    }
+
+    /// Кнопки поверх камеры — внутри безопасной зоны, чтобы не уходили под края экрана.
+    /// Стекло без .interactive(): интерактивное стекло на подписи кнопки забирает нажатие себе.
+    private var controls: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.headline).frame(width: 46, height: 46)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                Spacer()
+                Text("Сканер QR").font(.headline)
+                Spacer()
+                Color.clear.frame(width: 46, height: 46)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+            Spacer()
+
+            Text(cam.denied ? "Нет доступа к камере" : cam.found == nil ? "Наведите камеру на QR-код" : "Нашли!")
+                .font(.subheadline.bold())
+                .contentTransition(.opacity)
+                .padding(.horizontal, 16).padding(.vertical, 9)
+                .glassEffect(.regular, in: .capsule)
+                .padding(.bottom, 26)
+
+            HStack(spacing: 40) {
+                PhotosPicker(selection: $pick, matching: .images) {
+                    roundLabel(icon: "photo.on.rectangle", title: "Из фото", on: false)
+                }
+                .buttonStyle(QRPressStyle())
+                Button { cam.toggleTorch() } label: {
+                    roundLabel(icon: cam.torch ? "flashlight.on.fill" : "flashlight.off.fill", title: "Фонарик", on: cam.torch)
+                }
+                .buttonStyle(QRPressStyle())
+                .disabled(cam.denied)
+            }
+            .padding(.bottom, 16)
+        }
+        .foregroundStyle(.white)
+    }
+
+    private func roundLabel(icon: String, title: String, on: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(on ? .black : .white)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 60, height: 60)
+                .background(on ? Color.white : .clear, in: Circle())
+                .glassEffect(.regular, in: .circle)
+            Text(title).font(.caption.bold())
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// Лёгкое «нажатие» для круглых кнопок сканера
+private struct QRPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.4), value: configuration.isPressed)
     }
 }
