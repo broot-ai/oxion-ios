@@ -1231,6 +1231,17 @@ struct PlatformView: View {
                         }
                         .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
                     }
+                    NavigationLink { MapPlacesAdminView() } label: {
+                        HStack {
+                            IconBubble(icon: "map.fill", size: 38)
+                            Text("Магазины на карте").font(.headline)
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
+                        }
+                        .padding(14)
+                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                     NavigationLink { NFCTagsAdminView() } label: {
                         HStack {
                             IconBubble(icon: "wave.3.right.circle.fill", size: 38)

@@ -146,6 +146,7 @@ final class AppModel {
     var sheet: AppSheet?
     var showVision = false
     var showMuscles = false
+    var showMap = false
     var showCatalog = false
     var offerLoginKey = false
     var exerciseBox: IdBox?
@@ -194,6 +195,7 @@ final class AppModel {
         case "permissions": sheet = .permissions
         case "vision": showVision = true
         case "muscles", "body": showMuscles = true
+        case "map": showMap = true
         case "exercises", "catalog": showCatalog = true
         case "run": sheet = .run
         case "devices": sheet = .devices
@@ -472,6 +474,7 @@ struct MainTabView: View {
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }
         .fullScreenCover(isPresented: $model.showMuscles) { Body3DScreen() }
+        .fullScreenCover(isPresented: $model.showMap) { SportMapView() }
         .sheet(isPresented: $model.showCatalog) {
             NavigationStack {
                 WorkoutDBCatalogView()

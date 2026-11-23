@@ -219,6 +219,7 @@ struct AIActionButtons: View {
         case "exercises": "play.rectangle.on.rectangle"
         case "vision": "camera.viewfinder"
         case "run": "figure.run"
+        case "map": "map.fill"
         case "rest": "timer"
         case "devices": "dot.radiowaves.left.and.right"
         case "trainers", "trainer": "person.crop.circle.badge.checkmark"
