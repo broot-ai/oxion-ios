@@ -79,7 +79,7 @@ struct SubscriptionView: View {
                     benefit("checkmark.seal.fill", "Значок тренера в ленте и профиле")
                 }
                 .padding(18)
-                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .oxCardBG(24)
 
                 if let t {
                     if t.published == true, let until = t.paidUntil {
@@ -351,7 +351,7 @@ struct RecordsView: View {
                             Spacer()
                         }
                         .padding(14)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .oxCardBG(22)
                     }
                 } else if let a = ach {
                     HStack(spacing: 12) {
@@ -372,7 +372,7 @@ struct RecordsView: View {
                             }
                             .padding(14)
                             .frame(maxWidth: .infinity, minHeight: 170)
-                            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .oxCardBG(22)
                             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(x.done ? Color.lime.opacity(0.5) : Color.clear))
                         }
                     }
@@ -469,7 +469,7 @@ struct ChallengeCard: View {
             }
         }
         .padding(16)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .oxCardBG(24)
     }
 
     private func fmt(_ v: Double?) -> String {
@@ -572,7 +572,7 @@ struct GoalsView: View {
                         .foregroundStyle(Color.oxHint)
                     }
                     .padding(16)
-                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .oxCardBG(22)
                 }
                 if !loaded { LoadingOrError(error: errorText) { Task { await load() } } }
             }
@@ -639,7 +639,7 @@ struct MyCoachView: View {
                                 .buttonStyle(.glass)
                         }
                         .padding(14)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .oxCardBG(22)
                     }
                     if let b = d.bookings, !b.isEmpty {
                         SectionCard(title: "Записи на занятия") {
@@ -688,7 +688,7 @@ struct MyCoachView: View {
                             Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
                         }
                         .padding(14)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .oxCardBG(22)
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -770,7 +770,7 @@ struct ClientsView: View {
                                 .buttonStyle(.glass)
                         }
                         .padding(14)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .oxCardBG(22)
                     }
                 } else {
                     LoadingOrError(error: errorText) { Task { await load() } }
@@ -836,7 +836,7 @@ struct HealthView: View {
                         .frame(height: 170)
                     }
                     .padding(16)
-                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .oxCardBG(24)
 
                     HStack {
                         Image(systemName: "checkmark.icloud.fill").foregroundStyle(Color.limeInk)
@@ -916,7 +916,7 @@ struct HealthView: View {
             }
         }
         .padding(18)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .oxCardBG(26)
     }
 
     private func connect() async {
@@ -963,7 +963,7 @@ struct HealthView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .oxCardBG(22)
     }
 }
 
@@ -1035,7 +1035,7 @@ struct OrdersView: View {
                         Text(rub(o.totalKop)).font(.headline)
                     }
                     .padding(14)
-                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .oxCardBG(22)
                 }
                 if !loaded { LoadingOrError(error: errorText) { Task { await load() } } }
             }
@@ -1125,7 +1125,7 @@ struct WorkView: View {
             .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(18)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .oxCardBG(26)
     }
 
     private func load() async { me = try? await API.call("/m/me") as MMe }
@@ -1239,7 +1239,7 @@ struct PlatformView: View {
                             Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
                         }
                         .padding(14)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .oxCardBG(18)
                     }
                     .buttonStyle(.plain)
                     NavigationLink { NFCTagsAdminView() } label: {
@@ -1250,7 +1250,7 @@ struct PlatformView: View {
                             Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
                         }
                         .padding(14)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .oxCardBG(18)
                     }
                     .buttonStyle(.plain)
                     SectionCard(title: "Обращения в поддержку") {
@@ -1272,7 +1272,7 @@ struct PlatformView: View {
                                     Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
                                 }
                                 .padding(12)
-                                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .oxCardBG(18)
                             }
                             .buttonStyle(.plain)
                         }
@@ -1315,7 +1315,7 @@ struct PlatformView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
         .padding(12)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .oxCardBG(18)
     }
 
     private func load() async {

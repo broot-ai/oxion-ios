@@ -944,7 +944,7 @@ struct MapPlacesAdminView: View {
         .navigationTitle("Магазины на карте")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: status) { await load() }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .sheet(item: $rejecting) { p in
             RejectPlaceSheet(place: p) { reason in Task { await decide(p, false, reason: reason) } }
         }

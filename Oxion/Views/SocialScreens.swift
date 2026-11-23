@@ -53,6 +53,7 @@ struct UserProfileView: View {
                                    },
                                    onRemove: { posts.removeAll { $0.post.id == item.post.id } },
                                    onCompose: { compose = $0 })
+                            .reassemblesRow()
                         Divider().overlay(Color.primary.opacity(0.06))
                     }
                 } else {
@@ -235,6 +236,7 @@ struct ActivityView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .reassemblesRow()
                 .listRowBackground(Color.clear)
             }
         }

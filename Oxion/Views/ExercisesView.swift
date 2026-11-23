@@ -54,7 +54,7 @@ struct ExercisesView: View {
                                     }
                                     .frame(width: 84)
                                     .padding(.vertical, 10)
-                                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .oxCardBG(20)
                                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
                                         .stroke(muscle == key ? Color.lime : Color.primary.opacity(0.07), lineWidth: muscle == key ? 2 : 1))
                                 }
@@ -103,6 +103,7 @@ struct ExercisesView: View {
                                 }
                             }
                         }
+                        .reassemblesRow()
                     }
                 } footer: {
                     if loaded && !all.isEmpty {
@@ -160,7 +161,7 @@ struct ExerciseDetailView: View {
                     MuscleFigure(key: e.muscle, height: 240, name: e.name)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .oxCardBG(26)
                 }
                 HStack(spacing: 10) {
                     StatPill(icon: "figure.strengthtraining.traditional", text: model.muscleName(e.muscle))

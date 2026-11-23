@@ -190,7 +190,7 @@ struct WorkoutDBCatalogView: View {
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .padding(10)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .oxCardBG(22)
     }
 
     private func params(cursor: String?) -> [String: String] {

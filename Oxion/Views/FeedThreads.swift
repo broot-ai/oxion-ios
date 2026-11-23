@@ -450,7 +450,7 @@ struct ProfileTodoCards: View {
         }
         .padding(12)
         .frame(width: 170)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .oxCardBG(18)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.primary.opacity(0.06)))
     }
 

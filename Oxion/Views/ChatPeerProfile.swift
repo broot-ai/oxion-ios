@@ -168,7 +168,7 @@ struct ChatPeerProfileView: View {
                 infoRow("переписка", shieldLockedByPeer ? "Собеседник включил защиту от снимков" : "Защищена от снимков экрана", accent: true)
             }
         }
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .oxCardBG(20)
         .padding(.horizontal, 12)
     }
 
@@ -224,7 +224,7 @@ struct ChatPeerProfileView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(14)
-                            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .oxCardBG(18)
                         }
                         .buttonStyle(.plain)
                     }

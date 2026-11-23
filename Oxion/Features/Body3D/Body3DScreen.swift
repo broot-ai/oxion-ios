@@ -372,7 +372,7 @@ struct HomeMuscleCard: View {
                 Image(systemName: "chevron.right").foregroundStyle(Color.oxHint)
             }
             .padding(16)
-            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .oxCardBG(24)
         }
         .buttonStyle(.plain)
     }

@@ -277,7 +277,7 @@ struct MuscleLoadOverview: View {
             .navigationTitle("Нагрузка на мышцы")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } } }
-            .refreshable { await intel.refresh() }
+            .oxRefreshable { await intel.refresh() }
         }
     }
 }

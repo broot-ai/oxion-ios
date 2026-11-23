@@ -112,6 +112,7 @@ struct FeedView: View {
                                    onRemove: { store.remove(item.post.id) },
                                    onRemoveAuthor: { store.removeAuthor($0) },
                                    onCompose: { compose = $0 })
+                            .reassemblesRow()
                             .onAppear {
                                 if item.id == store.items.last?.id { Task { await store.load(reset: false) } }
                             }
@@ -729,7 +730,7 @@ struct PostWorkoutCard: View {
             Spacer()
         }
         .padding(12)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .oxCardBG(18)
     }
 }
 
@@ -748,7 +749,7 @@ struct PostProductCard: View {
             Spacer()
         }
         .padding(10)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .oxCardBG(18)
     }
 }
 

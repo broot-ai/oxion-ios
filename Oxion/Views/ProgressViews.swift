@@ -108,7 +108,7 @@ struct ProgressHubView: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 22)
                 }
                 .buttonStyle(.plain)
-                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .oxCardBG(22)
                 .padding(.horizontal, 16)
             } else if store.photos.isEmpty {
                 VStack(spacing: 8) {
@@ -118,7 +118,7 @@ struct ProgressHubView: View {
                     Button("Добавить фото") { addPhoto = true }.buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(.black)
                 }
                 .frame(maxWidth: .infinity).padding(20)
-                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .oxCardBG(22)
                 .padding(.horizontal, 16)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -346,7 +346,7 @@ struct ProgressHubView: View {
         VStack(alignment: .leading, spacing: 8) { c() }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .oxCardBG(22)
             .padding(.horizontal, 16)
     }
 
@@ -1043,7 +1043,7 @@ struct ReplayPlayerView: View {
             }
         }
         .padding(20)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .oxCardBG(28)
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Color.lime.opacity(0.4), lineWidth: 1))
         .foregroundStyle(.primary)
     }

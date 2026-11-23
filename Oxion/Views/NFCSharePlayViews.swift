@@ -98,7 +98,7 @@ struct NFCCheckInView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity)
-                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .oxCardBG(22)
                 }
 
                 if !history.isEmpty {
@@ -235,7 +235,7 @@ struct SharePlayView: View {
                         Spacer()
                     }
                     .padding(14)
-                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .oxCardBG(18)
                 }
 
                 Button {
@@ -275,7 +275,7 @@ struct SharePlayView: View {
             }
         }
         .padding(14)
-        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .oxCardBG(18)
     }
 
     private func start() async {

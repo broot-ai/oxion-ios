@@ -295,7 +295,7 @@ struct NewWorkoutSheet: View {
                                     }
                                     .frame(width: 92)
                                     .padding(.vertical, 10)
-                                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .oxCardBG(20)
                                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
                                         .stroke(on ? Color.lime : Color.primary.opacity(0.07), lineWidth: on ? 2 : 1))
                                     .shadow(color: on ? Color.lime.opacity(0.35) : .clear, radius: 10)

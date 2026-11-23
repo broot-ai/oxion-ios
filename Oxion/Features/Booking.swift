@@ -230,7 +230,7 @@ struct BookingSheet: View {
                             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .padding(16)
-                    .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .oxCardBG(24)
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -459,7 +459,7 @@ struct HomeSessionCard: View {
                 Image(systemName: "chevron.right").foregroundStyle(.secondary)
             }
             .padding(16)
-            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .oxCardBG(24)
         }
         .buttonStyle(.plain)
     }
@@ -536,7 +536,7 @@ struct TrainerScheduleView: View {
             }
         }
         .sheet(isPresented: $adding) { AddSlotsSheet { store.refreshTrainer() } }
-        .refreshable { store.refreshTrainer() }
+        .oxRefreshable { store.refreshTrainer() }
         .onAppear { store.refreshTrainer() }
     }
 }

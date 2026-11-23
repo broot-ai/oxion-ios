@@ -241,7 +241,7 @@ private struct SyncDots: View {
 
 // MARK: - Модификатор вместо стандартного «потяни, чтобы обновить»
 
-private struct IslandRefresh: ViewModifier {
+struct IslandRefresh: ViewModifier {
     let action: () async -> Void
     @State private var pull: CGFloat = 0
 
@@ -264,6 +264,6 @@ private struct IslandRefresh: ViewModifier {
 extension View {
     /// Потяни вниз — обновление с анимацией Dynamic Island
     func oxRefreshable(_ action: @escaping () async -> Void) -> some View {
-        modifier(IslandRefresh(action: action))
+        reassemblyRefreshable(action)
     }
 }

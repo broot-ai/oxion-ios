@@ -439,7 +439,7 @@ struct StatusView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showProgram) { NavigationStack { ProgramBuilderView() } }
         .task { await load() }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
     }
 
     private func areaRow(_ a: StatusArea) -> some View {

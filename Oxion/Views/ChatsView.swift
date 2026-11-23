@@ -176,6 +176,7 @@ struct ChatsView: View {
                 }
                 ForEach(filtered) { c in
                     ChatListRow(c: c, editing: editing) { path.append(.chat(ChatRef(id: c.id, name: c.peer.name ?? "Чат"))) }
+                        .reassemblesRow()
                         .tag(c.id)
                 }
             }

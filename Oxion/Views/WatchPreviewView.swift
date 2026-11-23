@@ -126,7 +126,7 @@ struct WatchPreviewView: View {
                 .font(.subheadline)
                 .labelStyle(TintedIconLabel(tint: Color.lime))
                 .padding(16)
-                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .oxCardBG(22)
             }
             .padding(16)
         }

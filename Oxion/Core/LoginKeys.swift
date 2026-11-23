@@ -313,7 +313,7 @@ struct LoginKeysView: View {
         }
         .navigationTitle("Ключи входа")
         .task { await load() }
-        .refreshable { await load() }
+        .oxRefreshable { await load() }
         .alert("Название ключа", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Например, iPhone 17 Pro", text: $newName)
             Button("Сохранить") { if let k = renaming { Task { await rename(k) } } }

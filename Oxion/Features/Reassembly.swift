@@ -66,17 +66,17 @@ final class Reassembly {
 /// индивидуальная, но постоянная для карточки траектория (по её номеру)
 struct ScatterPath {
     let dx: CGFloat, dy: CGFloat, angle: Double, scale: CGFloat, tiltX: Double, tiltY: Double, lift: CGFloat
-    init(index i: Int) {
+    init(index i: Int, amplitude a: CGFloat = 1) {
         func r(_ k: Int) -> CGFloat {  // детерминированный «случай» −1…1
             let x = sin(Double(i * 92821 + k * 68917) * 0.0137) * 43758.5453
             return CGFloat((x - floor(x)) * 2 - 1)
         }
-        dx = r(1) * 46
-        dy = r(2) * 34 - 6
-        angle = Double(r(3)) * 9
-        scale = 0.9 + (r(4) + 1) * 0.07
-        tiltX = Double(r(5)) * 16
-        tiltY = Double(r(6)) * 18
+        dx = r(1) * 46 * a
+        dy = (r(2) * 34 - 6) * a
+        angle = Double(r(3) * a) * 9
+        scale = 1 - (0.1 - (r(4) + 1) * 0.07) * a
+        tiltX = Double(r(5) * a) * 16
+        tiltY = Double(r(6) * a) * 18
         lift = 6 + (r(7) + 1) * 5
     }
 }
@@ -114,39 +114,61 @@ struct ReassembleEffect: GeometryEffect {
 
 // MARK: - Модификаторы
 
-private struct ReassembleCard: ViewModifier {
-    let index: Int
-    let ns: Namespace.ID
-    @Environment(Reassembly.self) private var ra
+private struct ReassemblyInsideKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// true внутри карточки, которая уже летает — вложенные карточки не разлетаются отдельно
+    var reassemblyInside: Bool {
+        get { self[ReassemblyInsideKey.self] }
+        set { self[ReassemblyInsideKey.self] = newValue }
+    }
+}
 
+private struct ReassembleCard: ViewModifier {
+    let index: Int?
+    let radius: CGFloat
+    let amplitude: CGFloat
+    let ghost: Bool
+    @State private var seed = Int.random(in: 1...9999)
+    @Namespace private var ns
+    @Environment(Reassembly.self) private var ra: Reassembly?
+    @Environment(\.reassemblyInside) private var inside
+
+    @ViewBuilder
     func body(content: Content) -> some View {
-        let path = ScatterPath(index: index)
+        if let ra, !inside {
+            flying(content.environment(\.reassemblyInside, true), ra)
+        } else {
+            content
+        }
+    }
+
+    private func flying(_ content: some View, _ ra: Reassembly) -> some View {
+        let path = ScatterPath(index: index ?? seed, amplitude: amplitude)
         let scattered = ra.phase == .scattered
         let lift = ra.phase == .pulling ? min(1, ra.pull) : 0
         // небольшая задержка у каждой карточки — разлёт и сборка «волной»
-        let delay = Double(index) * 0.035
-        content
-            .matchedGeometryEffect(id: "slot\(index)", in: ns, properties: .frame, isSource: true)
+        let delay = Double((index ?? seed) % 9) * 0.035
+        let shape = RoundedRectangle(cornerRadius: max(radius, 1), style: .continuous)
+        return content
+            .matchedGeometryEffect(id: "slot", in: ns, properties: .frame, isSource: true)
             .modifier(ReassembleEffect(t: ra.reduceMotion ? 0 : (scattered ? 1 : 0), lift: ra.reduceMotion ? 0 : lift, path: path))
             .animation(.spring(duration: scattered ? 0.7 : 0.75, bounce: scattered ? 0.28 : 0.22).delay(delay), value: scattered)
-            .shadow(color: Color(hex: 0x5AC8FA).opacity(scattered ? 0.28 : 0.12 * lift), radius: scattered ? 22 : 12 * lift, y: scattered ? 10 : 6 * lift)
+            .shadow(color: Color(hex: 0x5AC8FA).opacity(scattered ? 0.25 : 0.1 * lift), radius: scattered ? 20 : 10 * lift, y: scattered ? 8 : 5 * lift)
             .opacity(ra.reduceMotion && scattered ? 0.55 : 1)
             .background {
                 // стеклянное «гнездо» на исходном месте карточки
-                if !ra.reduceMotion {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                if ghost && !ra.reduceMotion {
+                    shape
                         .fill(Color(hex: 0x5AC8FA).opacity(0.05))
-                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Color(hex: 0x5AC8FA).opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [6, 6])))
-                        .matchedGeometryEffect(id: "slot\(index)", in: ns, properties: .frame, isSource: false)
+                        .overlay(shape.strokeBorder(Color(hex: 0x5AC8FA).opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [6, 6])))
+                        .matchedGeometryEffect(id: "slot", in: ns, properties: .frame, isSource: false)
                         .opacity(scattered ? 1 : 0)
                         .animation(.easeInOut(duration: 0.35), value: scattered)
                         .allowsHitTesting(false)
                 }
             }
             .overlay {
-                // голубая вспышка по контуру при завершении
-                FlashRim(trigger: ra.flash, delay: delay)
+                FlashRim(trigger: ra.flash, delay: delay, radius: radius)
                     .allowsHitTesting(false)
             }
     }
@@ -155,9 +177,10 @@ private struct ReassembleCard: ViewModifier {
 private struct FlashRim: View {
     let trigger: Int
     let delay: Double
+    let radius: CGFloat
     @State private var on = false
     var body: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
+        RoundedRectangle(cornerRadius: max(radius, 1), style: .continuous)
             .strokeBorder(LinearGradient(colors: [Color(hex: 0x8FE3FF), Color(hex: 0x5AC8FA).opacity(0.2)], startPoint: .top, endPoint: .bottom), lineWidth: 1.5)
             .shadow(color: Color(hex: 0x5AC8FA).opacity(0.8), radius: 12)
             .opacity(on ? 1 : 0)
@@ -239,8 +262,24 @@ extension View {
         modifier(ReassemblyHost(action: action))
     }
 
-    /// Карточка, которая участвует в разлёте и сборке
-    func reassembles(_ index: Int, in ns: Namespace.ID) -> some View {
-        modifier(ReassembleCard(index: index, ns: ns))
+    /// Карточка, которая участвует в разлёте и сборке (на экранах с обновлением)
+    func reassembles(_ index: Int, in ns: Namespace.ID? = nil, radius: CGFloat = 22) -> some View {
+        modifier(ReassembleCard(index: index, radius: radius, amplitude: 1, ghost: true))
+    }
+
+    /// Любой блок: своя случайная, но постоянная траектория
+    func reassembles(radius: CGFloat = 22, amplitude: CGFloat = 1, ghost: Bool = true) -> some View {
+        modifier(ReassembleCard(index: nil, radius: radius, amplitude: amplitude, ghost: ghost))
+    }
+
+    /// Строка списка или поста: разлёт поменьше, без «гнезда»
+    func reassemblesRow() -> some View {
+        modifier(ReassembleCard(index: nil, radius: 0, amplitude: 0.45, ghost: false))
+    }
+
+    /// Фон карточки Oxion + участие в разлёте
+    func oxCardBG(_ r: CGFloat) -> some View {
+        background(Color.oxCard, in: RoundedRectangle(cornerRadius: r, style: .continuous))
+            .reassembles(radius: r)
     }
 }

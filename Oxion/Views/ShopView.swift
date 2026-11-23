@@ -99,7 +99,7 @@ struct ShopView: View {
                                     }
                                 }
                                 .padding(12)
-                                .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .oxCardBG(20)
                                 .padding(.horizontal, 16)
                             }
                         }
@@ -256,7 +256,7 @@ struct ProductTile: View {
                 }
             }
             .padding(10)
-            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .oxCardBG(22)
         }
         .buttonStyle(.plain)
     }
