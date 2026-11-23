@@ -57,6 +57,8 @@ final class OxBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     var bookmarked = false
     /// цвет шапки под цвет сайта, как в Telegram
     var pageColor: UIColor = .systemBackground
+    /// снимок приложения: он «отъезжает назад», как экран под листом iOS
+    var backdrop: UIImage?
 
     private(set) var webView: WKWebView?
     private var observers: [NSKeyValueObservation] = []
@@ -75,24 +77,30 @@ final class OxBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         zoom = 1
         wv.pageZoom = 1
         bookmarked = BrowserStore.isBookmarked(u.absoluteString)
-        BrowserWindow.show()
-        withAnimation(.spring(duration: 0.42, bounce: 0.12)) { mode = .open }
+        present()
         Haptic.tap(.soft)
         return true
     }
 
-    func expand() {
+    func expand() { present() }
+
+    /// как лист iOS: сначала снимок приложения, потом шторка выезжает снизу
+    private func present() {
+        if mode != .open { backdrop = BrowserWindow.snapshotApp() }
         BrowserWindow.show()
-        withAnimation(.spring(duration: 0.42, bounce: 0.12)) { mode = .open }
+        guard mode != .open else { return }
+        DispatchQueue.main.async {
+            withAnimation(.spring(duration: 0.5, bounce: 0)) { self.mode = .open }
+        }
     }
 
     func minimize() {
-        withAnimation(.spring(duration: 0.4, bounce: 0.1)) { mode = .minimized }
+        withAnimation(.spring(duration: 0.45, bounce: 0)) { mode = .minimized }
         BrowserWindow.releaseKey()
     }
 
     func close() {
-        withAnimation(.smooth(duration: 0.3)) { mode = .hidden }
+        withAnimation(.spring(duration: 0.45, bounce: 0)) { mode = .hidden }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, self.mode == .hidden else { return }
             self.webView?.stopLoading()
@@ -225,6 +233,14 @@ enum BrowserWindow {
         window?.makeKey()
     }
 
+    /// снимок основного окна приложения
+    static func snapshotApp() -> UIImage? {
+        guard let w = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows)
+            .first(where: { !($0 is BrowserPassWindow) && $0.windowLevel == .normal && !$0.isHidden }) else { return nil }
+        let r = UIGraphicsImageRenderer(bounds: w.bounds)
+        return r.image { _ in w.drawHierarchy(in: w.bounds, afterScreenUpdates: false) }
+    }
+
     static func releaseKey() {
         window?.resignKey()
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
@@ -245,23 +261,29 @@ struct BrowserHost: View {
 
     var body: some View {
         GeometryReader { geo in
+            let open = b.mode == .open
+            // 0…1: насколько шторку стянули вниз
+            let k = min(1, max(0, drag / max(1, geo.size.height * 0.6)))
             ZStack(alignment: .bottom) {
-                if b.mode == .open {
-                    Color.black.opacity(0.45 * max(0, 1 - drag / 400))
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                    VStack(spacing: 0) {
-                        // «карточка позади», как у листов iOS
-                        UnevenRoundedRectangle(topLeadingRadius: 26, topTrailingRadius: 26, style: .continuous)
-                            .fill(Color(.systemGray3))
-                            .frame(height: 12)
-                            .padding(.horizontal, 18)
-                        BrowserPanel(drag: $drag)
+                if open {
+                    // приложение «отъезжает назад» и скругляется — как под листом в iOS
+                    Color.black.ignoresSafeArea().transition(.opacity)
+                    if let img = b.backdrop {
+                        Image(uiImage: img)
+                            .resizable()
+                            .ignoresSafeArea()
+                            .clipShape(RoundedRectangle(cornerRadius: 40 + 14 * k, style: .continuous))
+                            .scaleEffect(0.915 + 0.085 * k, anchor: .center)
+                            .offset(y: 6 * (1 - k))
+                            .brightness(-0.12 * (1 - k))
+                            .ignoresSafeArea()
+                            .transition(.scale(scale: 1.093).combined(with: .opacity))
                     }
-                    .padding(.top, geo.safeAreaInsets.top + 2)
-                    .offset(y: max(0, drag))
-                    .transition(.move(edge: .bottom))
-                    .ignoresSafeArea(edges: .bottom)
+                    BrowserPanel(drag: $drag)
+                        .padding(.top, geo.safeAreaInsets.top + 12)
+                        .offset(y: max(0, drag))
+                        .transition(.move(edge: .bottom))
+                        .ignoresSafeArea(edges: .bottom)
                 } else if b.mode == .minimized {
                     BrowserMiniBar()
                         .padding(.horizontal, 12)
@@ -300,7 +322,7 @@ struct BrowserMiniBar: View {
         .overlay(alignment: .bottomLeading) {
             if b.loading {
                 GeometryReader { g in
-                    Capsule().fill(Color.blue).frame(width: g.size.width * max(0.05, b.progress), height: 2.5)
+                    Capsule().fill(Color.lime).frame(width: g.size.width * max(0.05, b.progress), height: 2.5)
                 }
                 .frame(height: 2.5)
                 .padding(.horizontal, 26)
@@ -373,8 +395,12 @@ struct BrowserPanel: View {
             }
         }
         .background(Color(uiColor: b.pageColor))
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 26, topTrailingRadius: 26, style: .continuous))
-        .shadow(color: .black.opacity(0.25), radius: 20, y: -4)
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 38, topTrailingRadius: 38, style: .continuous))
+        .overlay(alignment: .top) {
+            // «ручка» шторки
+            Capsule().fill(Color.primary.opacity(0.18)).frame(width: 38, height: 5).padding(.top, 6)
+                .allowsHitTesting(false)
+        }
         .sheet(isPresented: $showBookmarks) { BrowserBookmarksSheet() }
         .sheet(isPresented: $shareChats) { if let u = b.url { ShareToChatsSheet(url: u) } }
         .sheet(item: $shareItem) { s in ActivitySheet(items: s.items).presentationDetents([.medium, .large]) }
@@ -403,8 +429,7 @@ struct BrowserPanel: View {
                 .glassEffect(.regular.interactive(), in: .capsule)
                 circle("xmark") { stopEditing() }
             } else {
-                circle("xmark") { b.minimize() }
-                    .simultaneousGesture(LongPressGesture().onEnded { _ in b.close() })
+                circle("xmark") { b.close() }
                 Button { startEditing() } label: {
                     Text(b.url?.host()?.replacingOccurrences(of: "www.", with: "") ?? "")
                         .font(.system(size: 17, weight: .semibold))
@@ -420,7 +445,7 @@ struct BrowserPanel: View {
                     // синяя полоска загрузки по низу адресной строки
                     if b.loading {
                         GeometryReader { g in
-                            Capsule().fill(Color.blue)
+                            Capsule().fill(Color.lime)
                                 .frame(width: max(14, (g.size.width - 40) * b.progress), height: 2.5)
                                 .animation(.smooth(duration: 0.2), value: b.progress)
                         }
@@ -434,7 +459,7 @@ struct BrowserPanel: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 12)
+        .padding(.top, 16)
         .padding(.bottom, 10)
     }
 
@@ -625,6 +650,18 @@ struct ShareToChatsSheet: View {
     @State private var q = ""
     @State private var sending = false
     @State private var system = false
+    @State private var loading = true
+    @State private var loadError: String?
+
+    private func loadChats() async {
+        loading = true
+        defer { loading = false }
+        do {
+            let r: ChatsResponse = try await API.call("/chats")
+            withAnimation(.smooth(duration: 0.25)) { chats = r.items.filter { $0.archived != true } }
+            loadError = nil
+        } catch { loadError = error.localizedDescription }
+    }
 
     private var list: [ChatItem] {
         let s = q.trimmingCharacters(in: .whitespaces)
@@ -688,9 +725,12 @@ struct ShareToChatsSheet: View {
         .presentationDetents([.medium, .large])
         .presentationCornerRadius(34)
         .sheet(isPresented: $system) { ActivitySheet(items: [url]).presentationDetents([.medium, .large]) }
-        .task {
-            if let r: ChatsResponse = try? await API.call("/chats") { chats = r.items.filter { $0.archived != true } }
+        .overlay {
+            if loading { ProgressView() }
+            else if let loadError { ContentUnavailableView("Чаты не загрузились", systemImage: "wifi.exclamationmark", description: Text(loadError)) }
+            else if chats.isEmpty { ContentUnavailableView("Чатов пока нет", systemImage: "bubble.left.and.bubble.right") }
         }
+        .task { await loadChats() }
         .animation(.smooth(duration: 0.2), value: picked)
     }
 
