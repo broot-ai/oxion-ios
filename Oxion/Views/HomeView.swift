@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var showExercises = false
     @State private var showShop = false
     @State private var showVision = false
+    @Namespace private var slots
 
     private var goal: Int { max(1, model.me?.weekGoal ?? 3) }
 
@@ -24,19 +25,22 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
-                    searchBar
-                    weekBlock
-                    HomeMuscleCard()
-                    if model.me?.mode == "trainer" {
-                        HomeTrainerCard()
-                    } else {
-                        HomeSessionCard { openTrainer = $0 }
+                    searchBar.reassembles(0, in: slots)
+                    weekBlock.reassembles(1, in: slots)
+                    HomeMuscleCard().reassembles(2, in: slots)
+                    Group {
+                        if model.me?.mode == "trainer" {
+                            HomeTrainerCard()
+                        } else {
+                            HomeSessionCard { openTrainer = $0 }
+                        }
                     }
-                    ringsCard
-                    if model.me?.mode != "trainer" { featuredBlock }
-                    coachCard
-                    quickCards
-                    todayBlock
+                    .reassembles(3, in: slots)
+                    ringsCard.reassembles(4, in: slots)
+                    if model.me?.mode != "trainer" { featuredBlock.reassembles(5, in: slots) }
+                    coachCard.reassembles(6, in: slots)
+                    quickCards.reassembles(7, in: slots)
+                    todayBlock.reassembles(8, in: slots)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 30)
@@ -66,7 +70,7 @@ struct HomeView: View {
                 case .ecosystem: EcosystemView()
                 }
             }
-            .oxRefreshable { await load() }
+            .reassemblyRefreshable { await load() }
             .task { await load() }
         }
     }
