@@ -14,14 +14,14 @@ enum NotifPrefs {
         static func of(_ c: ChatItem) -> Kind { c.peer.group == "channel" ? .channels : c.peer.group == "group" ? .groups : .dm }
     }
 
-    private static func get(_ k: String, _ def: Bool = true) -> Bool { UserDefaults.standard.object(forKey: k) as? Bool ?? def }
+    private static func flag(_ k: String, _ def: Bool = true) -> Bool { UserDefaults.standard.object(forKey: k) as? Bool ?? def }
 
-    static var all: Bool { get("np.all") }
-    static func isOn(_ k: Kind) -> Bool { get("np." + k.rawValue) }
-    static var preview: Bool { get("np.preview") }
-    static var names: Bool { get("np.names") }
-    static var badgeChannels: Bool { get("np.badgeChannels") }
-    static var badgeMessages: Bool { get("np.badgeMessages") }
+    static var all: Bool { flag("np.all") }
+    static func isOn(_ k: Kind) -> Bool { flag("np." + k.rawValue) }
+    static var preview: Bool { flag("np.preview") }
+    static var names: Bool { flag("np.names") }
+    static var badgeChannels: Bool { flag("np.badgeChannels") }
+    static var badgeMessages: Bool { flag("np.badgeMessages") }
 
     /// число на иконке с учётом настроек «Каналы» и «Число сообщений»
     static func badge(_ items: [ChatItem]) -> Int {
