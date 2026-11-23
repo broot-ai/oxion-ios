@@ -521,13 +521,16 @@ struct ChatView: View {
     @State private var productBox: AppModel.IdBox?
     // пересылка перетаскиванием и через меню
     @State private var fwdDrag: Int?
+    /// сообщение «поднято» долгим нажатием; панель чатов покажем, только когда его реально потянут
+    @State private var fwdPending: Int?
     @State private var fwdSheet: Message?
     // «потяни вверх» — краткое содержание
     @State private var pull: CGFloat = 0
     @State private var pullArmed = false
     @State private var scrollDragging = false
     @State private var showSummary = false
-    private let pullNeed: CGFloat = 90
+    /// сколько тянуть: примерно до середины экрана пальцем (из‑за «резинки» это ~40 pt прокрутки)
+    private let pullNeed: CGFloat = 40
 
     /// у последнего сообщения в серии от одного человека — «хвостик»
     private var tailIds: Set<Int> {
@@ -609,12 +612,19 @@ struct ChatView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if scrollDragging && pull > 6 && loaded && !messages.isEmpty {
+                if scrollDragging && pull > 3 && loaded && !messages.isEmpty {
                     PullSummaryHint(progress: pull / pullNeed)
                         .padding(.bottom, 10)
                         .transition(.opacity)
                 }
             }
+            // сообщение сдвинули пальцем — меню само закрывается, а слева выезжают чаты для пересылки
+            .onDrop(of: [.plainText], delegate: ForwardStartDrop(onMove: {
+                guard fwdDrag == nil, let id = fwdPending else { return }
+                Haptic.tap(.medium)
+                fwdDrag = id
+                fwdPending = nil
+            }, onEnd: { fwdPending = nil }))
             .background { ChatWallpaperBackground() }
             // как в Telegram: сверху нет плашки, переписка мягко растворяется под шапкой
             .scrollEdgeEffectStyle(.soft, for: .top)
@@ -904,10 +914,8 @@ struct ChatView: View {
                     .transition(Self.bubbleTransition(mine: m.mine))
                     // зажал и потащил — слева выезжают чаты, бросил на чат — переслано
                     .onDrag {
-                        if !shielded && m.deleted != true {
-                            Haptic.tap(.medium)
-                            withAnimation { fwdDrag = m.id }
-                        }
+                        // iOS вызывает это уже при долгом нажатии (вместе с меню) — панель пока не показываем
+                        fwdPending = (!shielded && m.deleted != true) ? m.id : nil
                         return NSItemProvider(object: "oxion-msg:\(m.id)" as NSString)
                     }
                     .contextMenu {

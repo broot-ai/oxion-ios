@@ -33,6 +33,16 @@ enum ChatForward {
     }
 }
 
+/// Ловит момент, когда поднятое сообщение начали тащить (а не просто держат для меню)
+struct ForwardStartDrop: DropDelegate {
+    var onMove: () -> Void
+    var onEnd: () -> Void
+    func validateDrop(info: DropInfo) -> Bool { true }
+    func dropEntered(info: DropInfo) { onMove() }
+    func dropUpdated(info: DropInfo) -> DropProposal? { onMove(); return DropProposal(operation: .cancel) }
+    func performDrop(info: DropInfo) -> Bool { onEnd(); return false }
+}
+
 /// Панель чатов, которая выезжает слева, пока тащишь сообщение
 struct ForwardDragPanel: View {
     let currentChatId: Int
@@ -246,7 +256,7 @@ struct PullSummaryHint: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
         .glassEffect(.regular, in: .capsule)
-        .opacity(Double(min(1, progress * 1.6)))
+        .opacity(Double(min(1, 0.35 + progress * 1.6)))
         .scaleEffect(0.85 + 0.15 * min(1, progress), anchor: .bottom)
         .animation(.smooth(duration: 0.2), value: ready)
         .allowsHitTesting(false)
