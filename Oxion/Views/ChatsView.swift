@@ -686,6 +686,8 @@ struct ChatView: View {
             guard shielded else { return }
             Task { await reportScreenshot() }
         }
+        // ссылки из переписки — во встроенный браузер (и в защищённых от снимков чатах тоже)
+        .modifier(InAppBrowserLinks())
         .safeAreaInset(edge: .bottom) {
             if let g = group, g.canPost != true {
                 channelBar

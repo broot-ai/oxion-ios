@@ -139,6 +139,8 @@ struct AIRichText: View {
             for run in a.runs where run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true {
                 a[run.range].foregroundColor = Color.primary
             }
+            // голые ссылки тоже нажимаются и открываются во встроенном браузере
+            Linkify.addLinks(&a, color: Color.limeInk)
             return a
         }
         // незакрытая разметка (во время печати) — просто убираем звёздочки

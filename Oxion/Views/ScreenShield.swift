@@ -23,7 +23,7 @@ private struct ShieldRepresentable<Content: View>: UIViewRepresentable {
     let content: Content
 
     func makeUIView(context: Context) -> ShieldView {
-        let host = UIHostingController(rootView: AnyView(content.environment(\.colorScheme, .dark).tint(Color.lime)))
+        let host = UIHostingController(rootView: AnyView(content.environment(\.colorScheme, .dark).tint(Color.lime).modifier(InAppBrowserLinks())))
         host.view.backgroundColor = .clear
         host.safeAreaRegions = []
         context.coordinator.host = host
@@ -31,7 +31,7 @@ private struct ShieldRepresentable<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ShieldView, context: Context) {
-        context.coordinator.host?.rootView = AnyView(content.environment(\.colorScheme, .dark).tint(Color.lime))
+        context.coordinator.host?.rootView = AnyView(content.environment(\.colorScheme, .dark).tint(Color.lime).modifier(InAppBrowserLinks()))
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

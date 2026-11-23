@@ -591,6 +591,21 @@ struct BrowserBookmarksSheet: View {
 enum Linkify {
     private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
+    /// дописать ссылки в уже размеченный текст (например, ответ ИИ с markdown)
+    static func addLinks(_ a: inout AttributedString, color: Color? = nil) {
+        guard let det = detector else { return }
+        let s = String(a.characters)
+        let ns = s as NSString
+        for m in det.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            guard let u = m.url, let r = Range(m.range, in: s) else { continue }
+            let lo = a.characters.index(a.startIndex, offsetBy: s.distance(from: s.startIndex, to: r.lowerBound))
+            let hi = a.characters.index(lo, offsetBy: s.distance(from: r.lowerBound, to: r.upperBound))
+            if a[lo..<hi].runs.contains(where: { $0.link != nil }) { continue }
+            a[lo..<hi].link = u
+            if let color { a[lo..<hi].foregroundColor = color }
+        }
+    }
+
     static func attributed(_ s: String, color: Color? = nil, underline: Bool = false) -> AttributedString {
         var out = AttributedString(s)
         guard let det = detector else { return out }
