@@ -17,12 +17,21 @@ enum WidgetSync {
             snap = await localSnapshot()
         }
         await addDashboard(&snap)
+        await saveCalendar()
         snap.updatedAt = Date()
         snap.save()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    /// Календарь тренировок: прошлый, текущий и следующий месяц
+    private static func saveCalendar() async {
+        let r = WidgetCalendar.range()
+        guard let w: WorkoutsResponse = try? await API.call("/workouts", query: ["from": r.0, "to": r.1]) else { return }
+        WidgetCalendar.build(w.items.map { WidgetCalendar.Item(date: $0.date, exCount: $0.exCount) }).save()
+    }
+
     static func clear() {
+        WidgetShared.defaults?.removeObject(forKey: WidgetCalendar.key)
         WidgetShared.defaults?.removeObject(forKey: WidgetShared.snapshotKey)
         WidgetShared.defaults?.removeObject(forKey: WidgetShared.tokenKey)
         WidgetCenter.shared.reloadAllTimelines()

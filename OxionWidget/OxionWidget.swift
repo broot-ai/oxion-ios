@@ -287,5 +287,6 @@ struct OxionWidgetBundle: WidgetBundle {
         TodayWidget()
         StreakWidget()
         QuickActionsWidget()
+        CalendarWidget()
     }
 }

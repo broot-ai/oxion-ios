@@ -152,3 +152,86 @@ struct WidgetAPIResponse: Decodable {
         return (try? dec.decode(WidgetAPIResponse.self, from: res.0))?.snapshot()
     }
 }
+
+/// Календарь тренировок для виджета: даты «yyyy-MM-dd» по состояниям.
+struct WidgetCalendar: Codable {
+    var done: [String] = []       // тренировка проведена (есть упражнения)
+    var planned: [String] = []    // запланирована (сегодня или позже)
+    var missed: [String] = []     // была в плане, но пустая
+    var updatedAt = Date()
+
+    static let key = "widget_calendar_v1"
+
+    static var placeholder: WidgetCalendar {
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        func d(_ off: Int) -> String { day(cal.date(byAdding: .day, value: off, to: now) ?? now) }
+        return WidgetCalendar(done: [-1, -3, -4, -6, -8, -10, -11, -13, -15].map(d),
+                              planned: [0, 2, 4, 7].map(d), missed: [-17].map(d))
+    }
+
+    static func day(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    /// Диапазон, который нужен сетке месяца: с начала прошлого месяца до конца следующего
+    static func range(_ now: Date = Date()) -> (String, String) {
+        let cal = Calendar(identifier: .gregorian)
+        let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+        let from = cal.date(byAdding: .month, value: -1, to: start) ?? now
+        let to = cal.date(byAdding: .day, value: -1, to: cal.date(byAdding: .month, value: 2, to: start) ?? now) ?? now
+        return (day(from), day(to))
+    }
+
+    struct Item: Decodable { let date: String; let exCount: Int? }
+
+    /// Разложить тренировки по состояниям
+    static func build(_ items: [Item], now: Date = Date()) -> WidgetCalendar {
+        let today = day(now)
+        var c = WidgetCalendar()
+        for w in items {
+            let has = (w.exCount ?? 0) > 0
+            if has && w.date <= today { c.done.append(w.date) }
+            else if w.date >= today { c.planned.append(w.date) }
+            else { c.missed.append(w.date) }
+        }
+        c.done = Array(Set(c.done)).sorted()
+        c.planned = Array(Set(c.planned).subtracting(c.done)).sorted()
+        c.missed = Array(Set(c.missed).subtracting(c.done)).sorted()
+        return c
+    }
+
+    static func load() -> WidgetCalendar? {
+        guard let d = WidgetShared.defaults?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(WidgetCalendar.self, from: d)
+    }
+
+    func save() {
+        if let d = try? JSONEncoder().encode(self) { WidgetShared.defaults?.set(d, forKey: Self.key) }
+    }
+
+    /// Обновление прямо из виджета, если приложение передало вход
+    static func fetch() async -> WidgetCalendar? {
+        guard let d = WidgetShared.defaults,
+              let token = d.string(forKey: WidgetShared.tokenKey),
+              let server = d.string(forKey: WidgetShared.serverKey) else { return nil }
+        let r = range()
+        guard var comps = URLComponents(string: server + "/api/workouts") else { return nil }
+        comps.queryItems = [URLQueryItem(name: "from", value: r.0), URLQueryItem(name: "to", value: r.1)]
+        guard let url = comps.url else { return nil }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 15
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let res = try? await URLSession.shared.data(for: req),
+              (res.1 as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        struct Resp: Decodable { let items: [Item] }
+        let dec = JSONDecoder()
+        dec.keyDecodingStrategy = .convertFromSnakeCase
+        guard let items = (try? dec.decode(Resp.self, from: res.0))?.items else { return nil }
+        return build(items)
+    }
+}
