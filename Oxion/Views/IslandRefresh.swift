@@ -55,7 +55,7 @@ final class IslandHUD {
         progress = min(1.25, d / Self.threshold)
         if progress >= 1 && !crossed {
             crossed = true
-            OxHaptics.play(.select)
+            Haptic.tap(.medium)
         } else if progress < 0.9 {
             crossed = false
         }
@@ -105,7 +105,8 @@ final class IslandHUD {
         Task { await SyncIsland.finish(nil, success: success) }
         try? await Task.sleep(for: .milliseconds(380))
         withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) { phase = .done }
-        OxHaptics.play(success ? .setDone : .select)
+        // без звука — только лёгкая вибрация
+        if success { Haptic.success() } else { Haptic.tap(.rigid) }
         try? await Task.sleep(for: .seconds(1.3))
         withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) { phase = .hidden; progress = 0 }
         crossed = false
@@ -116,108 +117,110 @@ final class PassthroughWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
 }
 
-/// Рисунок поверх Dynamic Island
+/// Рисунок поверх Dynamic Island: чёрная капсула ровно по форме острова «растёт» из него в стороны,
+/// как компактная Live Activity — слева кольцо загрузки, справа индикатор.
 struct IslandOverlay: View {
     @State private var hud = IslandHUD.shared
     @State private var spin = false
 
+    // размер и место Dynamic Island (iPhone 14 Pro … 17 Pro Max)
+    private let islandW: CGFloat = 126
+    private let islandH: CGFloat = 37.33
+    private let islandTop: CGFloat = 11.2
+    private let side: CGFloat = 34
+
     var body: some View {
         GeometryReader { g in
-            // всё рисуем ПОД строкой состояния: её iOS всегда показывает поверх приложений
-            let base = max(hud.topInset, 20) + 4
-            let expanded = hud.phase == .syncing || hud.phase == .done
-            let w: CGFloat = min(g.size.width - 24, 352)
-            let h: CGFloat = 70
+            let hasIsland = hud.topInset >= 51
+            let top = hasIsland ? islandTop : 6
+            let p = min(1, hud.progress)
+            let active = hud.phase != .hidden
+            // при потягивании остров раздаётся в стороны вслед за пальцем; при загрузке — полностью
+            let grow: CGFloat = hud.phase == .pulling ? p : (active ? 1 : 0)
+            let width = (hasIsland ? islandW : 90) + 2 * side * grow + (hud.phase == .done ? 8 : 0)
 
-            ZStack(alignment: .top) {
-                if expanded {
-                    RoundedRectangle(cornerRadius: h / 2, style: .continuous)
-                        .fill(.black)
-                        .overlay(RoundedRectangle(cornerRadius: h / 2, style: .continuous).stroke(Color.lime.opacity(0.25), lineWidth: 1))
-                        .overlay { islandContent }
-                        .frame(width: w, height: h)
-                        .shadow(color: Color.lime.opacity(0.3), radius: 22, y: 6)
-                        .position(x: g.size.width / 2, y: base + h / 2)
-                        .transition(.scale(scale: 0.25, anchor: .top).combined(with: .opacity).combined(with: .offset(y: -30)))
-                }
-                if hud.phase == .pulling {
-                    puller
-                        .position(x: g.size.width / 2, y: base + 24 + 30 * min(1, hud.progress))
-                        .transition(.scale(scale: 0.3, anchor: .top).combined(with: .opacity))
-                }
+            ZStack {
+                Capsule(style: .continuous)
+                    .fill(.black)
+                    .frame(width: width, height: islandH)
+                    .overlay { if active { compact(grow: grow) } }
+                    .opacity(hasIsland || active ? 1 : 0)
+                    .scaleEffect(hud.phase == .done ? 1.03 : 1)
             }
-            .frame(width: g.size.width, height: g.size.height, alignment: .top)
+            .frame(width: g.size.width)
+            .position(x: g.size.width / 2, y: top + islandH / 2)
+            .opacity(active ? 1 : 0)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .animation(.spring(response: 0.42, dampingFraction: 0.78), value: hud.phase)
+        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: hud.progress)
     }
 
-    /// 0…0.5 — светящаяся лаймовая точка, 0.5…1 — превращается в логотип с кольцом
-    private var puller: some View {
-        let p = hud.progress
-        let dot = max(0, min(1, p / 0.5))
-        let morph = max(0, min(1, (p - 0.5) / 0.5))
-        return ZStack {
-            Circle()
-                .fill(Color.lime)
-                .frame(width: 8 + 14 * dot, height: 8 + 14 * dot)
-                .shadow(color: Color.lime.opacity(0.9), radius: 6 + 10 * dot)
-                .opacity(1 - morph)
-                .scaleEffect(1 - 0.3 * morph)
-            ZStack {
-                Circle().fill(.black).frame(width: 46, height: 46)
-                Circle().stroke(Color.lime.opacity(0.18), lineWidth: 3).frame(width: 40, height: 40)
-                Circle().trim(from: 0, to: morph)
-                    .stroke(Color.lime, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 40, height: 40)
-                    .shadow(color: Color.lime.opacity(0.6), radius: 4)
-                Image("ox-logo").resizable().scaledToFit().frame(width: 18, height: 24)
-            }
-            .opacity(morph)
-            .scaleEffect(0.6 + 0.4 * morph + (p > 1 ? (p - 1) * 0.3 : 0))
-        }
-    }
-
-    private var islandContent: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().stroke(Color.lime.opacity(0.18), lineWidth: 3)
-                if hud.ringDone {
-                    Circle().stroke(hud.ok ? Color.lime : Color(hex: 0xFF5A4E), lineWidth: 3)
-                } else {
-                    Circle().trim(from: 0, to: 0.72)
-                        .stroke(Color.lime, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .rotationEffect(.degrees(spin ? 360 : 0))
-                        .animation(.linear(duration: 0.9).repeatForever(autoreverses: false), value: spin)
-                        .onAppear { spin = true }
-                        .onDisappear { spin = false }
-                }
-                if hud.phase == .done {
-                    Image(systemName: hud.ok ? "checkmark" : "xmark")
-                        .font(.system(size: 17, weight: .heavy))
-                        .foregroundStyle(hud.ok ? Color.lime : Color(hex: 0xFF5A4E))
-                        .transition(.scale.combined(with: .opacity))
-                } else {
-                    Image("ox-logo").resizable().scaledToFit().frame(width: 16, height: 21)
-                }
-            }
-            .frame(width: 42, height: 42)
-            .shadow(color: Color.lime.opacity(0.5), radius: 6)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("OXION").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
-                Text(hud.phase == .done ? hud.doneText : hud.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(hud.phase == .done ? (hud.ok ? Color.lime : Color(hex: 0xFF5A4E)) : Color.white.opacity(0.6))
-                    .contentTransition(.opacity)
-            }
+    /// содержимое по бокам от камеры
+    private func compact(grow: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            leading
+                .frame(width: 22, height: 22)
+                .padding(.leading, 9)
+                .opacity(Double(min(1, grow * 1.6)))
+                .scaleEffect(0.5 + 0.5 * grow)
             Spacer(minLength: 0)
-            if hud.phase == .syncing {
-                SyncDots()
-            }
+            trailing
+                .frame(height: 22)
+                .padding(.trailing, 10)
+                .opacity(Double(min(1, grow * 1.6)))
+                .scaleEffect(0.5 + 0.5 * grow)
         }
-        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private var leading: some View {
+        switch hud.phase {
+        case .pulling:
+            // кольцо заполняется, пока тянешь
+            ZStack {
+                Circle().stroke(Color.lime.opacity(0.2), lineWidth: 2.6)
+                Circle().trim(from: 0, to: min(1, hud.progress))
+                    .stroke(Color.lime, style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+        case .syncing:
+            ZStack {
+                Circle().stroke(Color.lime.opacity(0.2), lineWidth: 2.6)
+                Circle().trim(from: 0, to: hud.ringDone ? 1 : 0.7)
+                    .stroke(Color.lime, style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .animation(hud.ringDone ? .easeOut(duration: 0.3) : .linear(duration: 0.85).repeatForever(autoreverses: false), value: spin)
+                    .onAppear { spin = true }
+                    .onDisappear { spin = false }
+            }
+        case .done:
+            Image(systemName: hud.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(hud.ok ? Color.lime : Color(hex: 0xFF5A4E))
+                .transition(.scale.combined(with: .opacity))
+        case .hidden:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        switch hud.phase {
+        case .pulling:
+            Image(systemName: hud.progress >= 1 ? "arrow.clockwise" : "arrow.down")
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(hud.progress >= 1 ? Color.lime : Color.white.opacity(0.7))
+                .contentTransition(.symbolEffect(.replace))
+        case .syncing:
+            SyncDots()
+        case .done:
+            Image("ox-logo").resizable().scaledToFit().frame(width: 14, height: 19)
+                .transition(.scale.combined(with: .opacity))
+        case .hidden:
+            EmptyView()
+        }
     }
 }
 
@@ -228,7 +231,7 @@ private struct SyncDots: View {
             HStack(spacing: 4) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle().fill(Color.lime)
-                        .frame(width: 6, height: 6)
+                        .frame(width: 5, height: 5)
                         .opacity(0.3 + 0.7 * max(0, sin(t * 5 - Double(i) * 0.8)))
                 }
             }
