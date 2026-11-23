@@ -296,7 +296,7 @@ enum BrowserWindow {
     /// приложение над плашкой: окно становится ниже и получает скруглённые нижние углы
     static func dockApp(_ on: Bool, animated: Bool) {
         guard let w = mainWindow, let screen = w.windowScene?.screen.bounds else { return }
-        let target = on ? CGRect(x: 0, y: 0, width: screen.width, height: screen.height - barHeight - 4) : screen
+        let target = on ? CGRect(x: 0, y: 0, width: screen.width, height: screen.height - barHeight - 10) : screen
         if w.frame == target { return }
         let apply = {
             w.frame = target
@@ -366,11 +366,12 @@ struct BrowserHost: View {
                         .ignoresSafeArea(edges: .bottom)
                 } else if b.mode == .minimized {
                     BrowserMiniBar(bottomInset: geo.safeAreaInsets.bottom)
-                        .ignoresSafeArea(edges: .bottom)
                         .transition(.move(edge: .bottom))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            // плашка стоит вплотную к нижнему краю экрана, без отступа
+            .ignoresSafeArea(edges: .bottom)
         }
     }
 }
