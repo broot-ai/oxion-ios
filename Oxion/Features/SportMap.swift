@@ -113,7 +113,7 @@ struct SportMapView: View {
     static let sportPOI: [MKPointOfInterestCategory] = [.fitnessCenter, .stadium, .swimming, .tennis, .soccer, .basketball,
                                                         .volleyball, .skating, .skiing, .rockClimbing, .skatePark, .golf, .bowling]
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     @Namespace private var mapScope
     @State private var position: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var region: MKCoordinateRegion?
@@ -162,13 +162,14 @@ struct SportMapView: View {
             guard let c = f.pointOfInterestCategory else { return true }
             return !Self.sportPOI.contains(c)
         }
-        .mapControls { MapScaleView(scope: mapScope) }
+        .mapControls { }
         .mapScope(mapScope)
         // карта под статус-баром, а кнопки — ниже «острова»
         .ignoresSafeArea()
         .overlay(alignment: .topLeading) {
-            Button { dismiss() } label: {
+            Button { close() } label: {
                 Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).frame(width: 46, height: 46)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive(), in: .circle)
@@ -378,6 +379,13 @@ struct SportMapView: View {
         guard let me = locator.location else { return nil }
         let d = me.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
         return d < 1000 ? "\(Int(d)) м" : String(format: "%.1f км", d / 1000)
+    }
+
+    /// закрыть карту: сначала убираем нижнюю панель, потом сам экран
+    private func close() {
+        Haptic.tap(.soft)
+        showPanel = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { model.showMap = false }
     }
 
     private func select(shop s: MapShopPlace) {
@@ -884,65 +892,208 @@ struct MapPlacesAdminView: View {
     @State private var status = "pending"
     @State private var items: [MapShopPlace] = []
     @State private var loading = false
+    @State private var rejecting: MapShopPlace?
+    @Namespace private var tabNS
+
+    private let tabs: [(String, String, String)] = [("pending", "На проверке", "clock"), ("approved", "Одобрены", "checkmark.seal"), ("rejected", "Отклонены", "xmark.seal")]
 
     var body: some View {
-        List {
-            Picker("", selection: $status) {
-                Text("На проверке").tag("pending")
-                Text("Одобрены").tag("approved")
-                Text("Отклонены").tag("rejected")
-            }
-            .pickerStyle(.segmented)
-            .listRowBackground(Color.clear)
-            if !loading && items.isEmpty {
-                Text("Заявок нет").foregroundStyle(.secondary)
-            }
-            ForEach(items) { p in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        ShopPin(logo: p.logo, selected: false)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(p.name).font(.headline)
-                            Text("Владелец: \(p.owner ?? "—")").font(.caption).foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: 16) {
+                // вкладки-капсулы
+                HStack(spacing: 6) {
+                    ForEach(tabs, id: \.0) { t in
+                        Button {
+                            withAnimation(.smooth(duration: 0.25)) { status = t.0 }
+                            Haptic.tap(.soft)
+                        } label: {
+                            Label(t.1, systemImage: t.2)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .padding(.vertical, 9)
+                                .frame(maxWidth: .infinity)
+                                .foregroundStyle(status == t.0 ? Color.onLime : Color.primary.opacity(0.75))
+                                .background {
+                                    if status == t.0 { Capsule().fill(Color.lime).matchedGeometryEffect(id: "tab", in: tabNS) }
+                                }
                         }
-                    }
-                    Map(initialPosition: .camera(MapCamera(centerCoordinate: p.coordinate, distance: 700)), interactionModes: []) {
-                        Marker(p.name, systemImage: "bag.fill", coordinate: p.coordinate).tint(Color.lime)
-                    }
-                    .frame(height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Text(p.address).font(.subheadline)
-                    if let h = p.hours, !h.isEmpty { Text("Часы: \(h)").font(.caption).foregroundStyle(.secondary) }
-                    if let ph = p.phone, !ph.isEmpty { Text("Телефон: \(ph)").font(.caption).foregroundStyle(.secondary) }
-                    if status == "pending" {
-                        HStack {
-                            Button { Task { await decide(p, true) } } label: { Label("Одобрить", systemImage: "checkmark").frame(maxWidth: .infinity) }
-                                .buttonStyle(.glassProminent)
-                            Button { Task { await decide(p, false) } } label: { Label("Отклонить", systemImage: "xmark").frame(maxWidth: .infinity) }
-                                .buttonStyle(.glass)
-                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(4)
+                .background(Color.oxCard, in: Capsule())
+
+                if loading && items.isEmpty {
+                    ProgressView().padding(.top, 60)
+                } else if items.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: status == "pending" ? "tray" : "map").font(.system(size: 40)).foregroundStyle(Color.oxHint)
+                        Text(status == "pending" ? "Новых заявок нет" : "Пусто").font(.headline)
+                        Text(status == "pending" ? "Когда владелец магазина добавит точку на карту, она появится здесь" : "")
+                            .font(.subheadline).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 60)
+                    .padding(.horizontal, 30)
+                }
+                ForEach(items) { p in card(p).transition(.opacity.combined(with: .scale(scale: 0.97))) }
             }
+            .padding(16)
         }
-        .navigationTitle("Точки на карте")
+        .background(Color.oxBg)
+        .navigationTitle("Магазины на карте")
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: status) { await load() }
         .refreshable { await load() }
+        .sheet(item: $rejecting) { p in
+            RejectPlaceSheet(place: p) { reason in Task { await decide(p, false, reason: reason) } }
+        }
     }
+
+    private func card(_ p: MapShopPlace) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Map(initialPosition: .camera(MapCamera(centerCoordinate: p.coordinate, distance: 600)), interactionModes: [.zoom, .pan]) {
+                Annotation(p.name, coordinate: p.coordinate) { ShopPin(logo: p.logo, selected: true) }
+            }
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .frame(height: 190)
+            .overlay(alignment: .topLeading) {
+                Text(statusTitle(p.status))
+                    .font(.caption.bold())
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .foregroundStyle(p.status == "approved" ? Color.onLime : .white)
+                    .background(statusColor(p.status), in: Capsule())
+                    .padding(10)
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    RemoteImage(url: API.media(p.logo), icon: "bag.fill")
+                        .frame(width: 46, height: 46)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(p.name).font(.title3.bold()).lineLimit(1)
+                        Label(p.owner ?? "Владелец", systemImage: "person.crop.circle").font(.caption).foregroundStyle(Color.oxHint)
+                    }
+                    Spacer()
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    infoRow("mappin.and.ellipse", "Адрес", p.address)
+                    if let h = p.hours, !h.isEmpty { infoRow("clock", "Часы работы", h) }
+                    if let ph = p.phone, !ph.isEmpty { infoRow("phone", "Телефон", ph) }
+                    if let st = p.site, !st.isEmpty { infoRow("safari", "Сайт", st) }
+                    if p.status == "rejected", let r = p.rejectReason { infoRow("exclamationmark.bubble", "Причина отказа", r) }
+                }
+                .padding(12)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                HStack(spacing: 10) {
+                    if p.status != "approved" {
+                        Button { Task { await decide(p, true) } } label: {
+                            Label("Одобрить", systemImage: "checkmark")
+                                .font(.headline)
+                                .foregroundStyle(Color.onLime)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(Color.lime, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if p.status != "rejected" {
+                        Button { rejecting = p } label: {
+                            Label(p.status == "approved" ? "Снять с карты" : "Отклонить", systemImage: "xmark")
+                                .font(.headline)
+                                .foregroundStyle(Color(hex: 0xFF5A4E))
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(Color(hex: 0xFF5A4E).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(14)
+        }
+        .background(Color.oxCard)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.primary.opacity(0.06)))
+    }
+
+    private func infoRow(_ icon: String, _ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon).font(.subheadline).foregroundStyle(Color.limeInk).frame(width: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.caption).foregroundStyle(Color.oxHint)
+                Text(value).font(.subheadline)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func statusTitle(_ s: String?) -> String { s == "approved" ? "На карте" : s == "rejected" ? "Отклонено" : "На проверке" }
+    private func statusColor(_ s: String?) -> Color { s == "approved" ? Color.lime : s == "rejected" ? Color(hex: 0xFF5A4E) : Color.orange }
 
     private func load() async {
         loading = true
         defer { loading = false }
-        if let r: MapShopsResponse = try? await API.call("/m/platform/map-places", query: ["status": status]) { items = r.items }
+        if let r: MapShopsResponse = try? await API.call("/m/platform/map-places", query: ["status": status]) {
+            withAnimation(.smooth(duration: 0.25)) { items = r.items }
+        }
     }
 
-    private func decide(_ p: MapShopPlace, _ ok: Bool) async {
+    private func decide(_ p: MapShopPlace, _ ok: Bool, reason: String = "") async {
         do {
             let _: OK = try await API.call("/m/platform/map-places/\(p.id)/\(ok ? "approve" : "reject")", method: "POST",
-                                           body: ok ? [:] : ["reason": "Адрес или точка указаны неверно"])
-            Haptic.success()
-            withAnimation { items.removeAll { $0.id == p.id } }
+                                           body: ok ? [:] : ["reason": reason])
+            OxHaptics.play(ok ? .setDone : .select)
+            OxAlert.show(icon: ok ? "checkmark.seal.fill" : "xmark.seal.fill", title: ok ? "Магазин на карте" : "Заявка отклонена",
+                         message: ok ? "\(p.name) теперь видят все пользователи" : "Владелец получит уведомление с причиной")
+            withAnimation(.smooth(duration: 0.3)) { items.removeAll { $0.id == p.id } }
         } catch { OxAlert.error(error.localizedDescription) }
+    }
+}
+
+/// Причина отказа: быстрые варианты или свой текст
+struct RejectPlaceSheet: View {
+    let place: MapShopPlace
+    var onReject: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var reason = ""
+    private let quick = ["Точка стоит не на входе в магазин", "Адрес не совпадает с точкой", "Это не магазин спортпита", "Неверные часы работы или телефон"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Быстрый ответ") {
+                    ForEach(quick, id: \.self) { q in
+                        Button {
+                            reason = q
+                            Haptic.tap(.soft)
+                        } label: {
+                            HStack {
+                                Text(q).foregroundStyle(.primary)
+                                Spacer()
+                                if reason == q { Image(systemName: "checkmark").foregroundStyle(Color.limeInk) }
+                            }
+                        }
+                    }
+                }
+                Section("Или своими словами") {
+                    TextField("Причина отказа", text: $reason, axis: .vertical).lineLimit(2...4)
+                }
+            }
+            .navigationTitle("Отклонить «\(place.name)»")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Отклонить") {
+                        onReject(reason.trimmingCharacters(in: .whitespaces))
+                        dismiss()
+                    }
+                    .bold()
+                    .disabled(reason.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
