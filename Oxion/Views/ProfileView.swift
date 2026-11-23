@@ -125,7 +125,8 @@ struct ProfileView: View {
                             Text("Карта").foregroundStyle(.primary)
                         }
                     }
-                    nav("Сканер этикеток", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
+                    nav("Сканер еды", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
+                    nav("Дневник питания", "fork.knife", Color(hex: 0x58C770)) { FoodDiaryView() }
                     nav("Будильники", "alarm.fill", Color(hex: 0xF0A030)) { AlarmSettingsView() }
                     nav("Умные устройства", "dot.radiowaves.left.and.right", Color(hex: 0x3478F6)) { DevicePanelView() }
                 }
@@ -292,7 +293,8 @@ struct ProfileView: View {
             list.append(OxSearchItem("Что нового", I, "sparkles.rectangle.stack", Color.lime, ["новое", "обновление", "что нового"], run: { model.sheet = .whatsNew }))
             list.append(OxSearchItem("Карта", I, "map.fill", Color(hex: 0x3FD6C9), ["карта", "залы", "спортзал", "фитнес", "стадион", "бассейн", "спортпит", "магазин", "рядом", "map"], run: { model.showMap = true }))
             list.append(OxSearchItem("Пробежка с GPS", I, "figure.run", Color(hex: 0x58F670), ["бег", "gps", "карта", "маршрут", "run", "кардио", "пробежка", "километры"], push: { RunTrackerView() }))
-            list.append(OxSearchItem("Сканер этикеток", I, "text.viewfinder", Color(hex: 0x3FD6C9), ["калории", "бжу", "еда", "питание", "состав", "сканер", "продукты", "белок"], push: { LabelScannerView() }))
+            list.append(OxSearchItem("Дневник питания", I, "fork.knife", Color(hex: 0x58C770), ["питание", "калории", "еда", "кбжу", "рацион"], push: { FoodDiaryView() }))
+        list.append(OxSearchItem("Сканер еды", I, "text.viewfinder", Color(hex: 0x3FD6C9), ["калории", "бжу", "еда", "питание", "состав", "сканер", "продукты", "белок"], push: { LabelScannerView() }))
             list.append(OxSearchItem("Будильники", I, "alarm.fill", Color(hex: 0xF0A030), ["будильник", "напоминания", "alarm", "утро", "подъем"], push: { AlarmSettingsView() }))
             list.append(OxSearchItem("Умные устройства", I, "dot.radiowaves.left.and.right", Color(hex: 0x3478F6), ["bluetooth", "блютуз", "пульсометр", "датчик", "часы", "наушники", "гаджеты", "колонка"], push: { DevicePanelView() }))
             list.append(OxSearchItem("Отметка в зале по NFC", I, "wave.3.right", Color(hex: 0x3FD6C9), ["nfc", "зал", "отметка", "чекин", "check in", "посещение", "метка"], push: { NFCCheckInView() }))

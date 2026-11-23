@@ -725,6 +725,7 @@ struct ClientsView: View {
     @State private var errorText: String?
     @State private var showQR = false
     @State private var chat: ChatRef?
+    @State private var food: ChatRef?
 
     var body: some View {
         ScrollView {
@@ -764,6 +765,12 @@ struct ClientsView: View {
                             if let n = c.checksNew, n > 0 {
                                 Text("\(n)").font(.caption.bold()).foregroundStyle(.black).padding(6).background(Color.lime, in: Circle())
                             }
+                            if c.status != "pending" {
+                                Button {
+                                    food = ChatRef(id: c.id, name: c.name ?? "Клиент")
+                                } label: { Image(systemName: "fork.knife") }
+                                    .buttonStyle(.glass)
+                            }
                             Button {
                                 Task { await openChat(c) }
                             } label: { Image(systemName: "bubble.left.fill") }
@@ -781,6 +788,7 @@ struct ClientsView: View {
         .background(Color.oxBg)
         .navigationTitle("Мои клиенты")
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
+        .navigationDestination(item: $food) { FoodDiaryView(clientId: $0.id, clientName: $0.name) }
         .fullScreenCover(isPresented: $showQR) { MyCardSheet() }
         .oxRefreshable { await load() }
         .task { await load() }

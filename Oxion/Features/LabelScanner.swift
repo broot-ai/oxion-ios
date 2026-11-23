@@ -35,90 +35,15 @@ struct Nutrition: Equatable {
     }
 }
 
-struct LabelScannerView: View {
-    @State private var text = ""
-    @State private var n = Nutrition()
-    @State private var grams: Double = 100
-    @State private var frozen = false
-
-    private var supported: Bool { DataScannerViewController.isSupported && DataScannerViewController.isAvailable }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if supported {
-                ScannerRepresentable(frozen: frozen) { t in
-                    text = t
-                    let p = Nutrition.parse(t)
-                    if !p.isEmpty && p != n {
-                        n = p
-                        OxHaptics.play(.select)
-                    }
-                }
-                .frame(height: 320)
-                .overlay(alignment: .bottom) {
-                    Text(n.isEmpty ? "Наведите камеру на «Пищевая ценность на 100 г»" : "Нашли состав — можно заморозить кадр")
-                        .font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 6)
-                        .glassEffect(.regular, in: .capsule).padding(10)
-                }
-            } else {
-                ContentUnavailableView("Сканер недоступен", systemImage: "text.viewfinder",
-                                       description: Text("Нужен доступ к камере: Настройки → Oxion → Камера."))
-                    .frame(height: 320)
-            }
-
-            List {
-                Section("На 100 г") {
-                    row("Калории", n.kcal, "ккал")
-                    row("Белки", n.protein, "г")
-                    row("Жиры", n.fat, "г")
-                    row("Углеводы", n.carbs, "г")
-                }
-                Section {
-                    VStack(alignment: .leading) {
-                        Text("Порция: \(Int(grams)) г").font(.subheadline.bold())
-                        Slider(value: $grams, in: 10...600, step: 10).tint(Color.lime)
-                    }
-                    let k = grams / 100
-                    HStack {
-                        total("\(Int((n.kcal ?? 0) * k))", "ккал")
-                        total(String(format: "%.0f", (n.protein ?? 0) * k), "белки")
-                        total(String(format: "%.0f", (n.fat ?? 0) * k), "жиры")
-                        total(String(format: "%.0f", (n.carbs ?? 0) * k), "углев.")
-                    }
-                } header: { Text("В порции") }
-                Section {
-                    Toggle("Заморозить кадр", isOn: $frozen).tint(Color.lime)
-                } footer: {
-                    Text("Текст читается прямо на iPhone. Значения приблизительные — проверьте по упаковке.")
-                }
-            }
-            .scrollContentBackground(.hidden)
-        }
-        .background(Color.oxBg)
-        .navigationTitle("Сканер этикеток")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func row(_ t: String, _ v: Double?, _ u: String) -> some View {
-        HStack {
-            Text(t)
-            Spacer()
-            Text(v.map { String(format: $0.truncatingRemainder(dividingBy: 1) == 0 ? "%.0f" : "%.1f", $0) + " " + u } ?? "—")
-                .bold().foregroundStyle(v == nil ? Color.oxHint : Color.lime)
-        }
-    }
-
-    private func total(_ v: String, _ t: String) -> some View {
-        VStack(spacing: 2) {
-            Text(v).font(.title3.bold().monospacedDigit())
-            Text(t).font(.caption2).foregroundStyle(Color.oxHint)
-        }
-        .frame(maxWidth: .infinity)
-    }
+/// Ссылка на камеру сканера — чтобы сделать снимок кадра
+@MainActor final class ScannerHandle {
+    weak var vc: DataScannerViewController?
+    func photo() async -> UIImage? { try? await vc?.capturePhoto() }
 }
 
-private struct ScannerRepresentable: UIViewControllerRepresentable {
+struct ScannerRepresentable: UIViewControllerRepresentable {
     var frozen: Bool
+    var handle: ScannerHandle? = nil
     var onText: (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onText: onText) }
@@ -131,6 +56,7 @@ private struct ScannerRepresentable: UIViewControllerRepresentable {
             isHighFrameRateTrackingEnabled: false,
             isHighlightingEnabled: true)
         vc.delegate = context.coordinator
+        handle?.vc = vc
         try? vc.startScanning()
         return vc
     }
