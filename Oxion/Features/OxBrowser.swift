@@ -59,6 +59,32 @@ final class OxBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     var pageColor: UIColor = .systemBackground
     /// снимок приложения: он «отъезжает назад», как экран под листом iOS
     var backdrop: UIImage?
+    /// тёмный режим для сайтов, у которых нет своей тёмной темы (как адаптивный тёмный режим Safari)
+    var darkSites: Bool = UserDefaults.standard.bool(forKey: "ox.browser.dark")
+
+    func setDarkSites(_ on: Bool) {
+        darkSites = on
+        UserDefaults.standard.set(on, forKey: "ox.browser.dark")
+        UserDefaults.standard.set(true, forKey: "ox.browser.dark.asked")
+        webView?.evaluateJavaScript("window.__oxDark && window.__oxDark(\(on))")
+        Haptic.tap(.soft)
+    }
+
+    static let darkJS = """
+    window.__oxDark = function(on){
+      var id='__ox_dark', el=document.getElementById(id);
+      if(!on){ if(el) el.remove(); return; }
+      if(el) return;
+      try{
+        var bg=getComputedStyle(document.body||document.documentElement).backgroundColor, m=bg.match(/[\\d.]+/g);
+        if(m && m.length>=3 && (m.length<4 || +m[3]>0.5) && (0.299*m[0]+0.587*m[1]+0.114*m[2])<100) return;
+      }catch(e){}
+      el=document.createElement('style'); el.id=id;
+      el.textContent='html{filter:invert(1) hue-rotate(180deg)!important;background:#fff!important}'+
+        'img,video,picture,canvas,iframe,embed,object,svg image,[style*="background-image"]{filter:invert(1) hue-rotate(180deg)!important}';
+      (document.head||document.documentElement).appendChild(el);
+    };
+    """
 
     private(set) var webView: WKWebView?
     private var observers: [NSKeyValueObservation] = []
@@ -149,6 +175,10 @@ final class OxBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func makeWebView() -> WKWebView {
         let cfg = WKWebViewConfiguration()
         cfg.allowsInlineMediaPlayback = true
+        let ucc = WKUserContentController()
+        ucc.addUserScript(WKUserScript(source: Self.darkJS + "\nif (\(darkSites)) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ __oxDark(true) }); else __oxDark(true); }",
+                                       injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        cfg.userContentController = ucc
         cfg.websiteDataStore = .default()
         let wv = WKWebView(frame: .zero, configuration: cfg)
         wv.navigationDelegate = self
@@ -427,7 +457,45 @@ struct BrowserPanel: View {
     @State private var shareChats = false
     @State private var shareItem: ShareBox?
     @State private var refresh = 0
+    @State private var askDark = false
+    @Environment(\.colorScheme) private var scheme
     @FocusState private var addrFocused: Bool
+
+    /// предложение включить тёмный режим для сайтов, как в Safari iOS 27.3
+    private var darkPromo: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "circle.lefthalf.filled").font(.title2)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Тёмный режим для всех сайтов").font(.subheadline.bold())
+                    Text("Oxion может сам затемнять сайты, у которых нет своей тёмной темы.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            HStack(spacing: 10) {
+                Button {
+                    UserDefaults.standard.set(true, forKey: "ox.browser.dark.asked")
+                    withAnimation(.smooth) { askDark = false }
+                } label: {
+                    Text("Не сейчас").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 40)
+                        .background(Color.primary.opacity(0.1), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                Button {
+                    b.setDarkSites(true)
+                    withAnimation(.smooth) { askDark = false }
+                } label: {
+                    Text("Попробовать").font(.subheadline.weight(.semibold)).foregroundStyle(Color.onLime)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(Color.lime, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 14)
+    }
 
     struct ShareBox: Identifiable { let id = UUID(); let items: [Any] }
 
@@ -452,9 +520,12 @@ struct BrowserPanel: View {
                 }
             }
             if !editing {
-                bottomBar
-                    .padding(.bottom, 28)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                VStack(spacing: 10) {
+                    if askDark { darkPromo.transition(.move(edge: .bottom).combined(with: .opacity)) }
+                    bottomBar
+                }
+                .padding(.bottom, 28)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .background(Color(.systemBackground))
@@ -465,6 +536,12 @@ struct BrowserPanel: View {
                 .allowsHitTesting(false)
         }
         .sheet(isPresented: $showBookmarks) { BrowserBookmarksSheet() }
+        .task {
+            // показываем один раз, в тёмной теме и через пару секунд после открытия
+            guard scheme == .dark, !UserDefaults.standard.bool(forKey: "ox.browser.dark.asked"), !b.darkSites else { return }
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation(.spring(duration: 0.45, bounce: 0.15)) { askDark = true }
+        }
         .sheet(isPresented: $shareChats) { if let u = b.url { ShareToChatsSheet(url: u) } }
         .sheet(item: $shareItem) { s in ActivitySheet(items: s.items).presentationDetents([.medium, .large]) }
     }
@@ -544,6 +621,9 @@ struct BrowserPanel: View {
             }
             .controlGroupStyle(.compactMenu)
             Section {
+                Toggle(isOn: Binding(get: { b.darkSites }, set: { b.setDarkSites($0) })) {
+                    Label("Тёмный режим для сайтов", systemImage: "circle.lefthalf.filled")
+                }
                 Button { openInSafari() } label: { Label("Открыть в Safari", systemImage: "safari") }
             }
             Section {

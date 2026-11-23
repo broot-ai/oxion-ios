@@ -156,7 +156,7 @@ final class AppModel {
     struct IdBox: Identifiable { let id: Int }
 
     enum AppSheet: String, Identifiable {
-        case qr, compose, progress, permissions, run, scanner, music, screenLock, devices
+        case qr, compose, progress, permissions, run, scanner, music, screenLock, devices, program, status, whatsNew
         var id: String { rawValue }
     }
 
@@ -198,6 +198,9 @@ final class AppModel {
         case "vision": showVision = true
         case "muscles", "body": showMuscles = true
         case "map": showMap = true
+        case "program", "plan": sheet = .program
+        case "status": sheet = .status
+        case "whatsnew": sheet = .whatsNew
         case "exercises", "catalog": showCatalog = true
         case "run": sheet = .run
         case "devices": sheet = .devices
@@ -437,6 +440,12 @@ struct MainTabView: View {
             }
         }
         .onAppear { TabHold.install { p in hold = p } }
+        .task {
+            // «Что нового в Oxion» — один раз после обновления
+            guard WhatsNew.shouldShow else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            if model.sheet == nil { model.sheet = .whatsNew }
+        }
         .fullScreenCover(isPresented: $scanning) { QRScanScreen { scanned($0) } }
         .sheet(item: $scanUser) { b in NavigationStack { UserProfileView(userId: b.id) } }
         .transaction { t in
@@ -472,6 +481,9 @@ struct MainTabView: View {
             case .music: NavigationStack { WorkoutMusicView() }
             case .screenLock: NavigationStack { ScreenTimeLockView() }
             case .devices: NavigationStack { DevicePanelView() }
+            case .program: NavigationStack { ProgramBuilderView() }
+            case .status: NavigationStack { StatusView() }
+            case .whatsNew: WhatsNewView()
             }
         }
         .fullScreenCover(isPresented: $model.showVision) { VisionCoachView() }

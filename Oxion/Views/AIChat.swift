@@ -222,6 +222,8 @@ struct AIActionButtons: View {
         case "vision": "camera.viewfinder"
         case "run": "figure.run"
         case "map": "map.fill"
+        case "program", "plan": "calendar.badge.plus"
+        case "status": "circle.hexagongrid.fill"
         case "rest": "timer"
         case "devices": "dot.radiowaves.left.and.right"
         case "trainers", "trainer": "person.crop.circle.badge.checkmark"
