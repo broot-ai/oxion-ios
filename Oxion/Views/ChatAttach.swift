@@ -103,12 +103,17 @@ final class GalleryModel {
 struct ChatAttachSheet: View {
     let chatId: Int
     var replyTo: Int?
+    /// собеседник в личном чате — ему можно подарить Premium
+    var giftTo: Peer? = nil
+    var onGift: () -> Void = {}
     var onSent: (Message) -> Void
 
-    enum Tab: String, CaseIterable { case gallery, cards, location
-        var title: String { switch self { case .gallery: "Галерея"; case .cards: "Карточки"; case .location: "Геопозиция" } }
-        var icon: String { switch self { case .gallery: "photo.on.rectangle.angled"; case .cards: "rectangle.stack.fill"; case .location: "location.fill" } }
+    enum Tab: String, CaseIterable { case gallery, gift, cards, location
+        var title: String { switch self { case .gallery: "Галерея"; case .gift: "Подарок"; case .cards: "Карточки"; case .location: "Геопозиция" } }
+        var icon: String { switch self { case .gallery: "photo.on.rectangle.angled"; case .gift: "gift.fill"; case .cards: "rectangle.stack.fill"; case .location: "location.fill" } }
     }
+    private var tabs: [Tab] { Tab.allCases.filter { $0 != .gift || giftTo != nil } }
+    @State private var detent: PresentationDetent = .medium
 
     @Environment(\.dismiss) private var dismiss
     @State private var g = GalleryModel()
@@ -128,6 +133,13 @@ struct ChatAttachSheet: View {
                 Group {
                     switch tab {
                     case .gallery: gallery
+                    case .gift:
+                        if let p = giftTo {
+                            GiftPremiumPanel(userId: p.id, name: p.name ?? "собеседник", photo: p.photo) { _ in
+                                onGift()
+                                dismiss()
+                            }
+                        }
                     case .cards: AttachCardsList(chatId: chatId) { m in onSent(m); dismiss() }
                     case .location: LocationAttach(chatId: chatId) { m in onSent(m); dismiss() }
                     }
@@ -184,7 +196,7 @@ struct ChatAttachSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationCornerRadius(34)
         .presentationDragIndicator(.visible)
         .task { await g.start() }
@@ -269,10 +281,11 @@ struct ChatAttachSheet: View {
         } else {
             GlassEffectContainer {
                 HStack(spacing: 2) {
-                    ForEach(Tab.allCases, id: \.self) { t in
+                    ForEach(tabs, id: \.self) { t in
                         Button {
                             Haptic.tap()
                             tab = t
+                            if t == .gift { withAnimation(.spring(duration: 0.4)) { detent = .large } }
                         } label: {
                             VStack(spacing: 3) {
                                 Image(systemName: t.icon).font(.system(size: 19, weight: .semibold))

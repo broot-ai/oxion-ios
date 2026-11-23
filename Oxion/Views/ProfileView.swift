@@ -162,6 +162,7 @@ struct ProfileView: View {
                     nav("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
                     nav("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }
                     nav("Конфиденциальность и безопасность", "hand.raised.fill", Color(hex: 0x3B8CF5)) { SafetyView() }
+                    nav("Oxion Premium", "star.circle.fill", Color(hex: 0xFFB000)) { PremiumView() }
                     Toggle(isOn: $inAppBrowser) {
                         HStack(spacing: 14) {
                             OxRowIcon(icon: "safari.fill", tint: Color(hex: 0x3478F6))
@@ -308,7 +309,8 @@ struct ProfileView: View {
             list.append(OxSearchItem("Моя визитка и QR", E, "qrcode", Color.lime, ["qr", "куар", "визитка", "код", "поделиться профилем", "ссылка на профиль"], run: { showCard = true }))
             list.append(OxSearchItem("Пригласить друзей", E, "person.badge.plus", Color.lime, ["контакты", "друзья", "пригласить", "приглашение", "реферал"], push: { ContactsInviteView() }))
             list.append(OxSearchItem("Работа в Oxion", E, "briefcase.fill", Color(hex: 0x3FD6C9), ["вакансии", "работа", "карьера", "стать тренером"], push: { WorkView() }))
-            list.append(OxSearchItem("Конфиденциальность и безопасность", S, "hand.raised.fill", Color(hex: 0x3B8CF5), ["откровенные", "деликатный", "камера", "геопозиция", "приватность", "безопасность"], push: { SafetyView() }))
+            list.append(OxSearchItem("Oxion Premium", S, "star.circle.fill", Color(hex: 0xFFB000), ["премиум", "подписка", "подарок", "подарить", "premium"], push: { PremiumView() }))
+        list.append(OxSearchItem("Конфиденциальность и безопасность", S, "hand.raised.fill", Color(hex: 0x3B8CF5), ["откровенные", "деликатный", "камера", "геопозиция", "приватность", "безопасность"], push: { SafetyView() }))
         list.append(OxSearchItem("Уведомления", S, "bell.badge.fill", Color(hex: 0xFF5A4E), ["push", "пуши", "оповещения", "уведомления"], push: { NotificationSettingsView() }))
             list.append(OxSearchItem("Умные уведомления", S, "bell.and.waves.left.and.right", Color(hex: 0xFF5A4E), ["напоминания", "умные", "уведомления"], push: { SmartNotifySettingsView() }))
             list.append(OxSearchItem("Оформление", S, "paintbrush.fill", Color(hex: 0x8E7CFF), ["тема", "темная", "светлая", "иконка приложения", "шрифт", "размер текста", "пузыри", "цвет"], push: { AppearanceSettingsView() }))

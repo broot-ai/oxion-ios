@@ -784,7 +784,9 @@ struct ChatView: View {
         .toolbar(.hidden, for: .tabBar)
         .fullScreenCover(item: $call) { CallScreen(req: $0) }
         .sheet(isPresented: $attaching) {
-            ChatAttachSheet(chatId: chatId, replyTo: replyTo?.id) { m in
+            ChatAttachSheet(chatId: chatId, replyTo: replyTo?.id,
+                            giftTo: peer?.group == nil ? peer : nil,
+                            onGift: { Task { await load(initial: false) } }) { m in
                 replyTo = nil
                 withAnimation(.spring(duration: 0.4, bounce: 0.2)) {
                     if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
@@ -1194,6 +1196,12 @@ struct Bubble: View {
                             .overlay(alignment: .bottomTrailing) { meta(on: false).padding(.trailing, 10).padding(.bottom, 5) }
                             .foregroundStyle(ink)
                             .background(shape.fill(fill))
+                    } else if isCardOnly, m.kind == "gift" {
+                        GiftBubble(card: m.card, mine: m.mine)
+                            .overlay(alignment: .bottomTrailing) {
+                                meta(on: true).padding(.horizontal, 7).padding(.vertical, 3)
+                                    .background(.black.opacity(0.35), in: Capsule()).padding(8)
+                            }
                     } else if isCardOnly, let k = m.kind {
                         cardBubble(k)
                     } else {
