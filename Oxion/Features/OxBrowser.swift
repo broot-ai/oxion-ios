@@ -86,6 +86,8 @@ final class OxBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     /// как лист iOS: сначала снимок приложения, потом шторка выезжает снизу
     private func present() {
+        // приложение снова на весь экран, потом снимок для «отъезда назад»
+        BrowserWindow.dockApp(false, animated: false)
         if mode != .open { backdrop = BrowserWindow.snapshotApp() }
         BrowserWindow.show()
         guard mode != .open else { return }
@@ -97,11 +99,16 @@ final class OxBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     func minimize() {
         withAnimation(.spring(duration: 0.45, bounce: 0)) { mode = .minimized }
         BrowserWindow.releaseKey()
+        // как в Telegram: приложение поднимается над плашкой и скругляет нижние углы
+        BrowserWindow.dockApp(true, animated: true)
     }
 
     func close() {
+        Haptic.tap(.soft)
         withAnimation(.spring(duration: 0.45, bounce: 0)) { mode = .hidden }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        BrowserWindow.dockApp(false, animated: true)
+        BrowserWindow.releaseKey()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, self.mode == .hidden else { return }
             self.webView?.stopLoading()
             self.webView?.loadHTMLString("", baseURL: nil)
@@ -218,8 +225,8 @@ enum BrowserWindow {
                 return super.hitTest(point, with: event)
             case .minimized:
                 // плашка прижата к низу экрана, как в Telegram
-                let h = 54 + safeAreaInsets.bottom
-                let bar = CGRect(x: 0, y: bounds.height - h - 6, width: bounds.width, height: h + 6)
+                let h = BrowserWindow.barHeight
+                let bar = CGRect(x: 0, y: bounds.height - h, width: bounds.width, height: h)
                 return bar.contains(point) ? super.hitTest(point, with: event) : nil
             case .hidden:
                 return nil
@@ -243,6 +250,37 @@ enum BrowserWindow {
         }
         window?.isHidden = false
         window?.makeKey()
+    }
+
+    /// высота свёрнутой плашки (вместе с полосой «домой»)
+    static var barHeight: CGFloat {
+        let bottom = window?.safeAreaInsets.bottom ?? mainWindow?.safeAreaInsets.bottom ?? 34
+        return 58 + max(bottom, 20)
+    }
+
+    static var mainWindow: UIWindow? {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            .first { !($0 is BrowserPassWindow) && $0.windowLevel == .normal }
+    }
+
+    /// приложение над плашкой: окно становится ниже и получает скруглённые нижние углы
+    static func dockApp(_ on: Bool, animated: Bool) {
+        guard let w = mainWindow, let screen = w.windowScene?.screen.bounds else { return }
+        let target = on ? CGRect(x: 0, y: 0, width: screen.width, height: screen.height - barHeight - 4) : screen
+        if w.frame == target { return }
+        let apply = {
+            w.frame = target
+            w.layer.cornerRadius = on ? 32 : 0
+            w.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+            w.layer.cornerCurve = .continuous
+            w.clipsToBounds = on
+            w.layoutIfNeeded()
+        }
+        if animated {
+            UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction], animations: apply)
+        } else {
+            apply()
+        }
     }
 
     /// снимок основного окна приложения
@@ -311,31 +349,38 @@ struct BrowserHost: View {
 struct BrowserMiniBar: View {
     var bottomInset: CGFloat = 0
     @State private var b = OxBrowser.shared
-    @State private var drag: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Text(b.title.isEmpty ? "Один момент…" : b.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 56)
-                HStack {
-                    Button { b.close() } label: {
-                        Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary)
-                            .frame(width: 48, height: 48).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
+            HStack(spacing: 0) {
+                // крестик — отдельная кнопка, нажатия по ней не уходят в «развернуть»
+                Button { b.close() } label: {
+                    Image(systemName: "xmark").font(.system(size: 18, weight: .semibold)).foregroundStyle(.primary)
+                        .frame(width: 58, height: 58).contentShape(Rectangle())
                 }
-                .padding(.leading, 6)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Закрыть")
+                Button { b.expand() } label: {
+                    Text(b.title.isEmpty ? "Один момент…" : b.title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: 58)
+                        .padding(.trailing, 58)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(DragGesture(minimumDistance: 12).onEnded { v in
+                    if v.translation.height < -20 { b.expand() }
+                })
             }
-            .frame(height: 54)
-            Color.clear.frame(height: bottomInset)
+            .frame(height: 58)
+            Spacer(minLength: 0)
         }
+        .frame(height: BrowserWindow.barHeight)
         .frame(maxWidth: .infinity)
-        .background(Color(.systemBackground))
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16, style: .continuous))
+        .background(Color(.secondarySystemBackground))
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32, style: .continuous))
         .overlay(alignment: .top) {
             if b.loading {
                 GeometryReader { g in
@@ -344,16 +389,6 @@ struct BrowserMiniBar: View {
                 .frame(height: 2.5)
             }
         }
-        .shadow(color: .black.opacity(0.18), radius: 12, y: -2)
-        .offset(y: min(0, drag) * 0.3)
-        .contentShape(Rectangle())
-        .onTapGesture { b.expand() }
-        .gesture(DragGesture(minimumDistance: 8)
-            .onChanged { v in drag = v.translation.height }
-            .onEnded { v in
-                if v.translation.height < -24 { b.expand() }
-                withAnimation(.spring(duration: 0.3)) { drag = 0 }
-            })
     }
 }
 
@@ -400,14 +435,17 @@ struct BrowserPanel: View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 header
-                    .background(Color(.systemBackground))
-                    .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 6)
-                        .onChanged { v in if !editing { drag = max(0, v.translation.height) } }
-                        .onEnded { v in
-                            if !editing && (v.translation.height > 120 || v.predictedEndTranslation.height > 300) { b.minimize() }
-                            withAnimation(.spring(duration: 0.35)) { drag = 0 }
-                        })
+                    .background {
+                        // тянуть шторку — за пустое место шапки; кнопки остаются кнопками
+                        Color(.systemBackground)
+                            .contentShape(Rectangle())
+                            .gesture(DragGesture(minimumDistance: 6)
+                                .onChanged { v in if !editing { drag = max(0, v.translation.height) } }
+                                .onEnded { v in
+                                    if !editing && (v.translation.height > 120 || v.predictedEndTranslation.height > 300) { b.minimize() }
+                                    withAnimation(.spring(duration: 0.35)) { drag = 0 }
+                                })
+                    }
                 ZStack(alignment: .top) {
                     if let wv = b.webView { WebViewHost(webView: wv) }
                     if editing { addressSuggestions.transition(.opacity) }
