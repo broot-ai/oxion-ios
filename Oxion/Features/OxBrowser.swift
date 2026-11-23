@@ -217,9 +217,10 @@ enum BrowserWindow {
             case .open:
                 return super.hitTest(point, with: event)
             case .minimized:
-                let maxY = bounds.height - safeAreaInsets.bottom - 62
-                let bar = CGRect(x: 12, y: maxY - 52, width: bounds.width - 24, height: 52)
-                return bar.insetBy(dx: 0, dy: -6).contains(point) ? super.hitTest(point, with: event) : nil
+                // плашка прижата к низу экрана, как в Telegram
+                let h = 54 + safeAreaInsets.bottom
+                let bar = CGRect(x: 0, y: bounds.height - h - 6, width: bounds.width, height: h + 6)
+                return bar.contains(point) ? super.hitTest(point, with: event) : nil
             case .hidden:
                 return nil
             }
@@ -296,10 +297,9 @@ struct BrowserHost: View {
                         .transition(.move(edge: .bottom))
                         .ignoresSafeArea(edges: .bottom)
                 } else if b.mode == .minimized {
-                    BrowserMiniBar()
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 62)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    BrowserMiniBar(bottomInset: geo.safeAreaInsets.bottom)
+                        .ignoresSafeArea(edges: .bottom)
+                        .transition(.move(edge: .bottom))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -307,39 +307,53 @@ struct BrowserHost: View {
     }
 }
 
-/// свёрнутая страница — плашка над нижним меню
+/// свёрнутая страница — плашка внизу экрана, как в Telegram: крестик и название сайта
 struct BrowserMiniBar: View {
+    var bottomInset: CGFloat = 0
     @State private var b = OxBrowser.shared
+    @State private var drag: CGFloat = 0
+
     var body: some View {
-        HStack(spacing: 10) {
-            Button { b.close() } label: {
-                Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).frame(width: 34, height: 34).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Button { b.expand() } label: {
-                HStack(spacing: 8) {
-                    BrowserFavicon(url: b.url?.absoluteString ?? "", title: b.title, size: 22)
-                    Text(b.title.isEmpty ? "Один момент…" : b.title).font(.subheadline.bold()).lineLimit(1)
+        VStack(spacing: 0) {
+            ZStack {
+                Text(b.title.isEmpty ? "Один момент…" : b.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 56)
+                HStack {
+                    Button { b.close() } label: {
+                        Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary)
+                            .frame(width: 48, height: 48).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
+                .padding(.leading, 6)
             }
-            .buttonStyle(.plain)
-            Color.clear.frame(width: 34, height: 34)
+            .frame(height: 54)
+            Color.clear.frame(height: bottomInset)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 52)
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .overlay(alignment: .bottomLeading) {
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16, style: .continuous))
+        .overlay(alignment: .top) {
             if b.loading {
                 GeometryReader { g in
                     Capsule().fill(Color.lime).frame(width: g.size.width * max(0.05, b.progress), height: 2.5)
                 }
                 .frame(height: 2.5)
-                .padding(.horizontal, 26)
             }
         }
-        .gesture(DragGesture(minimumDistance: 10).onEnded { v in if v.translation.height < -30 { b.expand() } })
+        .shadow(color: .black.opacity(0.18), radius: 12, y: -2)
+        .offset(y: min(0, drag) * 0.3)
+        .contentShape(Rectangle())
+        .onTapGesture { b.expand() }
+        .gesture(DragGesture(minimumDistance: 8)
+            .onChanged { v in drag = v.translation.height }
+            .onEnded { v in
+                if v.translation.height < -24 { b.expand() }
+                withAnimation(.spring(duration: 0.3)) { drag = 0 }
+            })
     }
 }
 
@@ -386,7 +400,7 @@ struct BrowserPanel: View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 header
-                    .background(Color(uiColor: editing ? .systemBackground : b.pageColor))
+                    .background(Color(.systemBackground))
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 6)
                         .onChanged { v in if !editing { drag = max(0, v.translation.height) } }
@@ -405,7 +419,7 @@ struct BrowserPanel: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .background(Color(uiColor: b.pageColor))
+        .background(Color(.systemBackground))
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 38, topTrailingRadius: 38, style: .continuous))
         .overlay(alignment: .top) {
             // «ручка» шторки
@@ -600,10 +614,9 @@ struct BrowserPanel: View {
             barButton(b.bookmarked ? "bookmark.fill" : "bookmark") { showBookmarks = true }
             barButton("safari") { openInSafari() }
         }
-        .padding(.horizontal, 10)
-        .frame(height: 58)
+        .padding(.horizontal, 8)
+        .frame(width: 290, height: 56)
         .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.horizontal, 40)
     }
 
     private func barButton(_ icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
