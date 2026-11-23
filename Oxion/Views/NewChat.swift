@@ -5,6 +5,7 @@ import PhotosUI
 
 private struct IdResp: Decodable { let id: Int }
 
+@MainActor
 enum NewChatAPI {
     static func openUser(_ id: Int) async -> Int? {
         do {
