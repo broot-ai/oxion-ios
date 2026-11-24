@@ -23,13 +23,51 @@ final class StickerStore {
     /// наборы, добавленные в «Мои стикеры» (Chameleo — по умолчанию)
     var packs: [String] = UserDefaults.standard.stringArray(forKey: "stk.packs") ?? ["chameleo"]
 
+    var archived: [String] = UserDefaults.standard.stringArray(forKey: "stk.archived") ?? []
+    var recentPacks: [String] = UserDefaults.standard.stringArray(forKey: "stk.recentPacks") ?? []
+    var recentFirst: Bool = UserDefaults.standard.bool(forKey: "stk.recentFirst") {
+        didSet { UserDefaults.standard.set(recentFirst, forKey: "stk.recentFirst") }
+    }
+
+    /// мои наборы в нужном порядке («Сначала недавние» — последние использованные выше)
+    var orderedPacks: [StickerPacks.Pack] {
+        var ids = packs
+        if recentFirst {
+            ids.sort { (recentPacks.firstIndex(of: $0) ?? 999) < (recentPacks.firstIndex(of: $1) ?? 999) }
+        }
+        return ids.compactMap { id in StickerPacks.all.first { $0.id == id } }
+    }
+
     func hasPack(_ id: String) -> Bool { packs.contains(id) }
+    func movePacks(from: IndexSet, to: Int) {
+        packs.move(fromOffsets: from, toOffset: to)
+        UserDefaults.standard.set(packs, forKey: "stk.packs")
+    }
+    func removePacks(_ ids: Set<String>) {
+        packs.removeAll { ids.contains($0) }
+        UserDefaults.standard.set(packs, forKey: "stk.packs")
+    }
+    func archive(_ ids: Set<String>) {
+        removePacks(ids)
+        archived = Array(Set(archived).union(ids))
+        UserDefaults.standard.set(archived, forKey: "stk.archived")
+    }
+    func unarchive(_ id: String) {
+        archived.removeAll { $0 == id }
+        UserDefaults.standard.set(archived, forKey: "stk.archived")
+        if !packs.contains(id) { packs.insert(id, at: 0); UserDefaults.standard.set(packs, forKey: "stk.packs") }
+    }
     func togglePack(_ id: String) {
         if packs.contains(id) { packs.removeAll { $0 == id } } else { packs.insert(id, at: 0) }
         UserDefaults.standard.set(packs, forKey: "stk.packs")
     }
 
     func used(_ ref: String) {
+        if let p = StickerPacks.pack(of: ref)?.id {
+            recentPacks.removeAll { $0 == p }
+            recentPacks.insert(p, at: 0)
+            UserDefaults.standard.set(recentPacks, forKey: "stk.recentPacks")
+        }
         recent.removeAll { $0 == ref }
         recent.insert(ref, at: 0)
         recent = Array(recent.prefix(20))
@@ -98,7 +136,7 @@ struct StickerView: View {
     }
 }
 
-// MARK: - Панель стикеров
+// MARK: - Панель стикеров (как в Telegram: скруглённая сверху, под полем ввода)
 
 struct StickerPanel: View {
     var onSend: (_ ref: String, _ silent: Bool) -> Void
@@ -109,26 +147,36 @@ struct StickerPanel: View {
     @State private var store = StickerStore.shared
     @State private var preview: String?
     @State private var packSheet: StickerPacks.Pack?
+    @State private var settings = false
+    @State private var section = ""
     @Namespace private var ns
 
     private let cols = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
-    private static let emojis = Array("😀😁😂🤣😊😍😘😎🤩🥳😏😴🤔🤯😤😡🥶🤗👍👎👏🙌💪🔥⚡️💯✅❤️🧡💚💙💜🖤🤍🎉🏆🥇🏋️🏃‍♂️🚴‍♀️🧘‍♀️🍎🥗🍗🥚🥤☕️🍫😅🙏👀").map(String.init)
+    static let emojis = Array("😀😁😂🤣😊😍😘😎🤩🥳😏😴🤔🤯😤😡🥶🤗👍👎👏🙌💪🔥⚡️💯✅❤️🧡💚💙💜🖤🤍🎉🏆🥇🏋️🏃‍♂️🚴‍♀️🧘‍♀️🍎🥗🍗🥚🥤☕️🍫😅🙏👀").map(String.init)
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollViewReader { proxy in
                 VStack(spacing: 0) {
-                    if mode == .stickers { packBar(proxy) }
+                    if mode == .stickers { packBar(proxy) } else { Color.clear.frame(height: 10) }
+                    Divider().opacity(0.4)
                     ScrollView {
                         if mode == .stickers { stickers } else { emojiGrid }
                     }
                     .scrollIndicators(.hidden)
                 }
             }
-            modeBar
+            bottomBar
         }
-        .frame(height: 320)
-        .background(.bar)
+        .frame(height: 330)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous)
+                .fill(Color(white: 0.08))
+                .shadow(color: .black.opacity(0.35), radius: 16, y: -4)
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous))
+        .environment(\.colorScheme, .dark)
         .overlay {
             if let p = preview {
                 StickerPreviewOverlay(ref: p,
@@ -142,7 +190,10 @@ struct StickerPanel: View {
         }
         .animation(.spring(duration: 0.3), value: preview)
         .sheet(item: $packSheet) { p in StickerPackSheet(pack: p, onSend: { ref in send(ref, silent: false); packSheet = nil }) }
+        .sheet(isPresented: $settings) { StickerSettingsView() }
     }
+
+    private var myPacks: [StickerPacks.Pack] { store.orderedPacks }
 
     private func send(_ ref: String, silent: Bool) {
         store.used(ref)
@@ -152,55 +203,79 @@ struct StickerPanel: View {
 
     private func packBar(_ proxy: ScrollViewProxy) -> some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 14) {
-                if !store.recent.isEmpty {
-                    Button { withAnimation { proxy.scrollTo("recent", anchor: .top) } } label: { Image(systemName: "clock").font(.title3) }
-                }
-                if !store.favorites.isEmpty {
-                    Button { withAnimation { proxy.scrollTo("fav", anchor: .top) } } label: { Image(systemName: "bookmark").font(.title3) }
-                }
-                ForEach(StickerPacks.all.filter { store.hasPack($0.id) }) { p in
-                    Button { withAnimation { proxy.scrollTo(p.id, anchor: .top) } } label: {
+            HStack(spacing: 8) {
+                barIcon("plus.square.on.square", id: "add") { settings = true }
+                if !store.favorites.isEmpty { barIcon("bookmark", id: "fav") { jump("fav", proxy) } }
+                if !store.recent.isEmpty { barIcon("clock", id: "recent") { jump("recent", proxy) } }
+                ForEach(myPacks) { p in
+                    Button { jump(p.id, proxy) } label: {
                         StickerView(ref: StickerPacks.refs(p)[0], size: 30, playing: false)
+                            .frame(width: 40, height: 40)
+                            .background(section == p.id ? Color.white.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .foregroundStyle(.secondary)
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.top, 12).padding(.bottom, 8)
         }
         .scrollIndicators(.hidden)
     }
 
+    private func barIcon(_ icon: String, id: String, _ a: @escaping () -> Void) -> some View {
+        Button(action: a) {
+            Image(systemName: icon).font(.system(size: 19, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, height: 40)
+                .background(section == id ? Color.white.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func jump(_ id: String, _ proxy: ScrollViewProxy) {
+        Haptic.tap(.soft)
+        section = id
+        withAnimation(.spring(duration: 0.35)) { proxy.scrollTo(id, anchor: .top) }
+    }
+
     private var stickers: some View {
         LazyVStack(alignment: .leading, spacing: 6) {
-            if !store.recent.isEmpty {
-                header("НЕДАВНИЕ", id: "recent") { store.clearRecent() }
-                grid(store.recent)
-            }
             if !store.favorites.isEmpty {
                 header("ИЗБРАННЫЕ СТИКЕРЫ", id: "fav", clear: nil)
                 grid(store.favorites)
             }
-            ForEach(StickerPacks.all.filter { store.hasPack($0.id) }) { p in
+            if !store.recent.isEmpty {
+                header("НЕДАВНИЕ", id: "recent") { store.clearRecent() }
+                grid(store.recent)
+            }
+            ForEach(myPacks) { p in
                 header(p.title.uppercased(), id: p.id, clear: nil)
                 grid(StickerPacks.refs(p))
             }
+            if myPacks.isEmpty && store.recent.isEmpty && store.favorites.isEmpty {
+                Button { settings = true } label: {
+                    Label("Добавить стикеры", systemImage: "plus.circle.fill").font(.subheadline.bold())
+                }
+                .frame(maxWidth: .infinity).padding(.top, 60)
+            }
         }
         .padding(.horizontal, 8)
-        .padding(.bottom, 70)
+        .padding(.bottom, 80)
     }
 
     private func header(_ t: String, id: String, clear: (() -> Void)?) -> some View {
-        HStack {
-            Text(t).font(.caption2.bold()).foregroundStyle(.secondary)
-            Spacer()
+        ZStack {
+            Text(t).font(.caption.bold()).foregroundStyle(.secondary)
             if let clear {
-                Button { clear() } label: { Image(systemName: "xmark").font(.caption2.bold()) }.foregroundStyle(.secondary)
+                HStack {
+                    Spacer()
+                    Button { clear() } label: { Image(systemName: "xmark").font(.caption.bold()) }.foregroundStyle(.secondary)
+                }
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 10)
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 2)
         .id(id)
     }
 
@@ -223,25 +298,37 @@ struct StickerPanel: View {
             }
         }
         .padding(12)
-        .padding(.bottom, 70)
+        .padding(.bottom, 80)
     }
 
-    private var modeBar: some View {
-        HStack(spacing: 4) {
-            seg("Стикеры", .stickers)
-            seg("Эмодзи", .emoji)
+    // снизу: «Стикеры | Эмодзи» по центру и шестерёнка справа, как в Telegram
+    private var bottomBar: some View {
+        ZStack {
+            HStack(spacing: 2) {
+                seg("Стикеры", .stickers)
+                seg("Эмодзи", .emoji)
+            }
+            .padding(4)
+            .glassEffect(.regular, in: .capsule)
+            HStack {
+                Spacer()
+                Button { settings = true } label: {
+                    Image(systemName: "gearshape").font(.system(size: 19, weight: .medium)).frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .padding(.trailing, 16)
         }
-        .padding(4)
-        .glassEffect(.regular, in: .capsule)
-        .padding(.bottom, 10)
+        .padding(.bottom, 12)
     }
 
     private func seg(_ t: String, _ m: Mode) -> some View {
         Button { withAnimation(.spring(duration: 0.3)) { mode = m } } label: {
-            Text(t).font(.footnote.bold())
-                .padding(.horizontal, 14).padding(.vertical, 7)
+            Text(t).font(.subheadline.bold())
+                .padding(.horizontal, 16).padding(.vertical, 8)
                 .background {
-                    if mode == m { Capsule().fill(Color.primary.opacity(0.12)).matchedGeometryEffect(id: "seg", in: ns) }
+                    if mode == m { Capsule().fill(Color.white.opacity(0.14)).matchedGeometryEffect(id: "seg", in: ns) }
                 }
         }
         .buttonStyle(.plain)
@@ -524,5 +611,186 @@ private struct DustBurst: View {
                 g.fill(Path(CGRect(x: p.x, y: p.y, width: s, height: s)), with: .color(col))
             }
         }
+    }
+}
+
+
+// MARK: - «Стикеры и эмодзи» (шестерёнка в панели)
+
+struct StickerSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var store = StickerStore.shared
+    @AppStorage("chat.bigEmoji") private var bigEmoji = true
+    @AppStorage("chat.quickReaction") private var quick = "❤️"
+    @State private var selected = Set<String>()
+    @State private var editing: EditMode = .active
+
+    var body: some View {
+        NavigationStack {
+            List(selection: $selected) {
+                Section {
+                    NavigationLink { PopularPacksView() } label: {
+                        row("flame.fill", Color(hex: 0xF0A030), "Популярные стикеры", badge: StickerPacks.all.filter { !store.hasPack($0.id) }.count)
+                    }
+                    NavigationLink { ArchivedPacksView() } label: {
+                        row("archivebox.fill", Color(hex: 0x58C770), "Архив стикеров", value: "\(store.archived.count)")
+                    }
+                    NavigationLink { EmojiListView() } label: {
+                        row("face.smiling.inverse", Color(hex: 0x3FA9F5), "Эмодзи", value: "\(StickerPanel.emojis.count)")
+                    }
+                    NavigationLink { QuickReactionView(quick: $quick) } label: {
+                        row("heart.fill", Color(hex: 0xFF4D5E), "Быстрая реакция", value: quick)
+                    }
+                }
+                .selectionDisabled()
+
+                Section {
+                    Toggle("Крупные эмодзи", isOn: $bigEmoji).tint(Color.lime)
+                    Toggle("Сначала недавние", isOn: $store.recentFirst).tint(Color.lime)
+                } footer: {
+                    Text("В начале списка будут отображаться недавно использованные наборы.")
+                }
+                .selectionDisabled()
+
+                Section("Мои стикеры") {
+                    if store.packs.isEmpty {
+                        Text("Нет добавленных наборов").foregroundStyle(.secondary)
+                    }
+                    ForEach(store.orderedPacks) { p in
+                        HStack(spacing: 14) {
+                            StickerView(ref: StickerPacks.refs(p)[0], size: 46, playing: false)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.title).font(.headline)
+                                Text("\(p.count) стикеров").font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }
+                        .tag(p.id)
+                    }
+                    .onMove { store.movePacks(from: $0, to: $1) }
+                }
+            }
+            .environment(\.editMode, $editing)
+            .navigationTitle("Стикеры и эмодзи")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Button("Удалить") {
+                        store.removePacks(selected); selected = []; Haptic.success()
+                    }
+                    .buttonStyle(.glass)
+                    .foregroundStyle(selected.isEmpty ? Color.secondary : Color.red)
+                    Spacer()
+                    Button("В архив") {
+                        store.archive(selected); selected = []; Haptic.success()
+                    }
+                    .buttonStyle(.glass)
+                    Spacer()
+                    ShareLink(item: store.orderedPacks.filter { selected.contains($0.id) }.map { "Набор стикеров «\($0.title)» в Oxion" }.joined(separator: "\n")) {
+                        Text("Отправить")
+                    }
+                    .buttonStyle(.glass)
+                }
+                .disabled(selected.isEmpty)
+                .controlSize(.large)
+                .padding(.horizontal, 16).padding(.bottom, 8)
+            }
+        }
+    }
+
+    private func row(_ icon: String, _ c: Color, _ t: String, badge: Int? = nil, value: String? = nil) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 32, height: 32).background(c.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(t)
+            Spacer()
+            if let badge, badge > 0 {
+                Text("\(badge)").font(.subheadline.bold()).foregroundStyle(.white)
+                    .padding(.horizontal, 9).padding(.vertical, 2).background(Color(hex: 0x3B8CF5), in: Capsule())
+            }
+            if let value { Text(value).foregroundStyle(.secondary) }
+        }
+    }
+}
+
+private struct PopularPacksView: View {
+    @State private var store = StickerStore.shared
+    @State private var open: StickerPacks.Pack?
+    var body: some View {
+        List(StickerPacks.all) { p in
+            HStack(spacing: 14) {
+                StickerView(ref: StickerPacks.refs(p)[0], size: 46, playing: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.title).font(.headline)
+                    Text("\(p.count) стикеров").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if store.hasPack(p.id) {
+                    Image(systemName: "checkmark").foregroundStyle(Color.lime)
+                } else {
+                    Button("Добавить") { store.togglePack(p.id); Haptic.success() }
+                        .buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(Color.onLime)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { open = p }
+        }
+        .navigationTitle("Популярные стикеры")
+        .sheet(item: $open) { StickerPackSheet(pack: $0) }
+    }
+}
+
+private struct ArchivedPacksView: View {
+    @State private var store = StickerStore.shared
+    var body: some View {
+        List {
+            if store.archived.isEmpty {
+                Text("В архиве пусто").foregroundStyle(.secondary)
+            }
+            ForEach(store.archived, id: \.self) { id in
+                if let p = StickerPacks.all.first(where: { $0.id == id }) {
+                    HStack(spacing: 14) {
+                        StickerView(ref: StickerPacks.refs(p)[0], size: 46, playing: false)
+                        Text(p.title).font(.headline)
+                        Spacer()
+                        Button("Вернуть") { store.unarchive(id); Haptic.success() }.buttonStyle(.glass)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Архив стикеров")
+    }
+}
+
+private struct EmojiListView: View {
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 12) {
+                ForEach(StickerPanel.emojis, id: \.self) { Text($0).font(.system(size: 34)) }
+            }
+            .padding()
+        }
+        .navigationTitle("Эмодзи")
+    }
+}
+
+private struct QuickReactionView: View {
+    @Binding var quick: String
+    var body: some View {
+        List(Kinds.reactions + ["😍", "🙏", "👀", "💯"], id: \.self) { e in
+            Button { quick = e; Haptic.tap() } label: {
+                HStack {
+                    Text(e).font(.system(size: 28))
+                    Spacer()
+                    if quick == e { Image(systemName: "checkmark").foregroundStyle(Color.lime) }
+                }
+            }
+            .foregroundStyle(.primary)
+        }
+        .navigationTitle("Быстрая реакция")
     }
 }

@@ -629,6 +629,10 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            // нажатие по переписке закрывает панель стикеров
+            .simultaneousGesture(TapGesture().onEnded {
+                if showStickers { withAnimation(.spring(duration: 0.3)) { showStickers = false } }
+            }, isEnabled: showStickers)
             // насколько переписку протянули вверх за последний сообщение
             .onScrollGeometryChange(for: CGFloat.self) { g in
                 let rest = max(-g.contentInsets.top, g.contentSize.height + g.contentInsets.bottom - g.containerSize.height)
@@ -1277,6 +1281,15 @@ struct Bubble: View {
     var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
 
+    @AppStorage("chat.bigEmoji") private var bigEmoji = true
+    /// текст только из 1–3 эмодзи
+    private var onlyEmoji: String? {
+        guard m.kind == nil, m.photo == nil, m.forward == nil, m.deleted != true, m.reply == nil,
+              let t = m.text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty, t.count <= 3,
+              t.allSatisfy({ ch in ch.unicodeScalars.contains { $0.properties.isEmojiPresentation } || (ch.unicodeScalars.first?.properties.isEmoji == true && ch.unicodeScalars.count > 1) })
+        else { return nil }
+        return t
+    }
     private var isSticker: Bool { m.kind == "sticker" && m.deleted != true }
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true && m.forward == nil }
     private var fill: Color { m.mine ? Color.lime : Color.oxBubble.opacity(0.94) }
@@ -1328,6 +1341,13 @@ struct Bubble: View {
                             }
                     } else if isCardOnly, let k = m.kind {
                         cardBubble(k)
+                    } else if bigEmoji, let e = onlyEmoji {
+                        // «Крупные эмодзи»: 1–3 эмодзи без пузыря, как в Telegram
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(e).font(.system(size: e.count == 1 ? 64 : 48))
+                            meta(on: true).padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(.black.opacity(0.3), in: Capsule())
+                        }
                     } else {
                         bubble
                     }
