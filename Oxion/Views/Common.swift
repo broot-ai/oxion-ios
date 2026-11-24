@@ -28,7 +28,7 @@ struct AnimatedFire: View {
 
     var body: some View {
         let live = PowerSaver.allowsNow(.interface)
-        TimelineView(.animation(minimumInterval: 1 / 60, paused: !live)) { tl in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !live)) { tl in
             let ph = live ? (tl.date.timeIntervalSinceReferenceDate / loop).truncatingRemainder(dividingBy: 1) : 0.2
             Rectangle()
                 .fill(.black)

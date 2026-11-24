@@ -520,7 +520,7 @@ private struct RingGlint: View {
     let line: CGFloat
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !PowerSaver.allowsNow(.liveBackgrounds))) { _ in
+        TimelineView(.animation(minimumInterval: 1 / 20, paused: !PowerSaver.allowsNow(.liveBackgrounds))) { _ in
             let t = TiltMotion.shared
             let angle = Angle.degrees(-135 + t.x * 60 - t.y * 30)
             ZStack {

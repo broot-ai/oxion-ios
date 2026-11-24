@@ -253,7 +253,7 @@ final class SensitiveGuard {
 
     func check(_ image: UIImage, url: URL) async -> Bool {
         if let c = cache[url] { return c }
-        guard enabled, systemReady, let cg = image.cgImage else { return false }
+        guard enabled, systemReady, let cg = image.cgImage else { cache[url] = false; return false }
         let r = (try? await analyzer.analyzeImage(cg))?.isSensitive ?? false
         cache[url] = r
         return r

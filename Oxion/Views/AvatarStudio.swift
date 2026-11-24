@@ -187,7 +187,7 @@ struct AvatarStudio: View {
                     circleButton(icon: "person.crop.circle") { ContactPhoto.pick { img in set(.photo(img)) } }
                     if let url = API.media(model.me?.photoUrl) {
                         Button {
-                            Task { if let img = await MediaLoader.shared.load(url) { set(.photo(img)) } }
+                            Task { if let img = await MediaLoader.shared.load(url, maxPixel: 1200) { set(.photo(img)) } }
                         } label: {
                             Avatar(url: url, name: model.me?.displayName ?? "?", size: 76)
                         }

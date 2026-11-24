@@ -1,5 +1,6 @@
 import SwiftUI
 import Network
+import ImageIO
 import Charts
 
 // MARK: - Энергосбережение (как в Telegram)
@@ -237,7 +238,7 @@ final class MediaLoader: @unchecked Sendable {
         return URLSession(configuration: c)
     }()
 
-    init() { mem.totalCostLimit = 60 << 20 }
+    init() { mem.totalCostLimit = 120 << 20 }
 
     enum Auto { static let cellKey = "auto_photos_cell", wifiKey = "auto_photos_wifi" }
 
@@ -246,21 +247,49 @@ final class MediaLoader: @unchecked Sendable {
         return NetKind.shared.cellular ? (d.object(forKey: Auto.cellKey) as? Bool ?? true) : (d.object(forKey: Auto.wifiKey) as? Bool ?? true)
     }
 
-    func cached(_ url: URL) -> UIImage? {
-        if let i = mem.object(forKey: url as NSURL) { return i }
-        if let r = cache.cachedResponse(for: URLRequest(url: url)), let i = UIImage(data: r.data) {
-            mem.setObject(i, forKey: url as NSURL, cost: r.data.count)
-            return i
-        }
-        return nil
+    private func key(_ url: URL, _ maxPixel: CGFloat?) -> NSURL {
+        // разные размеры одной картинки (аватар 40 pt и фото на весь экран) кешируем отдельно
+        let m = maxPixel.map { "#\(Int($0))" } ?? "#full"
+        return (URL(string: url.absoluteString + m) ?? url) as NSURL
     }
 
-    func load(_ url: URL) async -> UIImage? {
-        if let i = cached(url) { return i }
-        guard let (data, _) = try? await session.data(from: url), let img = UIImage(data: data) else { return nil }
-        Traffic.add(data.count, .media)
-        mem.setObject(img, forKey: url as NSURL, cost: data.count)
+    /// только из памяти — мгновенно, без диска и без раскодирования
+    func cached(_ url: URL, maxPixel: CGFloat? = 1600) -> UIImage? {
+        mem.object(forKey: key(url, maxPixel))
+    }
+
+    /// Загрузка: диск/сеть и раскодирование — в фоне, сразу в нужном размере.
+    /// Раньше большие фото раскодировались в полном размере прямо во время прокрутки — отсюда рывки.
+    func load(_ url: URL, maxPixel: CGFloat? = 1600, cacheOnly: Bool = false) async -> UIImage? {
+        let k = key(url, maxPixel)
+        if let i = mem.object(forKey: k) { return i }
+        let cache = self.cache
+        var data = await Task.detached(priority: .userInitiated) { cache.cachedResponse(for: URLRequest(url: url))?.data }.value
+        if data == nil {
+            if cacheOnly { return nil }
+            guard let (d, _) = try? await session.data(from: url) else { return nil }
+            Traffic.add(d.count, .media)
+            data = d
+        }
+        guard let data else { return nil }
+        let img = await Task.detached(priority: .userInitiated) { MediaLoader.decode(data, maxPixel: maxPixel) }.value
+        guard let img else { return nil }
+        let cost = Int(img.size.width * img.scale * img.size.height * img.scale * 4)
+        mem.setObject(img, forKey: k, cost: cost)
         return img
+    }
+
+    /// Раскодировать сразу (не при первой отрисовке) и уменьшить до нужного размера
+    nonisolated static func decode(_ data: Data, maxPixel: CGFloat?) -> UIImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        if let maxPixel {
+            let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                         kCGImageSourceShouldCacheImmediately: true,
+                                         kCGImageSourceCreateThumbnailWithTransform: true,
+                                         kCGImageSourceThumbnailMaxPixelSize: maxPixel]
+            if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) { return UIImage(cgImage: cg) }
+        }
+        return UIImage(data: data)?.preparingForDisplay()
     }
 
     func clear() {
@@ -281,8 +310,12 @@ struct OxRemoteImage<Placeholder: View>: View {
     @State private var revealed = false
 
     var body: some View {
+        // из памяти — сразу, без мигания заглушки (фото — только если уже проверено на откровенность)
+        let shown = img ?? url.flatMap { u in
+            (!gated || SensitiveGuard.shared.cached(u) == false) ? MediaLoader.shared.cached(u, maxPixel: maxPixel) : nil
+        }
         ZStack {
-            if let img {
+            if let img = shown {
                 Image(uiImage: img).resizable().scaledToFill()
                     .blur(radius: sensitive && !revealed ? 40 : 0, opaque: true)
                     .transition(.opacity)
@@ -311,14 +344,27 @@ struct OxRemoteImage<Placeholder: View>: View {
         .task(id: url) { await fetch(force: false) }
     }
 
+    /// фото в ленте и чатах — до 1600 точек, аватары и иконки — до 480
+    private var maxPixel: CGFloat { gated ? 1600 : 480 }
+
     private func fetch(force: Bool) async {
         guard let url else { return }
-        if let c = MediaLoader.shared.cached(url) {
+        if let c = MediaLoader.shared.cached(url, maxPixel: maxPixel) {
             if gated { sensitive = await SensitiveGuard.shared.check(c, url: url) }
-            img = c; return
+            if img !== c { img = c }
+            return
         }
-        if gated && !force && !MediaLoader.autoPhotos { waiting = true; return }
-        if let i = await MediaLoader.shared.load(url) {
+        if gated && !force && !MediaLoader.autoPhotos {
+            // уже скачанное раньше показываем и без автозагрузки
+            if let i = await MediaLoader.shared.load(url, maxPixel: maxPixel, cacheOnly: true) {
+                if gated { sensitive = await SensitiveGuard.shared.check(i, url: url) }
+                img = i
+            } else {
+                waiting = true
+            }
+            return
+        }
+        if let i = await MediaLoader.shared.load(url, maxPixel: maxPixel) {
             // откровенные фото размываем ещё до показа
             if gated { sensitive = await SensitiveGuard.shared.check(i, url: url) }
             withAnimation(.easeOut(duration: 0.25)) { img = i }
@@ -534,7 +580,7 @@ enum ChatAutoSave {
         for m in messages where !m.mine {
             guard let p = m.photo, let url = API.media(p) else { continue }
             Task {
-                if let img = await MediaLoader.shared.load(url) { PhotoSaver.save(img) { _ in } }
+                if let img = await MediaLoader.shared.load(url, maxPixel: nil) { PhotoSaver.save(img) { _ in } }
             }
         }
     }
