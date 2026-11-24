@@ -92,29 +92,72 @@ struct LimeRibbon: View {
     }
 }
 
-/// Мерцающие звёздочки вокруг аватарки
-private struct Sparkles: View {
-    var color: Color = Color(hex: 0xFFC53D)
+/// Искры как в Telegram Premium: четырёхлучевые звёздочки SF Symbols разных размеров разлетаются от центра
+struct Sparkles: View {
+    var colors: [Color] = [Color(hex: 0xFFC53D), Color(hex: 0xFFB000), Color(hex: 0xFFE680), Color.lime]
+    var count = 34
+
+    private struct P { let angle: Double; let speed: Double; let size: Double; let phase: Double; let color: Int; let symbol: Int }
+    private let ps: [P]
+
+    init(colors: [Color]? = nil, count: Int = 34) {
+        if let colors { self.colors = colors }
+        self.count = count
+        var list: [P] = []
+        for i in 0..<count {
+            func r(_ k: Int) -> Double {
+                let x = sin(Double(i * 7919 + k * 104729) * 0.0173) * 43758.5453
+                return x - floor(x)
+            }
+            list.append(P(angle: r(1) * .pi * 2, speed: 0.35 + r(2) * 0.65, size: 5 + pow(r(3), 1.6) * 15,
+                          phase: r(4), color: Int(r(5) * 100), symbol: r(6) < 0.7 ? 0 : 1))
+        }
+        ps = list
+    }
+
     var body: some View {
         TimelineView(.animation) { tl in
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
-                for i in 0..<26 {
-                    let fi = Double(i)
-                    let x = (sin(fi * 12.9898) * 43758.5453).truncatingRemainder(dividingBy: 1)
-                    let y = (sin(fi * 78.233) * 12345.6789).truncatingRemainder(dividingBy: 1)
-                    let px = abs(x) * size.width
-                    let py = abs(y) * size.height
-                    let a = 0.25 + 0.75 * abs(sin(t * (0.8 + fi.truncatingRemainder(dividingBy: 5) * 0.3) + fi))
-                    let r = 1.5 + fi.truncatingRemainder(dividingBy: 3) * 1.2
-                    var c = ctx
-                    c.opacity = a
-                    c.fill(Path(ellipseIn: CGRect(x: px - r, y: py - r, width: r * 2, height: r * 2)), with: .color(i % 4 == 0 ? .white : color))
+                let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                let maxR = hypot(size.width, size.height) / 2
+                let sym = [ctx.resolve(Image(systemName: "sparkle")), ctx.resolve(Image(systemName: "plus"))]
+                for p in ps {
+                    // жизнь частицы 0…1: вылетает из центра, растёт и гаснет у края
+                    let life = (t * 0.16 * p.speed + p.phase).truncatingRemainder(dividingBy: 1)
+                    let d = 24 + life * maxR
+                    let x = c.x + cos(p.angle) * d
+                    let y = c.y + sin(p.angle) * d * 0.8
+                    let fade = min(1, life * 4) * (1 - life)
+                    let sz = p.size * (0.5 + life * 0.7)
+                    var g = ctx
+                    g.opacity = fade
+                    g.translateBy(x: x, y: y)
+                    g.rotate(by: .degrees(life * 90))
+                    var img = sym[p.symbol]
+                    img.shading = .color(colors[p.color % colors.count])
+                    g.draw(img, in: CGRect(x: -sz / 2, y: -sz / 2, width: sz, height: sz))
                 }
             }
         }
         .allowsHitTesting(false)
     }
+}
+
+/// Шторка ровно по высоте содержимого
+struct FitSheet: ViewModifier {
+    @State private var h: CGFloat = 400
+    func body(content: Content) -> some View {
+        content
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h = $0 }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .presentationDetents([.height(h)])
+    }
+}
+
+extension View {
+    func fitSheet() -> some View { modifier(FitSheet()) }
 }
 
 // MARK: - Панель «Подарить Premium» (вкладка «Подарок» в чате)
@@ -195,7 +238,7 @@ struct GiftPremiumPanel: View {
                 onSent(r.messageId)
             }
         }
-        .sheet(isPresented: $showPerks) { NavigationStack { PremiumView(embedded: true) } }
+        .sheet(isPresented: $showPerks) { PremiumView(embedded: true) }
     }
 }
 
@@ -262,7 +305,7 @@ struct GiftConfirmSheet: View {
             }
             .padding(.horizontal, 16).padding(.top, 12)
 
-            ScrollView {
+            Group {
                 VStack(spacing: 12) {
                     Text("Вы отправляете подарок за \(plan.priceText)")
                         .font(.caption.bold()).foregroundStyle(.secondary)
@@ -310,7 +353,7 @@ struct GiftConfirmSheet: View {
                 }
                 .padding(.horizontal, 20)
             }
-            .scrollDismissesKeyboard(.interactively)
+            .padding(.bottom, 14)
 
             Button {
                 Task { await send() }
@@ -330,7 +373,7 @@ struct GiftConfirmSheet: View {
             .padding(.bottom, 12)
         }
         .background(Color.oxBg)
-        .presentationDetents([.large])
+        .fitSheet()
         .presentationCornerRadius(34)
         .presentationDragIndicator(.visible)
     }
@@ -392,7 +435,7 @@ struct GiftBubble: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .sheet(isPresented: $showPerks) { NavigationStack { PremiumView(embedded: true) } }
+        .sheet(isPresented: $showPerks) { PremiumView(embedded: true) }
     }
 }
 
@@ -407,15 +450,58 @@ struct PremiumView: View {
     @State private var buying = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
+        if embedded {
+            // шторка ровно по содержимому: без прокрутки и пустого места снизу
+            main
+                .padding(.top, 8)
+                .overlay(alignment: .topLeading) {
+                    Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 36, height: 36) }
+                        .buttonStyle(.glass).buttonBorderShape(.circle)
+                        .padding(16)
+                }
+                .background(Color.oxBg)
+                .fitSheet()
+                .presentationCornerRadius(34)
+                .presentationDragIndicator(.visible)
+                .task { await load() }
+        } else {
+            full
+        }
+    }
+
+    private var full: some View {
+        ScrollView { main }
+        .background(Color.oxBg)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            if let p = plan {
+                Button { Task { await buy(p) } } label: {
+                    HStack {
+                        if buying { ProgressView().tint(Color.onLime) }
+                        Text((info?.active == true ? "Продлить за " : "Подключить за ") + p.priceText).font(.headline)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+                }
+                .buttonStyle(.glassProminent)
+                .tint(Color.lime).foregroundStyle(Color.onLime)
+                .controlSize(.large)
+                .disabled(buying)
+                .padding(.horizontal, 16).padding(.bottom, 8)
+            }
+        }
+        .task { await load() }
+    }
+
+    private var main: some View {
+            VStack(spacing: 14) {
                 ZStack {
-                    Sparkles().frame(height: 150)
-                    Image(systemName: "star.circle.fill")
-                        .font(.system(size: 84))
-                        .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFE680), Color(hex: 0xFFB000)], startPoint: .top, endPoint: .bottom))
-                        .shadow(color: Color(hex: 0xFFB000).opacity(0.5), radius: 24)
-                        .symbolEffect(.bounce, value: info?.active)
+                    Sparkles().frame(height: 190)
+                    Image("premium-trophy")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 150)
+                        .shadow(color: Color(hex: 0xFFB000).opacity(0.35), radius: 22, y: 6)
                 }
                 Text("Oxion Premium").font(.system(size: 30, weight: .heavy))
                 if let u = info?.until {
@@ -474,35 +560,7 @@ struct PremiumView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, embedded ? 20 : 100)
-        }
-        .background(Color.oxBg)
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if embedded {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                }
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if !embedded, let p = plan {
-                Button { Task { await buy(p) } } label: {
-                    HStack {
-                        if buying { ProgressView().tint(Color.onLime) }
-                        Text((info?.active == true ? "Продлить за " : "Подключить за ") + p.priceText).font(.headline)
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 6)
-                }
-                .buttonStyle(.glassProminent)
-                .tint(Color.lime).foregroundStyle(Color.onLime)
-                .controlSize(.large)
-                .disabled(buying)
-                .padding(.horizontal, 16).padding(.bottom, 8)
-            }
-        }
-        .task { await load() }
+            .padding(.bottom, embedded ? 12 : 100)
     }
 
     private func perkColor(_ i: Int) -> Color {
