@@ -58,6 +58,7 @@ final class FeedStore {
 enum FeedRoute: Hashable {
     case post(Int)
     case user(Int)
+    case friends
     case activity
     case search
     case coach
@@ -71,6 +72,7 @@ struct FeedDestination: View {
         switch route {
         case .post(let id): PostDetailView(postId: id)
         case .user(let id): UserProfileView(userId: id)
+        case .friends: FriendsActivityView()
         case .activity: ActivityView()
         case .search: FeedSearchView()
         case .coach: AICoachView()
@@ -156,6 +158,8 @@ struct FeedView: View {
                         .accessibilityLabel("Новая публикация")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { path.append(.friends) } label: { Image(systemName: "person.2.fill") }
+                        .accessibilityLabel("Друзья")
                     Button { path.append(.search) } label: { Image(systemName: "magnifyingglass") }
                     Button { path.append(.activity) } label: { Image(systemName: "heart") }
                 }
@@ -202,9 +206,14 @@ struct FeedView: View {
 
     private var newPostRow: some View {
         HStack(spacing: 12) {
-            Avatar(url: API.media(model.me?.photoUrl), name: model.me?.displayName ?? "?", size: 40)
+            // аватар и имя — в мой профиль ленты
+            Button { if let id = model.me?.id { path.append(.user(id)) } } label: {
+                Avatar(url: API.media(model.me?.photoUrl), name: model.me?.displayName ?? "?", size: 40)
+            }
+            .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.me?.displayName ?? "Вы").font(.subheadline.weight(.semibold))
+                    .onTapGesture { if let id = model.me?.id { path.append(.user(id)) } }
                 Text("Что нового?").font(.subheadline).foregroundStyle(Color.oxHint)
             }
             Spacer()

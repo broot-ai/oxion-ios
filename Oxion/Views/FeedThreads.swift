@@ -351,7 +351,7 @@ struct NoteComposerSheet: View {
                             .focused($focused)
                             .font(.subheadline)
                             .padding(.horizontal, 14).padding(.vertical, 10)
-                            .fixedSize(horizontal: text.count < 24, vertical: false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .overlay(Capsule().strokeBorder(Color.oxHint.opacity(0.6), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
                             .onChange(of: text) { if text.count > 60 { text = String(text.prefix(60)) } }
                             .animation(.smooth(duration: 0.2), value: text)

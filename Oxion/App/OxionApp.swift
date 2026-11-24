@@ -354,6 +354,7 @@ struct MainTabView: View {
     @State private var focusHideFeed = OxFocus.hideFeed
     @State private var hold: TabHold.Press?
     @State private var scanning = false
+    @State private var welcome = false
     @State private var scanUser: AppModel.IdBox?
     @Environment(\.openURL) private var openURL
 
@@ -440,7 +441,16 @@ struct MainTabView: View {
             }
         }
         .onAppear { TabHold.install { p in hold = p } }
+        .fullScreenCover(isPresented: $welcome) {
+            WelcomeFlow { Welcome.seen = true; WhatsNew.markSeen(); welcome = false }
+        }
         .task {
+            // приветствие в стиле Apple Фитнес — один раз; вместо него «Что нового» не показываем
+            if !Welcome.seen {
+                try? await Task.sleep(for: .seconds(0.6))
+                welcome = true
+                return
+            }
             // «Что нового в Oxion» — один раз после обновления
             guard WhatsNew.shouldShow else { return }
             try? await Task.sleep(for: .seconds(1.2))
