@@ -1,4 +1,5 @@
 import SwiftUI
+import Lottie
 
 // Oxion Premium: подписка и подарки собеседникам — как «Подарить Premium» в Telegram.
 // Оплата пока в тестовом режиме: подарок активируется сразу.
@@ -69,38 +70,17 @@ struct GiftBoxIcon: View {
     }
 }
 
-/// Золотой кубок Oxion «живой»: парит, слегка покачивается, по золоту пробегает блик
+/// Золотой кубок Oxion — настоящая анимация стикера (Lottie из .tgs), по кругу
 struct AnimatedTrophy: View {
     var height: CGFloat = 150
     @Environment(\.accessibilityReduceMotion) private var reduce
 
     var body: some View {
-        TimelineView(.animation(paused: reduce)) { tl in
-            let t = tl.date.timeIntervalSinceReferenceDate
-            let lift = reduce ? 0 : sin(t * 1.6) * 6
-            let tilt = reduce ? 0 : sin(t * 1.1) * 3
-            // блик пробегает раз в ~3.2 с
-            let sweep = (t / 3.2).truncatingRemainder(dividingBy: 1)
-            let img = Image("premium-trophy").resizable().scaledToFit()
-            img
-                .frame(height: height)
-                .overlay {
-                    GeometryReader { g in
-                        LinearGradient(colors: [.clear, .white.opacity(0.75), .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: g.size.width * 0.35)
-                            .rotationEffect(.degrees(20))
-                            .offset(x: -g.size.width * 0.5 + sweep * g.size.width * 2)
-                            .blendMode(.plusLighter)
-                    }
-                    .mask(img)
-                    .opacity(reduce ? 0 : 1)
-                }
-                .rotation3DEffect(.degrees(tilt * 2), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
-                .rotationEffect(.degrees(tilt))
-                .offset(y: -lift)
-                .shadow(color: Color(hex: 0xFFB000).opacity(0.25 + 0.15 * (1 + sin(t * 1.6)) / 2), radius: 22, y: 8 + lift * 0.5)
-        }
-        .frame(height: height + 14)
+        LottieView(animation: .named("premium-trophy", bundle: .main))
+            .playbackMode(reduce ? .paused(at: .progress(0)) : .playing(.toProgress(1, loopMode: .loop)))
+            .resizable()
+            .frame(width: height * 1.1, height: height * 1.1)
+            .shadow(color: Color(hex: 0xFFB000).opacity(0.3), radius: 22, y: 8)
     }
 }
 
