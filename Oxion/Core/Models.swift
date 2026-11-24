@@ -219,7 +219,13 @@ struct Trainer: Decodable, Identifiable {
     let cover: String?
     var fav: Bool?
     let match: Bool?
+    var photo: String? = nil
+    var online: Bool? = nil
+    var clients: Int? = nil
+    var nextSlot: Double? = nil
+    var link: String? = nil
     var id: Int { userId }
+    var nextDate: Date? { nextSlot.map { Date(timeIntervalSince1970: $0 / 1000) } }
 }
 
 struct TrainersResponse: Decodable {
@@ -227,6 +233,33 @@ struct TrainersResponse: Decodable {
     let hasMore: Bool?
     let nextOffset: Int?
 }
+
+struct DirectionCount: Decodable, Hashable { let name: String; let n: Int }
+struct TrainersHome: Decodable {
+    let city: String?
+    let total: Int?
+    let goal: String?
+    let my: [Trainer]?
+    let today: [Trainer]?
+    let match: [Trainer]?
+    let top: [Trainer]?
+    let fresh: [Trainer]?
+    let popular: [Trainer]?
+    let directions: [DirectionCount]?
+    let formats: [String]?
+}
+
+struct TrainerReview: Decodable, Identifiable {
+    let userId: Int
+    let name: String?
+    let photo: String?
+    let rating: Int
+    let text: String?
+    let reply: String?
+    let at: Double?
+    var id: Int { userId }
+}
+struct MyReview: Decodable { let rating: Int; let text: String? }
 
 struct TrainerPhoto: Decodable, Identifiable {
     let id: Int?
@@ -249,6 +282,19 @@ struct TrainerDetail: Decodable {
     let reviewsCount: Int?
     var fav: Bool?
     let isMe: Bool?
+    var photo: String? = nil
+    var online: Bool? = nil
+    var lastSeen: Double? = nil
+    var since: Double? = nil
+    var clients: Int? = nil
+    var sessions: Int? = nil
+    var posts: Int? = nil
+    var nextSlots: [Slot]? = nil
+    var myLink: String? = nil
+    var canReview: Bool? = nil
+    var myReview: MyReview? = nil
+    var reviews: [TrainerReview]? = nil
+    var ratingDist: [Int]? = nil
 }
 
 struct FavResponse: Decodable { let ok: Bool?; let fav: Bool? }

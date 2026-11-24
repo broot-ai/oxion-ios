@@ -82,6 +82,7 @@ enum CalendarAdd {
 struct BookingSheet: View {
     let trainerId: Int
     let trainerName: String
+    var preselect: Int? = nil
     var onBooked: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
@@ -300,6 +301,10 @@ struct BookingSheet: View {
             slots = r.items.sorted { $0.startsAt < $1.startsAt }
             link = r.link
             day = days.first
+            if let p = preselect, let sl = slots.first(where: { $0.id == p }) {
+                day = Calendar.current.startOfDay(for: sl.date)
+                chosen = sl
+            }
         } catch { OxAlert.error(error.localizedDescription) }
         loaded = true
     }
