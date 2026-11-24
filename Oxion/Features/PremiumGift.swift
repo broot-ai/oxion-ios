@@ -30,7 +30,7 @@ struct PremiumPlan: Decodable, Identifiable, Hashable {
         default: "gift-green"
         }
     }
-    var priceText: String { "\(price.formatted(.number.locale(Locale(identifier: "ru_RU")))) ₽" }
+    var priceText: String { "\(price.formatted(.number.locale(L10n.locale))) ₽" }
     var titleFull: String { "Premium на \(months == 12 ? "1 год" : months == 1 ? "1 месяц" : "\(months) месяца")" }
 }
 
@@ -49,7 +49,7 @@ struct GiftResult: Decodable { let ok: Bool?; let chatId: Int?; let messageId: I
 
 private func untilText(_ ms: Double) -> String {
     let f = DateFormatter()
-    f.locale = Locale(identifier: "ru_RU")
+    f.locale = L10n.locale
     f.dateFormat = "d MMMM yyyy"
     return f.string(from: Date(timeIntervalSince1970: ms / 1000))
 }
@@ -609,7 +609,7 @@ struct GiftServiceRow: View {
         PremiumPlan(key: card?["plan"]?.string ?? "m1", months: Int(card?["months"]?.string ?? "1") ?? 1,
                     title: card?["title"]?.string ?? "", price: Int(card?["price"]?.string ?? "0") ?? 0, discount: nil, color: card?["color"]?.string)
     }
-    private var price: String { "\(plan.price.formatted(.number.locale(Locale(identifier: "ru_RU")))) ₽" }
+    private var price: String { "\(plan.price.formatted(.number.locale(L10n.locale))) ₽" }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -722,7 +722,7 @@ struct GiftDetailsSheet: View {
     private func dateText(_ ms: Double?) -> String {
         guard let ms else { return "—" }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         f.dateFormat = "dd.MM.yy 'в' HH:mm"
         return f.string(from: Date(timeIntervalSince1970: ms > 1e11 ? ms / 1000 : ms))
     }

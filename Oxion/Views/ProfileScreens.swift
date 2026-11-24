@@ -1032,7 +1032,7 @@ struct WeekBars: View {
 
     private func dayName(_ d: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         f.dateFormat = "EE"
         return f.string(from: d).capitalized
     }

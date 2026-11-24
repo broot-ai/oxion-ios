@@ -389,7 +389,7 @@ enum SlotText {
         let time = d.formatted(.dateTime.hour().minute())
         if cal.isDateInToday(d) { return "сегодня \(time)" }
         if cal.isDateInTomorrow(d) { return "завтра \(time)" }
-        return d.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "ru_RU"))) + " " + time
+        return d.formatted(.dateTime.weekday(.abbreviated).locale(L10n.locale)) + " " + time
     }
 }
 
@@ -932,7 +932,7 @@ struct TrainerDetailView: View {
         let cal = Calendar.current
         if cal.isDateInToday(d) { return "СЕГОДНЯ" }
         if cal.isDateInTomorrow(d) { return "ЗАВТРА" }
-        return d.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(Locale(identifier: "ru_RU"))).uppercased()
+        return d.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(L10n.locale)).uppercased()
     }
 
     private func block<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {

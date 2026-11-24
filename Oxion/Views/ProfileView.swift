@@ -499,6 +499,7 @@ struct AppSettingsHubView: View {
         List {
             Section {
                 link("Уведомления", "bell.badge.fill", Color(hex: 0xFF5A4E)) { NotificationSettingsView() }
+                link("Язык · Language", "globe", Color(hex: 0x3FD6C9)) { LanguageSettingsView() }
                 link("Оформление", "paintbrush.fill", Color(hex: 0x8E7CFF)) { AppearanceSettingsView() }
                 link("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
                 link("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }

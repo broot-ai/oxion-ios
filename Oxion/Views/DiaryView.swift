@@ -394,7 +394,7 @@ struct DiaryView: View {
         let thisWeek = cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
         let lastWeek = cal.date(byAdding: .weekOfYear, value: -1, to: thisWeek) ?? thisWeek
         let month = DateFormatter()
-        month.locale = Locale(identifier: "ru_RU")
+        month.locale = L10n.locale
         month.dateFormat = "LLLL"
         var order: [String] = []
         var map: [String: [Workout]] = [:]
@@ -488,7 +488,7 @@ struct DiaryCalendarStrip: View {
 
     private static let weekday: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         f.dateFormat = "EEEEEE"
         return f
     }()

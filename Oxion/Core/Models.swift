@@ -728,6 +728,10 @@ struct MCart: Decodable {
 enum RU {
     /// 1 год, 2 года, 5 лет
     static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
+        if !L10n.isRussian {
+            let single = L10n.lang == "fr" ? abs(n) <= 1 : abs(n) == 1
+            return L10n.tr(single ? one : many)
+        }
         let a = abs(n) % 100, b = a % 10
         if a > 10 && a < 20 { return many }
         if b == 1 { return one }
@@ -745,7 +749,7 @@ enum RU {
 
     static let humanDay: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         f.dateFormat = "d MMMM, EEEE"
         return f
     }()

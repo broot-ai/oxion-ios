@@ -12,7 +12,7 @@ enum PeerStatus {
         if ago < 300 { return "в сети" }
         if ago < 3600 { return "был(а) \(Int(ago / 60)) мин назад" }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         f.dateFormat = Calendar.current.isDateInToday(d) ? "в HH:mm" : "d MMM в HH:mm"
         return "был(а) " + f.string(from: d)
     }

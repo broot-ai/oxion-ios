@@ -305,7 +305,7 @@ final class LocationAsker: NSObject, CLLocationManagerDelegate {
             manager.requestLocation()
         }
         guard let loc else { return nil }
-        let pm = try? await CLGeocoder().reverseGeocodeLocation(loc, preferredLocale: Locale(identifier: "ru_RU"))
+        let pm = try? await CLGeocoder().reverseGeocodeLocation(loc, preferredLocale: L10n.locale)
         return pm?.first?.locality
     }
 

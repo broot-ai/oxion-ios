@@ -504,7 +504,7 @@ enum ChatTime {
     static func short(_ ms: Double) -> String {
         let d = Date(timeIntervalSince1970: ms / 1000)
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         if Calendar.current.isDateInToday(d) {
             f.dateFormat = "HH:mm"
         } else if Calendar.current.isDate(d, equalTo: Date(), toGranularity: .year) {

@@ -875,7 +875,7 @@ struct AddShopPlaceSheet: View {
         geocoding = true
         defer { geocoding = false }
         guard let pm = try? await CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: c.latitude, longitude: c.longitude),
-                                                                      preferredLocale: Locale(identifier: "ru_RU")).first else { return }
+                                                                      preferredLocale: L10n.locale).first else { return }
         let line = [pm.thoroughfare.map { $0 + (pm.subThoroughfare.map { ", " + $0 } ?? "") }, pm.locality].compactMap { $0 }.joined(separator: ", ")
         if !line.isEmpty { address = line }
     }

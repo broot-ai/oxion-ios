@@ -726,7 +726,7 @@ enum FeedTime {
         if s < 86400 { return "\(Int(s / 3600)) ч" }
         if s < 7 * 86400 { return "\(Int(s / 86400)) д" }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = L10n.locale
         f.dateFormat = "d MMM"
         return f.string(from: Date(timeIntervalSince1970: ms / 1000))
     }

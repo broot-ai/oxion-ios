@@ -4,6 +4,7 @@ options:
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
+  developmentLanguage: ru
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -55,6 +56,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: ru
         LSRequiresIPhoneOS: true
+        CFBundleLocalizations: [ru, en, fr, de]
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: LaunchBackground

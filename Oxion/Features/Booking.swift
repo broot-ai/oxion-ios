@@ -29,10 +29,10 @@ extension CoachBooking {
 
 enum BookingFormat {
     static let day: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "ru_RU"); f.dateFormat = "EEEE, d MMMM"; return f
+        let f = DateFormatter(); f.locale = L10n.locale; f.dateFormat = "EEEE, d MMMM"; return f
     }()
     static let time: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "ru_RU"); f.dateFormat = "HH:mm"; return f
+        let f = DateFormatter(); f.locale = L10n.locale; f.dateFormat = "HH:mm"; return f
     }()
     static func when(_ d: Date) -> String {
         let cal = Calendar.current
@@ -175,7 +175,7 @@ struct BookingSheet: View {
                                 withAnimation(.spring(duration: 0.35)) { day = d; chosen = nil }
                             } label: {
                                 VStack(spacing: 4) {
-                                    Text(d.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "ru_RU"))).uppercased())
+                                    Text(d.formatted(.dateTime.weekday(.abbreviated).locale(L10n.locale)).uppercased())
                                         .font(.caption2.bold())
                                     Text(d.formatted(.dateTime.day())).font(.title3.bold())
                                     Text("\(slots.filter { Calendar.current.isDate($0.date, inSameDayAs: d) }.count)")
