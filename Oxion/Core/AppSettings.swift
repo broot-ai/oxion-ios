@@ -45,4 +45,8 @@ enum Haptic {
         guard AppSettings.haptics, PowerSaver.allowsNow(.haptics) else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
+    static func error() {
+        guard AppSettings.haptics, PowerSaver.allowsNow(.haptics) else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
 }

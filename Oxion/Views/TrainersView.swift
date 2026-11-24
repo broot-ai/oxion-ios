@@ -143,6 +143,10 @@ struct TrainersView: View {
                 async let b: Void = store.load(reset: true)
                 _ = await (a, b)
             }
+            .onOxionRefresh {
+                await store.loadHome()
+                await store.load(reset: true)
+            }
             .task {
                 if !model.trainerQuery.isEmpty { takeQuery() }
                 if store.home == nil { await store.loadHome() }

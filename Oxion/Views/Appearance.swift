@@ -273,6 +273,7 @@ struct AnimationSettingsView: View {
     @State private var p = PowerSaver.shared
     @AppStorage("anim_messages") private var messages = true
     @AppStorage("anim_send_haptic") private var sendHaptic = true
+    @AppStorage("island.brand") private var islandBrand = true
 
     var body: some View {
         List {
@@ -285,6 +286,12 @@ struct AnimationSettingsView: View {
             Section("Сообщения") {
                 Toggle("Появление новых сообщений", isOn: $messages)
                 Toggle("Вибрация при отправке", isOn: $sendHaptic)
+            }
+            Section {
+                Toggle("Логотип под Dynamic Island", isOn: $islandBrand)
+                    .onChange(of: islandBrand) { OverlayWindows.shared.updateIsland() }
+            } footer: {
+                Text("На экране логотип спрятан под Dynamic Island, а на скриншотах вместо выреза видны огонёк и надпись OXION.")
             }
         }
         .tint(Color.lime)

@@ -1,5 +1,4 @@
 import SwiftUI
-import Lottie
 
 // Oxion Premium: подписка и подарки собеседникам — как «Подарить Premium» в Telegram.
 // Оплата пока в тестовом режиме: подарок активируется сразу.
@@ -70,17 +69,20 @@ struct GiftBoxIcon: View {
     }
 }
 
-/// Золотой кубок Oxion — настоящая анимация стикера (Lottie из .tgs), по кругу
+/// Золотой кубок Oxion — статичная картинка с мягким «дыханием»
 struct AnimatedTrophy: View {
     var height: CGFloat = 150
     @Environment(\.accessibilityReduceMotion) private var reduce
+    @State private var up = false
 
     var body: some View {
-        LottieView(animation: .named("premium-trophy", bundle: .main))
-            .playbackMode(reduce ? .paused(at: .progress(0)) : .playing(.toProgress(1, loopMode: .loop)))
+        Image("premium-trophy")
             .resizable()
+            .scaledToFit()
             .frame(width: height * 1.1, height: height * 1.1)
+            .scaleEffect(up && !reduce ? 1.04 : 1)
             .shadow(color: Color(hex: 0xFFB000).opacity(0.3), radius: 22, y: 8)
+            .onAppear { withAnimation(.easeInOut(duration: 2.2).repeatForever()) { up = true } }
     }
 }
 

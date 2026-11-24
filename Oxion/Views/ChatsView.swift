@@ -247,6 +247,7 @@ struct ChatsView: View {
             }
             .searchable(text: $query, prompt: "Поиск по чатам")
             .oxRefreshable { await store.load() }
+            .onOxionRefresh { await store.load() }
             .task {
                 await store.load()
                 if let r: ProtectAll = try? await API.call("/chats/protect-all") { protectAll = r.enabled }
@@ -533,10 +534,7 @@ struct ChatView: View {
     @State private var messages: [Message] = []
     @State private var peer: Peer?
     @State private var peerReadId = 0
-    @State private var showStickers = false
     @AppStorage("chat.quickReaction") private var quickReaction = "❤️"
-    @State private var stickerMenu: Message?
-    @State private var stickerPack: StickerPacks.Pack?
     /// удаляемые сообщения: распадаются на частицы, потом исчезают
     @State private var dissolving: [Int: Date] = [:]
     @State private var since: Double = 0
@@ -634,10 +632,6 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
-            // нажатие по переписке закрывает панель стикеров
-            .simultaneousGesture(TapGesture().onEnded {
-                if showStickers { withAnimation(.spring(duration: 0.3)) { showStickers = false } }
-            }, isEnabled: showStickers)
             // насколько переписку протянули вверх за последний сообщение
             .onScrollGeometryChange(for: CGFloat.self) { g in
                 let rest = max(-g.contentInsets.top, g.contentSize.height + g.contentInsets.bottom - g.containerSize.height)
@@ -814,19 +808,6 @@ struct ChatView: View {
             .sharedBackgroundVisibility(.hidden)
         }
         .toolbar(.hidden, for: .tabBar)
-        .overlay {
-            if let sm = stickerMenu {
-                ChatStickerMenu(m: sm, reactions: Kinds.reactions,
-                                onReact: { e in Task { await react(sm, e) } },
-                                onReply: { replyTo = sm; focused = true },
-                                onPack: { stickerPack = StickerPacks.pack(of: sm.card?["id"]?.string ?? "") },
-                                onDelete: sm.mine ? { Task { await remove(sm) } } : nil,
-                                onClose: { stickerMenu = nil })
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.2), value: stickerMenu?.id)
-        .sheet(item: $stickerPack) { p in StickerPackSheet(pack: p, onSend: { ref in stickerPack = nil; Task { await sendSticker(ref, silent: false) } }) }
         .fullScreenCover(item: $call) { CallScreen(req: $0) }
         .sheet(isPresented: $attaching) {
             ChatAttachSheet(chatId: chatId, replyTo: replyTo?.id,
@@ -910,38 +891,10 @@ struct ChatView: View {
                 }
                 .glassEffect(.regular.interactive(), in: .circle)
 
-                // поле ввода, в котором видны анимированные эмодзи
-                EmojiComposer(text: $text, focused: $focused)
-                    .overlay(alignment: .leading) {
-                        if text.isEmpty {
-                            Text("Сообщение").foregroundStyle(.tertiary).allowsHitTesting(false)
-                        }
-                    }
-                    .padding(.leading, 16)
-                    .padding(.trailing, 48)
+                // обычное системное поле ввода — лёгкое и быстрое
+                PlainComposer(text: $text, focused: $focused)
+                    .padding(.horizontal, 16)
                     .padding(.vertical, 11)
-                    .overlay(alignment: .bottomTrailing) {
-                        // стикеры и эмодзи — вместо клавиатуры, как в Telegram
-                        Button {
-                            Haptic.tap(.soft)
-                            if showStickers {
-                                showStickers = false
-                                focused = true
-                            } else {
-                                focused = false
-                                withAnimation(.spring(duration: 0.35)) { showStickers = true }
-                            }
-                        } label: {
-                            Image(systemName: showStickers ? "keyboard" : "face.smiling")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                                .contentTransition(.symbolEffect(.replace))
-                                .frame(width: 46, height: 44)
-                                // нажимается вся область кнопки, а не только линии значка
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(StickerToggleStyle())
-                    }
                     .glassEffect(.regular, in: .rect(cornerRadius: 22))
 
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending {
@@ -964,15 +917,8 @@ struct ChatView: View {
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
-            if showStickers {
-                StickerPanel(onSend: { ref, silent in Task { await sendSticker(ref, silent: silent) } },
-                             onEmoji: { text += $0 },
-                             onPremiumEmoji: { text += $0 })
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
         .padding(.top, 6)
-        .onChange(of: focused) { if focused && showStickers { withAnimation(.spring(duration: 0.3)) { showStickers = false } } }
     }
 
     private func load(initial: Bool) async {
@@ -1081,19 +1027,17 @@ struct ChatView: View {
                            return NSItemProvider(object: "oxion-msg:\(m.id)" as NSString)
                        },
                        menu: { AnyView(messageMenu(m)) },
-                       groupMode: group?.kind == "group",
-                       onStickerTap: { if let p = StickerPacks.pack(of: m.card?["id"]?.string ?? "") { stickerPack = p } },
-                       onStickerHold: { stickerMenu = m }) { action in
+                       groupMode: group?.kind == "group") { action in
                     switch action {
                     case .product(let id): productBox = AppModel.IdBox(id: id)
                     case .call(let video): call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: video)
                     }
                 }
                     .modifier(DissolveModifier(start: dissolving[m.id],
-                                               overlayParticles: ["sticker", "vnote", "video", "voice", "photos"].contains(m.kind ?? "") || m.photo != nil,
+                                               overlayParticles: ["vnote", "video", "voice", "photos"].contains(m.kind ?? "") || m.photo != nil,
                                                tint: m.mine ? Color.lime : Color.white))
                     .allowsHitTesting(dissolving[m.id] == nil)
-                    // двойное нажатие — быстрая реакция (выбирается в «Стикеры и эмодзи»)
+                    // двойное нажатие — быстрая реакция
                     .simultaneousGesture(TapGesture(count: 2).onEnded {
                         guard m.deleted != true else { return }
                         Haptic.tap(.medium)
@@ -1262,21 +1206,6 @@ struct ChatView: View {
         }
     }
 
-    private func sendSticker(_ ref: String, silent: Bool) async {
-        var b: [String: Any] = ["kind": "sticker", "ref": ref]
-        if silent { b["silent"] = true }
-        if let r = replyTo { b["reply_to"] = r.id }
-        do {
-            let m: Message = try await API.call("/chats/\(chatId)/messages", method: "POST", body: b)
-            replyTo = nil
-            OxSound.play(.sent)
-            withAnimation(.spring(duration: 0.4, bounce: 0.25)) {
-                if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
-            }
-        } catch {
-            OxAlert.error(error.localizedDescription)
-        }
-    }
 
     private func replace(_ m: Message) {
         if let i = messages.firstIndex(where: { $0.id == m.id }) { messages[i] = m }
@@ -1295,9 +1224,6 @@ struct Bubble: View {
     /// меню по долгому нажатию — превью повторяет форму пузыря
     var menu: (() -> AnyView)? = nil
     var groupMode = false
-    /// стикер: нажатие — набор, удержание — своё меню (без квадратной подложки системного меню)
-    var onStickerTap: (() -> Void)? = nil
-    var onStickerHold: (() -> Void)? = nil
     var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
 
@@ -1310,7 +1236,8 @@ struct Bubble: View {
         else { return nil }
         return t
     }
-    private var isSticker: Bool { m.kind == "sticker" && m.deleted != true }
+    /// старые стикеры показываем обычной подписью
+    private var isSticker: Bool { false }
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true && m.forward == nil }
     private var fill: Color { m.mine ? Color.lime : Color.oxBubble.opacity(0.94) }
     private var ink: Color { m.mine ? Color.onLime : Color.primary }
@@ -1337,15 +1264,14 @@ struct Bubble: View {
                                     .background(.black.opacity(0.45), in: Capsule())
                             }
                     } else if isCardOnly, m.kind == "sticker" {
-                        // стикер — без пузыря, как в Telegram
-                        StickerView(ref: m.card?["id"]?.string ?? "", size: 170)
-                            .overlay(alignment: .bottomTrailing) {
-                                meta(on: true).padding(.horizontal, 7).padding(.vertical, 3)
-                                    .background(.black.opacity(0.35), in: Capsule())
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { onStickerTap?() }
-                            .onLongPressGesture(minimumDuration: 0.35) { onStickerHold?() }
+                        // стикеры убраны — старые показываем подписью
+                        HStack(spacing: 8) {
+                            Text("🎨 Стикер").font(.subheadline)
+                            meta(on: false)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .foregroundStyle(ink)
+                        .background(shape.fill(fill))
                     } else if isCardOnly, m.kind == "voice" {
                         ChatCard(kind: "voice", card: m.card, mine: m.mine, embedded: true, messageId: m.id)
                             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 20)
@@ -1361,13 +1287,6 @@ struct Bubble: View {
                             }
                     } else if isCardOnly, let k = m.kind {
                         cardBubble(k)
-                    } else if let refs = PremiumEmoji.onlyEmoji(m.text), m.kind == nil, m.photo == nil, m.forward == nil, m.reply == nil, m.deleted != true {
-                        // только анимированные эмодзи — крупно, без пузыря
-                        VStack(alignment: .trailing, spacing: 2) {
-                            BigEmojiRow(refs: refs)
-                            meta(on: true).padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(.black.opacity(0.3), in: Capsule())
-                        }
                     } else if bigEmoji, let e = onlyEmoji {
                         // «Крупные эмодзи»: 1–3 эмодзи без пузыря, как в Telegram
                         VStack(alignment: .trailing, spacing: 2) {
@@ -1487,15 +1406,7 @@ struct Bubble: View {
                     ChatCard(kind: k, card: m.card, mine: m.mine, embedded: true, messageId: m.id)
                         .padding(.horizontal, -6)
                 }
-                if let t = m.text, !t.isEmpty, PremiumEmoji.hasTokens(t) {
-                    // текст с анимированными эмодзи
-                    VStack(alignment: .trailing, spacing: 2) {
-                        EmojiMessageText(text: t, fontSize: style.fontSize, color: m.mine ? Color.onLime : Color.primary,
-                                         linkColor: m.mine ? Color.onLime : Color.limeInk)
-                        // место под время (оно рисуется поверх в правом нижнем углу)
-                        Color.clear.frame(width: 64, height: 12)
-                    }
-                } else if let t = m.text, !t.isEmpty {
+                if let t = m.text.map({ PremiumEmoji.plain($0) }), !t.isEmpty {
                     // время встаёт в конец последней строки, пузырь — по ширине текста
                     (Text(Linkify.attributed(t, color: m.mine ? Color.onLime : Color.limeInk, underline: true)) + timeSpacer)
                         .font(.system(size: style.fontSize))
@@ -1667,12 +1578,17 @@ struct BubbleDrag: ViewModifier {
 }
 
 
-/// Кнопка стикеров в поле ввода: срабатывает сразу, при нажатии слегка сжимается
-private struct StickerToggleStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.85 : 1)
-            .opacity(configuration.isPressed ? 0.6 : 1)
-            .animation(.spring(duration: 0.18), value: configuration.isPressed)
+
+/// Поле ввода сообщения: системный TextField с переносом строк
+struct PlainComposer: View {
+    @Binding var text: String
+    @Binding var focused: Bool
+    @FocusState private var f: Bool
+    var body: some View {
+        TextField("Сообщение", text: $text, axis: .vertical)
+            .lineLimit(1...6)
+            .focused($f)
+            .onChange(of: focused) { if f != focused { f = focused } }
+            .onChange(of: f) { if focused != f { focused = f } }
     }
 }

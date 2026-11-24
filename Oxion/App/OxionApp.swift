@@ -104,9 +104,22 @@ struct OxionApp: App {
                         model.handle(route: r)
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                    Task { try? await Task.sleep(for: .milliseconds(350)); OverlayWindows.shared.updateIsland() }
+                }
+                .task {
+                    // окна поверх приложения: плашка под Dynamic Island и экран обновления
+                    try? await Task.sleep(for: .milliseconds(300))
+                    OverlayWindows.shared.install()
+                }
                 .onChange(of: scenePhase) {
+                    if scenePhase == .active {
+                        OverlayWindows.shared.install()
+                        AppResume.shared.didBecomeActive(model: model)
+                    }
                     if scenePhase == .active, let r = PendingRoute.take() { model.handle(route: r) }
                     if scenePhase == .background {
+                        AppResume.shared.didEnterBackground()
                         Task { await SmartNotify.reschedule() }
                         OxAppDelegate.schedule()
                         QuickActions.update()
@@ -252,6 +265,14 @@ final class AppModel {
             return
         }
         await loadMe()
+    }
+
+    /// Тихо обновить профиль (без экрана загрузки и без выхода из аккаунта при сбое сети)
+    func refreshMe() async throws {
+        let m: Me = try await API.call("/me")
+        me = m
+        if let mt: Meta = try? await API.call("/meta") { meta = mt }
+        Task { await Catalog.refresh { self.muscleName($0) } }
     }
 
     func loadMe() async {

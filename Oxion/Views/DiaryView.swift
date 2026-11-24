@@ -140,6 +140,7 @@ struct DiaryView: View {
                 }
             }
             .oxRefreshable { await load() }
+            .onOxionRefresh { await load() }
             .task {
                 if stats == nil { await load() }
             }

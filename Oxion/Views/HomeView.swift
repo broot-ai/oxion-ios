@@ -70,6 +70,7 @@ struct HomeView: View {
             }
             .reassemblyRefreshable { await load() }
             .task { await load() }
+            .onOxionRefresh { await load() }
             .sheet(isPresented: $ringsInfo) { RingsDetailSheet(rings: todayRings) }
         }
     }

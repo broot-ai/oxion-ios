@@ -172,6 +172,7 @@ struct FeedView: View {
                 }
             }
             .oxRefreshable { await store.load(reset: true) }
+            .onOxionRefresh { await store.load(reset: true) }
             .task { if store.items.isEmpty { await store.load(reset: true) } }
             .onChange(of: store.tab) {
                 Haptic.tap(.soft)
