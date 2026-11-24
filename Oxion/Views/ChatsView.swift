@@ -531,6 +531,8 @@ struct ChatView: View {
     @State private var peer: Peer?
     @State private var peerReadId = 0
     @State private var showStickers = false
+    @State private var stickerMenu: Message?
+    @State private var stickerPack: StickerPacks.Pack?
     /// удаляемые сообщения: распадаются на частицы, потом исчезают
     @State private var dissolving: [Int: Date] = [:]
     @State private var since: Double = 0
@@ -598,6 +600,8 @@ struct ChatView: View {
                             .background(Color.lime.opacity(0.12), in: Capsule())
                             .padding(.bottom, 4)
                     }
+                    // хвостики считаем один раз на кадр, а не для каждого сообщения (иначе чат тормозит)
+                    let tails = tailIds
                     ForEach(messages) { m in
                         if m.kind == "shot" || m.kind == "svc" {
                             HStack(spacing: 6) {
@@ -616,7 +620,7 @@ struct ChatView: View {
                         } else if m.kind == "gift" && m.deleted != true {
                             GiftServiceRow(m: m, peerName: peer?.name).id(m.id)
                         } else {
-                        bubbleRow(m)
+                        bubbleRow(m, tails: tails)
                         }
                     }
                 }
@@ -801,6 +805,19 @@ struct ChatView: View {
             .sharedBackgroundVisibility(.hidden)
         }
         .toolbar(.hidden, for: .tabBar)
+        .overlay {
+            if let sm = stickerMenu {
+                ChatStickerMenu(m: sm, reactions: Kinds.reactions,
+                                onReact: { e in Task { await react(sm, e) } },
+                                onReply: { replyTo = sm; focused = true },
+                                onPack: { stickerPack = StickerPacks.pack(of: sm.card?["id"]?.string ?? "") },
+                                onDelete: sm.mine ? { Task { await remove(sm) } } : nil,
+                                onClose: { stickerMenu = nil })
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: stickerMenu?.id)
+        .sheet(item: $stickerPack) { p in StickerPackSheet(pack: p, onSend: { ref in stickerPack = nil; Task { await sendSticker(ref, silent: false) } }) }
         .fullScreenCover(item: $call) { CallScreen(req: $0) }
         .sheet(isPresented: $attaching) {
             ChatAttachSheet(chatId: chatId, replyTo: replyTo?.id,
@@ -1037,8 +1054,8 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private func bubbleRow(_ m: Message) -> some View {
-                Bubble(m: m, read: m.mine && m.id <= peerReadId, tail: tailIds.contains(m.id),
+    private func bubbleRow(_ m: Message, tails: Set<Int>) -> some View {
+                Bubble(m: m, read: m.mine && m.id <= peerReadId, tail: tails.contains(m.id),
                        sender: group?.kind == "group" && !m.mine ? m.fromId.flatMap { senders[$0] } : nil,
                        dragProvider: {
                            // iOS вызывает это уже при долгом нажатии (вместе с меню) — панель пока не показываем
@@ -1046,13 +1063,17 @@ struct ChatView: View {
                            return NSItemProvider(object: "oxion-msg:\(m.id)" as NSString)
                        },
                        menu: { AnyView(messageMenu(m)) },
-                       groupMode: group?.kind == "group") { action in
+                       groupMode: group?.kind == "group",
+                       onStickerTap: { if let p = StickerPacks.pack(of: m.card?["id"]?.string ?? "") { stickerPack = p } },
+                       onStickerHold: { stickerMenu = m }) { action in
                     switch action {
                     case .product(let id): productBox = AppModel.IdBox(id: id)
                     case .call(let video): call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: video)
                     }
                 }
-                    .modifier(DissolveModifier(start: dissolving[m.id]))
+                    .modifier(DissolveModifier(start: dissolving[m.id],
+                                               overlayParticles: ["sticker", "vnote", "video", "voice", "photos"].contains(m.kind ?? "") || m.photo != nil,
+                                               tint: m.mine ? Color.lime : Color.white))
                     .allowsHitTesting(dissolving[m.id] == nil)
                     .id(m.id)
                     .transition(Self.bubbleTransition(mine: m.mine))
@@ -1252,7 +1273,11 @@ struct Bubble: View {
     var groupMode = false
     var onAction: (InlineBtn.Action) -> Void = { _ in }
     var style = BubbleStyle()
+    /// стикер: нажатие — набор, удержание — своё меню (без квадратной подложки системного меню)
+    var onStickerTap: (() -> Void)? = nil
+    var onStickerHold: (() -> Void)? = nil
 
+    private var isSticker: Bool { m.kind == "sticker" && m.deleted != true }
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true && m.forward == nil }
     private var fill: Color { m.mine ? Color.lime : Color.oxBubble.opacity(0.94) }
     private var ink: Color { m.mine ? Color.onLime : Color.primary }
@@ -1285,6 +1310,9 @@ struct Bubble: View {
                                 meta(on: true).padding(.horizontal, 7).padding(.vertical, 3)
                                     .background(.black.opacity(0.35), in: Capsule())
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture { onStickerTap?() }
+                            .onLongPressGesture(minimumDuration: 0.35) { onStickerHold?() }
                     } else if isCardOnly, m.kind == "voice" {
                         ChatCard(kind: "voice", card: m.card, mine: m.mine, embedded: true, messageId: m.id)
                             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 20)
@@ -1309,7 +1337,7 @@ struct Bubble: View {
                 }
                 .frame(width: isCardOnly && !["vnote", "voice", "sticker"].contains(m.kind ?? "") ? 294 : nil)
                 // перетаскивать для пересылки только сам пузырь — без пустого места строки вокруг
-                .modifier(BubbleDrag(provider: dragProvider, menu: menu, shape: dragShape))
+                .modifier(BubbleDrag(provider: isSticker ? nil : dragProvider, menu: isSticker ? nil : menu, shape: dragShape))
                 if let rs = m.reactions, !rs.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(rs, id: \.self) { r in

@@ -20,6 +20,14 @@ final class StickerStore {
     static let shared = StickerStore()
     var recent: [String] = UserDefaults.standard.stringArray(forKey: "stk.recent") ?? []
     var favorites: [String] = UserDefaults.standard.stringArray(forKey: "stk.fav") ?? []
+    /// наборы, добавленные в «Мои стикеры» (Chameleo — по умолчанию)
+    var packs: [String] = UserDefaults.standard.stringArray(forKey: "stk.packs") ?? ["chameleo"]
+
+    func hasPack(_ id: String) -> Bool { packs.contains(id) }
+    func togglePack(_ id: String) {
+        if packs.contains(id) { packs.removeAll { $0 == id } } else { packs.insert(id, at: 0) }
+        UserDefaults.standard.set(packs, forKey: "stk.packs")
+    }
 
     func used(_ ref: String) {
         recent.removeAll { $0 == ref }
@@ -37,18 +45,51 @@ final class StickerStore {
     }
 }
 
+/// Разобранные анимации: файл читается один раз и не в главном потоке — чат не подвисает
+@MainActor
+final class StickerCache {
+    static let shared = StickerCache()
+    private var cache: [String: LottieAnimation] = [:]
+    private var loading: [String: Task<LottieAnimation?, Never>] = [:]
+
+    func cached(_ name: String) -> LottieAnimation? { cache[name] }
+
+    func animation(_ name: String) async -> LottieAnimation? {
+        if let a = cache[name] { return a }
+        if let t = loading[name] { return await t.value }
+        let t = Task.detached(priority: .userInitiated) { () -> LottieAnimation? in
+            guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
+                  let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+            return try? LottieAnimation.from(data: data)
+        }
+        loading[name] = t
+        let a = await t.value
+        cache[name] = a
+        loading[name] = nil
+        return a
+    }
+}
+
 /// Один стикер: Lottie по кругу; старые «gto» — эмодзи
 struct StickerView: View {
     let ref: String
     var size: CGFloat = 160
     var playing = true
+    @State private var anim: LottieAnimation?
 
     var body: some View {
         Group {
             if StickerPacks.isAnimated(ref) {
-                LottieView(animation: .named(StickerPacks.file(ref), bundle: .main))
-                    .playbackMode(playing ? .playing(.toProgress(1, loopMode: .loop)) : .paused(at: .progress(0)))
-                    .resizable()
+                if let a = anim ?? StickerCache.shared.cached(StickerPacks.file(ref)) {
+                    // Core Animation: анимация крутится вне главного потока
+                    LottieView(animation: a)
+                        .configuration(LottieConfiguration(renderingEngine: .coreAnimation))
+                        .playbackMode(playing ? .playing(.toProgress(1, loopMode: .loop)) : .paused(at: .progress(0)))
+                        .resizable()
+                } else {
+                    Color.clear
+                        .task { anim = await StickerCache.shared.animation(StickerPacks.file(ref)) }
+                }
             } else {
                 Text("🎨").font(.system(size: size * 0.6))
             }
@@ -100,7 +141,7 @@ struct StickerPanel: View {
             }
         }
         .animation(.spring(duration: 0.3), value: preview)
-        .sheet(item: $packSheet) { p in StickerPackSheet(pack: p) { ref in send(ref, silent: false); packSheet = nil } }
+        .sheet(item: $packSheet) { p in StickerPackSheet(pack: p, onSend: { ref in send(ref, silent: false); packSheet = nil }) }
     }
 
     private func send(_ ref: String, silent: Bool) {
@@ -118,7 +159,7 @@ struct StickerPanel: View {
                 if !store.favorites.isEmpty {
                     Button { withAnimation { proxy.scrollTo("fav", anchor: .top) } } label: { Image(systemName: "bookmark").font(.title3) }
                 }
-                ForEach(StickerPacks.all) { p in
+                ForEach(StickerPacks.all.filter { store.hasPack($0.id) }) { p in
                     Button { withAnimation { proxy.scrollTo(p.id, anchor: .top) } } label: {
                         StickerView(ref: StickerPacks.refs(p)[0], size: 30, playing: false)
                     }
@@ -141,7 +182,7 @@ struct StickerPanel: View {
                 header("ИЗБРАННЫЕ СТИКЕРЫ", id: "fav", clear: nil)
                 grid(store.favorites)
             }
-            ForEach(StickerPacks.all) { p in
+            ForEach(StickerPacks.all.filter { store.hasPack($0.id) }) { p in
                 header(p.title.uppercased(), id: p.id, clear: nil)
                 grid(StickerPacks.refs(p))
             }
@@ -280,29 +321,142 @@ extension StickerPacks.Pack: Hashable {
     func hash(into h: inout Hasher) { h.combine(id) }
 }
 
-/// Весь набор
+/// Весь набор: как в Telegram — сетка, «Добавить N стикеров» / «Удалить N стикеров»
 struct StickerPackSheet: View {
     let pack: StickerPacks.Pack
-    var onSend: (String) -> Void
+    var onSend: ((String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var store = StickerStore.shared
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
-                    ForEach(StickerPacks.refs(pack), id: \.self) { r in
-                        Button { onSend(r) } label: { StickerView(ref: r, size: 76) }.buttonStyle(.plain)
+        let added = store.hasPack(pack.id)
+        VStack(spacing: 0) {
+            HStack {
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 36, height: 36) }
+                    .buttonStyle(.glass).buttonBorderShape(.circle)
+                Spacer()
+                Text(pack.title).font(.headline)
+                Spacer()
+                ShareLink(item: "Набор стикеров «\(pack.title)» в Oxion") {
+                    Image(systemName: "ellipsis").font(.headline).frame(width: 36, height: 36)
+                }
+                .buttonStyle(.glass).buttonBorderShape(.circle)
+            }
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 8) {
+                ForEach(StickerPacks.refs(pack), id: \.self) { r in
+                    StickerView(ref: r, size: 64)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard let onSend else { return }
+                            onSend(r)
+                        }
+                }
+            }
+            .padding(.horizontal, 12)
+
+            Button {
+                Haptic.success()
+                store.togglePack(pack.id)
+                OxAlert.show(icon: added ? "trash.fill" : "checkmark.circle.fill", tint: added ? .red : Color.lime,
+                             title: added ? "Стикеры удалены" : "Стикеры добавлены",
+                             message: added ? "Набор \(pack.title) удалён из ваших стикеров" : "Набор \(pack.title) добавлен в ваши стикеры")
+                dismiss()
+            } label: {
+                Text(added ? "Удалить \(pack.count) стикеров" : "Добавить \(pack.count) стикеров")
+                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(added ? Color.red.opacity(0.85) : Color.lime)
+            .foregroundStyle(added ? Color.white : Color.onLime)
+            .controlSize(.large)
+            .padding(16)
+        }
+        .background(Color.oxBg)
+        .fitSheet()
+        .presentationCornerRadius(34)
+        .presentationDragIndicator(.visible)
+    }
+}
+
+/// Меню стикера в переписке по долгому нажатию — сам стикер крупно, без квадратной подложки
+struct ChatStickerMenu: View {
+    let m: Message
+    var reactions: [String]
+    var onReact: (String) -> Void
+    var onReply: () -> Void
+    var onPack: () -> Void
+    var onDelete: (() -> Void)?
+    var onClose: () -> Void
+    @State private var shown = false
+    @State private var store = StickerStore.shared
+
+    private var ref: String { m.card?["id"]?.string ?? "" }
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+                .onTapGesture { close() }
+            VStack(spacing: 14) {
+                HStack(spacing: 6) {
+                    ForEach(reactions, id: \.self) { e in
+                        Button { onReact(e); close() } label: { Text(e).font(.system(size: 28)).frame(width: 40, height: 40) }
+                            .buttonStyle(.plain)
                     }
                 }
-                .padding(14)
-            }
-            .navigationTitle(pack.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Image(systemName: "xmark") } }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .glassEffect(.regular, in: .capsule)
+                .scaleEffect(shown ? 1 : 0.7)
+                .opacity(shown ? 1 : 0)
+
+                StickerView(ref: ref, size: 200)
+                    .scaleEffect(shown ? 1 : 0.7)
+
+                VStack(spacing: 0) {
+                    row("Ответить", "arrowshape.turn.up.left") { onReply(); close() }
+                    Divider()
+                    row(store.favorites.contains(ref) ? "Удалить из Избранного" : "В Избранное",
+                        store.favorites.contains(ref) ? "bookmark.slash" : "bookmark") { store.toggleFavorite(ref); close() }
+                    if StickerPacks.pack(of: ref) != nil {
+                        Divider()
+                        row("Посмотреть набор", "square.grid.2x2") { close(); onPack() }
+                    }
+                    if let onDelete {
+                        Divider()
+                        row("Удалить", "trash", red: true) { close(); onDelete() }
+                    }
+                }
+                .frame(width: 250)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .opacity(shown ? 1 : 0)
+                .offset(y: shown ? 0 : 16)
             }
         }
-        .presentationDetents([.medium, .large])
+        .onAppear {
+            Haptic.tap(.medium)
+            withAnimation(.spring(duration: 0.4, bounce: 0.35)) { shown = true }
+        }
+    }
+
+    private func close() {
+        withAnimation(.easeOut(duration: 0.2)) { shown = false }
+        onClose()
+    }
+
+    private func row(_ t: String, _ icon: String, red: Bool = false, _ a: @escaping () -> Void) -> some View {
+        Button(action: a) {
+            HStack(spacing: 12) {
+                Image(systemName: icon).frame(width: 22)
+                Text(t)
+                Spacer()
+            }
+            .font(.subheadline)
+            .foregroundStyle(red ? Color.red : Color.primary)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -310,10 +464,22 @@ struct StickerPackSheet: View {
 
 struct DissolveModifier: ViewModifier {
     let start: Date?
+    /// стикеры, видео, кружки рисуются через UIKit — шейдер их не видит, для них частицы рисуем сверху
+    var overlayParticles = false
+    var tint: Color = Color.lime
     static let duration: TimeInterval = 1.1
 
     func body(content: Content) -> some View {
-        if let start {
+        if let start, overlayParticles {
+            TimelineView(.animation) { tl in
+                let t = min(1, tl.date.timeIntervalSince(start) / Self.duration)
+                content
+                    .opacity(max(0, 1 - t * 1.6))
+                    .scaleEffect(1 - 0.15 * t)
+                    .blur(radius: t * 8)
+                    .overlay { DustBurst(t: t, tint: tint).padding(-60).allowsHitTesting(false) }
+            }
+        } else if let start {
             TimelineView(.animation) { tl in
                 let t = min(1, tl.date.timeIntervalSince(start) / Self.duration)
                 // запас вокруг пузыря, чтобы частицы могли разлететься за его края
@@ -327,6 +493,36 @@ struct DissolveModifier: ViewModifier {
             }
         } else {
             content
+        }
+    }
+}
+
+
+/// Облако частиц поверх исчезающего стикера
+private struct DustBurst: View {
+    let t: Double
+    var tint: Color
+    var body: some View {
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            for i in 0..<260 {
+                let fi = Double(i)
+                func r(_ k: Double) -> Double { let x = sin(fi * 12.9898 + k * 78.233) * 43758.5453; return x - floor(x) }
+                // частица стартует внутри стикера и улетает вверх-вправо
+                let sx = c.x + (r(1) - 0.5) * (size.width - 120)
+                let sy = c.y + (r(2) - 0.5) * (size.height - 120)
+                let delay = (1 - (sx / size.width)) * 0.4 + r(3) * 0.2
+                let k = max(0, min(1, (t - delay) / 0.5))
+                guard k > 0, k < 1 else { continue }
+                let ang = -1.2 + r(4) * 1.9
+                let d = (16 + r(5) * 60) * k * k
+                let p = CGPoint(x: sx + cos(ang) * d, y: sy + sin(ang) * d)
+                let s = 1.5 + r(6) * 2
+                var g = ctx
+                g.opacity = 1 - k
+                let col: Color = r(7) < 0.5 ? tint : (r(7) < 0.8 ? .white : tint.opacity(0.6))
+                g.fill(Path(CGRect(x: p.x, y: p.y, width: s, height: s)), with: .color(col))
+            }
         }
     }
 }
