@@ -156,7 +156,6 @@ struct FeedView: View {
                         .accessibilityLabel("Новая публикация")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { path.append(.coach) } label: { AIAvatar(size: 28) }
                     Button { path.append(.search) } label: { Image(systemName: "magnifyingglass") }
                     Button { path.append(.activity) } label: { Image(systemName: "heart") }
                 }
@@ -236,25 +235,70 @@ struct FeedView: View {
     @ViewBuilder
     private var topicsRow: some View {
         if let topics = model.meta?.feedTopics, !topics.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
+            // темы листаются вбок; значки — системные иконки iOS вместо эмодзи
+            ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(topics) { t in
                         Button {
+                            Haptic.tap(.soft)
                             path.append(.topic(t.key, t.name))
                         } label: {
-                            Text("\(t.icon ?? "") \(t.name)")
-                                .font(.subheadline)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.oxCard, in: Capsule())
-                                .overlay(Capsule().stroke(Color.primary.opacity(0.06)))
+                            HStack(spacing: 6) {
+                                Image(systemName: FeedTopicIcon.symbol(t.key))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(FeedTopicIcon.tint(t.key))
+                                Text(t.name).font(.subheadline.weight(.medium))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.oxCard, in: Capsule())
+                            .overlay(Capsule().stroke(Color.primary.opacity(0.06)))
+                            .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 16)
+                .scrollTargetLayout()
             }
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollBounceBehavior(.always, axes: .horizontal)
+            .frame(height: 40)
             .padding(.bottom, 12)
+        }
+    }
+}
+
+/// Значки тем ленты — SF Symbols вместо эмодзи
+enum FeedTopicIcon {
+    static func symbol(_ key: String) -> String {
+        switch key {
+        case "progress": "chart.line.uptrend.xyaxis"
+        case "strength": "dumbbell.fill"
+        case "cardio": "figure.run"
+        case "food": "fork.knife"
+        case "lose": "flame.fill"
+        case "gain": "figure.strengthtraining.traditional"
+        case "ask": "questionmark.bubble.fill"
+        case "home": "house.fill"
+        case "motivation": "bolt.fill"
+        case "partner": "person.2.fill"
+        default: "number"
+        }
+    }
+    static func tint(_ key: String) -> Color {
+        switch key {
+        case "progress": Color(hex: 0x3FD6C9)
+        case "strength": Color.lime
+        case "cardio": Color(hex: 0x58F670)
+        case "food": Color(hex: 0xF0A030)
+        case "lose": Color(hex: 0xFF5A4E)
+        case "gain": Color(hex: 0x8E7CFF)
+        case "ask": Color(hex: 0x3B8CF5)
+        case "home": Color(hex: 0xFFB000)
+        case "motivation": Color(hex: 0xFFD60A)
+        default: Color(hex: 0x3FD6C9)
         }
     }
 }
@@ -382,7 +426,7 @@ struct ThreadPost: View {
                 Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
             }
             if let tp = p.topic, let t = model.meta?.feedTopics?.first(where: { $0.key == tp }) {
-                Text("› \(t.icon ?? "") \(t.name)")
+                (Text("› ") + Text(Image(systemName: FeedTopicIcon.symbol(t.key))) + Text(" \(t.name)"))
                     .font(.caption)
                     .foregroundStyle(Color.oxHint)
                     .lineLimit(1)

@@ -85,104 +85,56 @@ struct ProfileView: View {
                             Spacer()
                         }
                         .padding(.vertical, 6)
-                        Button {
-                            editing = true
-                        } label: {
-                            Label("Изменить профиль", systemImage: "pencil")
+                        NavigationLink { EditMyProfileView() } label: {
+                            Label("Изменить мой профиль", systemImage: "person.crop.circle.badge.pencil")
+                                .font(.headline)
+                                .foregroundStyle(Color.limeInk)
                         }
                     }
-
-                    Section("Аккаунт") {
-                        LabeledContent("Город", value: me.city ?? "не указан")
-                        LabeledContent("Цель в неделю", value: "\(me.weekGoal ?? 3) \(RU.plural(me.weekGoal ?? 3, "тренировка", "тренировки", "тренировок"))")
-                    }
                 }
 
-                Section {
-                    nav("OXION OS — экосистема Apple", "sparkles.rectangle.stack.fill", Color.lime) { EcosystemView() }
-                    nav("Доступы и разрешения", "checkmark.shield.fill", Color(hex: 0x0A84FF)) { PermissionsView() }
-                    nav("Номер телефона", "phone.fill", Color(hex: 0x34A853)) { PhoneSettingsView() }
-                }
                 Section("Тренировки") {
                     nav("Твой статус", "circle.hexagongrid.fill", Color(hex: 0x3FD6C9)) { StatusView() }
                     nav("План на 4 недели", "calendar.badge.plus", Color.lime) { ProgramBuilderView() }
                     nav("Прогресс тела", "chart.line.uptrend.xyaxis", Color.lime) { ProgressHubView() }
                     nav("Цели", "target", Color(hex: 0xFF5A4E)) { GoalsView() }
                     nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
+                    nav("Медали", "medal.fill", Color(hex: 0xFFB000)) { MedalsView() }
                     nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
-                    nav("Рядом", "dot.radiowaves.left.and.right", Color(hex: 0xB2EE37)) { NearbyPeopleView() }
+                    nav("Пробежка с GPS", "figure.run", Color(hex: 0x58F670)) { RunTrackerView() }
+                }
+                Section("Питание") {
+                    nav("Сканер еды", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
+                    nav("Дневник питания", "fork.knife", Color(hex: 0x58C770)) { FoodDiaryView() }
                 }
                 Section("Тренер и здоровье") {
                     nav("Мой тренер", "person.crop.circle.badge.checkmark", Color(hex: 0x8E7CFF)) { MyCoachView() }
-                    nav("ИИ-тренер", "sparkles", Color.lime) { AICoachView() }
                     nav("Здоровье", "heart.text.square.fill", Color(hex: 0xFF3B5C)) { HealthView() }
                 }
-                Section("Инструменты") {
-                    nav("Пробежка с GPS", "figure.run", Color(hex: 0x58F670)) { RunTrackerView() }
+                Section("Рядом и покупки") {
                     Button { model.showMap = true } label: {
                         HStack(spacing: 14) {
                             OxRowIcon(icon: "map.fill", tint: Color(hex: 0x3FD6C9))
-                            Text("Карта").foregroundStyle(.primary)
+                            Text("Карта спортивных мест").foregroundStyle(.primary)
                         }
                     }
-                    nav("Сканер еды", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
-                    nav("Дневник питания", "fork.knife", Color(hex: 0x58C770)) { FoodDiaryView() }
-                    nav("Будильники", "alarm.fill", Color(hex: 0xF0A030)) { AlarmSettingsView() }
-                    nav("Умные устройства", "dot.radiowaves.left.and.right", Color(hex: 0x3478F6)) { DevicePanelView() }
-                }
-                Section("Музыка и фокус") {
-                    nav("Музыка для тренировки", "music.note", Color(hex: 0xFF3B5C)) { WorkoutMusicView() }
-                    nav("Не отвлекаться", "hourglass", Color(hex: 0x8E7CFF)) { ScreenTimeLockView() }
-                    nav("Game Center", "gamecontroller.fill", Color(hex: 0x0A84FF)) { GameCenterView() }
-                }
-                Section("Покупки") {
+                    nav("Рядом", "dot.radiowaves.left.and.right", Color(hex: 0xB2EE37)) { NearbyPeopleView() }
                     nav("Магазин спортпита", "bag.fill", Color(hex: 0xF0A030)) { ShopView() }
                     nav("Мои заказы", "shippingbox.fill", Color(hex: 0x3FD6C9)) { OrdersView() }
                 }
                 if model.me?.mode == "trainer" || model.me?.hasTrainer == true {
                     Section("Для тренера") {
-                        nav("Моя анкета тренера", "person.text.rectangle.fill", Color.lime) { TrainerEditView() }
                         nav("Мои клиенты", "person.2.fill", Color(hex: 0x58F670)) { ClientsView() }
                         nav("Расписание и запись", "calendar", Color(hex: 0x3FD6C9)) { TrainerScheduleView() }
                         nav("PRO-размещение", "crown.fill", Color(hex: 0xF0A030)) { SubscriptionView() }
                     }
                 }
-                Section("Ещё") {
-                    nav("Мой профиль в ленте", "person.crop.square.fill", Color(hex: 0x8E7CFF)) { UserProfileView(userId: model.me?.id ?? 0) }
-                    Button { showCard = true } label: { row("Моя визитка и QR", "qrcode", Color.lime) }
-                    nav("Работа в Oxion", "briefcase.fill", Color(hex: 0x3FD6C9)) { WorkView() }
+                Section {
+                    nav("Настройки", "gearshape.fill", Color(hex: 0x8E8E93)) { AppSettingsHubView() }
+                    nav("Oxion Premium", "star.circle.fill", Color(hex: 0xFFB000)) { PremiumView() }
                     if model.me?.admin == true {
                         nav("Панель платформы", "shield.lefthalf.filled", Color(hex: 0xFF5A4E)) { PlatformView() }
                     }
-                }
-
-                Section {
-                    nav("Уведомления", "bell.badge.fill", Color(hex: 0xFF5A4E)) { NotificationSettingsView() }
-                    nav("Оформление", "paintbrush.fill", Color(hex: 0x8E7CFF)) { AppearanceSettingsView() }
-                    nav("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
-                    nav("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }
-                    nav("Конфиденциальность и безопасность", "hand.raised.fill", Color(hex: 0x3B8CF5)) { SafetyView() }
-                    nav("Oxion Premium", "star.circle.fill", Color(hex: 0xFFB000)) { PremiumView() }
-                    Toggle(isOn: $inAppBrowser) {
-                        HStack(spacing: 14) {
-                            OxRowIcon(icon: "safari.fill", tint: Color(hex: 0x3478F6))
-                            Text("Открывать ссылки в Oxion")
-                        }
-                    }
-                    if !notifText.isEmpty {
-                        Text(notifText)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                    } label: {
-                        Label("Настройки Oxion в iPhone", systemImage: "gearshape.fill")
-                    }
-                } header: {
-                    Text("Настройки")
-                } footer: {
-                    Text("Тактильный отклик, ленту при запуске и автозагрузку фото можно поменять в «Настройки» → Oxion.")
                 }
 
                 Section("Поддержка") {
@@ -202,9 +154,6 @@ struct ProfileView: View {
                 }
 
                 Section {
-                    NavigationLink { LoginKeysView() } label: {
-                        Label("Ключи входа · \(Biometry.name)", systemImage: Biometry.icon)
-                    }
                     Button(role: .destructive) {
                         confirmLogout = true
                     } label: {
@@ -309,7 +258,10 @@ struct ProfileView: View {
             list.append(OxSearchItem("Моя визитка и QR", E, "qrcode", Color.lime, ["qr", "куар", "визитка", "код", "поделиться профилем", "ссылка на профиль"], run: { showCard = true }))
             list.append(OxSearchItem("Пригласить друзей", E, "person.badge.plus", Color.lime, ["контакты", "друзья", "пригласить", "приглашение", "реферал"], push: { ContactsInviteView() }))
             list.append(OxSearchItem("Работа в Oxion", E, "briefcase.fill", Color(hex: 0x3FD6C9), ["вакансии", "работа", "карьера", "стать тренером"], push: { WorkView() }))
-            list.append(OxSearchItem("Oxion Premium", S, "star.circle.fill", Color(hex: 0xFFB000), ["премиум", "подписка", "подарок", "подарить", "premium"], push: { PremiumView() }))
+            list.append(OxSearchItem("Настройки", S, "gearshape.fill", Color(hex: 0x8E8E93), ["настройки", "параметры", "уведомления", "оформление", "тема"], push: { AppSettingsHubView() }))
+        list.append(OxSearchItem("Медали", S, "medal.fill", Color(hex: 0xFFB000), ["медали", "достижения", "награды", "ачивки", "game center"], push: { MedalsView() }))
+        list.append(OxSearchItem("Изменить мой профиль", S, "person.crop.circle.badge.pencil", Color.lime, ["профиль", "аватар", "имя", "телефон", "номер"], push: { EditMyProfileView() }))
+        list.append(OxSearchItem("Oxion Premium", S, "star.circle.fill", Color(hex: 0xFFB000), ["премиум", "подписка", "подарок", "подарить", "premium"], push: { PremiumView() }))
         list.append(OxSearchItem("Конфиденциальность и безопасность", S, "hand.raised.fill", Color(hex: 0x3B8CF5), ["откровенные", "деликатный", "камера", "геопозиция", "приватность", "безопасность"], push: { SafetyView() }))
         list.append(OxSearchItem("Уведомления", S, "bell.badge.fill", Color(hex: 0xFF5A4E), ["push", "пуши", "оповещения", "уведомления"], push: { NotificationSettingsView() }))
             list.append(OxSearchItem("Умные уведомления", S, "bell.and.waves.left.and.right", Color(hex: 0xFF5A4E), ["напоминания", "умные", "уведомления"], push: { SmartNotifySettingsView() }))
@@ -467,6 +419,133 @@ struct EditProfileSheet: View {
             dismiss()
         } catch {
             errorText = error.localizedDescription
+        }
+    }
+}
+
+
+// MARK: - «Изменить мой профиль»: всё, что касается профиля
+
+struct EditMyProfileView: View {
+    @Environment(AppModel.self) private var model
+    @State private var editing = false
+    @State private var avatarStudio = false
+    @State private var showCard = false
+
+    var body: some View {
+        List {
+            if let me = model.me {
+                Section {
+                    HStack {
+                        Spacer()
+                        Button { avatarStudio = true } label: {
+                            VStack(spacing: 10) {
+                                Avatar(url: API.media(me.photoUrl), name: me.displayName, size: 96)
+                                Text("Изменить аватар").font(.subheadline.bold()).foregroundStyle(Color.limeInk)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                Section("Данные") {
+                    Button { editing = true } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(me.displayName).font(.headline).foregroundStyle(.primary)
+                                Text("\(me.city ?? "Город не указан") · цель \(me.weekGoal ?? 3) в неделю")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("Изменить").foregroundStyle(Color.limeInk)
+                        }
+                    }
+                    NavigationLink { PhoneSettingsView() } label: {
+                        Label("Номер телефона", systemImage: "phone.fill")
+                    }
+                }
+                Section("Как меня видят") {
+                    NavigationLink { UserProfileView(userId: me.id) } label: {
+                        Label("Мой профиль в ленте", systemImage: "person.crop.square.fill")
+                    }
+                    Button { showCard = true } label: {
+                        Label("Моя визитка и QR", systemImage: "qrcode")
+                    }
+                    if me.mode == "trainer" || me.hasTrainer == true {
+                        NavigationLink { TrainerEditView() } label: {
+                            Label("Моя анкета тренера", systemImage: "person.text.rectangle.fill")
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Мой профиль")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $editing) { EditProfileSheet() }
+        .fullScreenCover(isPresented: $avatarStudio) { AvatarStudio() }
+        .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
+    }
+}
+
+// MARK: - «Настройки»: всё, что не про тренировки
+
+struct AppSettingsHubView: View {
+    @AppStorage("ox.browser.inapp") private var inAppBrowser = true
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        List {
+            Section {
+                link("Уведомления", "bell.badge.fill", Color(hex: 0xFF5A4E)) { NotificationSettingsView() }
+                link("Оформление", "paintbrush.fill", Color(hex: 0x8E7CFF)) { AppearanceSettingsView() }
+                link("Энергосбережение", "battery.50percent", Color(hex: 0xF0A030)) { EnergySettingsView() }
+                link("Данные и память", "internaldrive.fill", Color(hex: 0x3478F6)) { DataStorageView() }
+            }
+            Section {
+                link("Конфиденциальность и безопасность", "hand.raised.fill", Color(hex: 0x3B8CF5)) { SafetyView() }
+                link("Доступы и разрешения", "checkmark.shield.fill", Color(hex: 0x0A84FF)) { PermissionsView() }
+                link("Ключи входа · \(Biometry.name)", Biometry.icon, Color(hex: 0x58C770)) { LoginKeysView() }
+            }
+            Section("Тренировки и устройства") {
+                link("Будильники", "alarm.fill", Color(hex: 0xF0A030)) { AlarmSettingsView() }
+                link("Музыка для тренировки", "music.note", Color(hex: 0xFF3B5C)) { WorkoutMusicView() }
+                link("Не отвлекаться", "hourglass", Color(hex: 0x8E7CFF)) { ScreenTimeLockView() }
+                link("Умные устройства", "dot.radiowaves.left.and.right", Color(hex: 0x3478F6)) { DevicePanelView() }
+                link("Game Center", "gamecontroller.fill", Color(hex: 0x0A84FF)) { GameCenterView() }
+                link("OXION OS — экосистема Apple", "sparkles.rectangle.stack.fill", Color.lime) { EcosystemView() }
+            }
+            Section {
+                Toggle(isOn: $inAppBrowser) {
+                    HStack(spacing: 14) {
+                        OxRowIcon(icon: "safari.fill", tint: Color(hex: 0x3478F6))
+                        Text("Открывать ссылки в Oxion")
+                    }
+                }
+                .tint(Color.lime)
+                link("Работа в Oxion", "briefcase.fill", Color(hex: 0x3FD6C9)) { WorkView() }
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                } label: {
+                    HStack(spacing: 14) {
+                        OxRowIcon(icon: "gearshape.fill", tint: Color(hex: 0x8E8E93))
+                        Text("Настройки Oxion в iPhone").foregroundStyle(.primary)
+                    }
+                }
+            } footer: {
+                Text("Тактильный отклик, ленту при запуске и автозагрузку фото можно поменять в «Настройки» → Oxion.")
+            }
+        }
+        .navigationTitle("Настройки")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func link<D: View>(_ t: String, _ icon: String, _ c: Color, @ViewBuilder _ d: @escaping () -> D) -> some View {
+        NavigationLink { d() } label: {
+            HStack(spacing: 14) {
+                OxRowIcon(icon: icon, tint: c)
+                Text(t)
+            }
         }
     }
 }

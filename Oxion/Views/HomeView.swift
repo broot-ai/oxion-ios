@@ -17,6 +17,7 @@ struct HomeView: View {
     @State private var showShop = false
     @State private var showVision = false
 
+    @State private var ringsInfo = false
     private var goal: Int { max(1, model.me?.weekGoal ?? 3) }
 
     var body: some View {
@@ -24,7 +25,6 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
-                    searchBar.reassembles(0)
                     weekBlock.reassembles(1)
                     HomeMuscleCard().reassembles(2)
                     Group {
@@ -35,9 +35,8 @@ struct HomeView: View {
                         }
                     }
                     .reassembles(3)
-                    ringsCard.reassembles(4)
+                    todaySquares
                     if model.me?.mode != "trainer" { featuredBlock.reassembles(5) }
-                    coachCard.reassembles(6)
                     quickCards.reassembles(7)
                     todayBlock.reassembles(8)
                 }
@@ -71,6 +70,7 @@ struct HomeView: View {
             }
             .reassemblyRefreshable { await load() }
             .task { await load() }
+            .sheet(isPresented: $ringsInfo) { RingsDetailSheet(rings: todayRings) }
         }
     }
 
@@ -177,6 +177,62 @@ struct HomeView: View {
         if w == 0 { return "Пусть сегодня начнётся ваша трансформация — запланируйте первую тренировку!" }
         if left > 0 { return "Осталось \(left) \(RU.plural(left, "тренировка", "тренировки", "тренировок")) до цели недели. Вы справитесь!" }
         return "Цель недели выполнена. Отличная работа! 🔥"
+    }
+
+    private var todayRings: [RingData] {
+        let w = stats?.workouts ?? 0
+        let sets = stats?.today?.sets ?? 0
+        let kcal = stats?.today?.calories ?? 0
+        return [
+            RingData(value: Double(w), max: Double(goal), color: Color(hex: 0xB2EE37), label: "Тренировки за неделю", text: "\(w) / \(goal)"),
+            RingData(value: Double(sets), max: 20, color: Color(hex: 0x58F670), label: "Подходы сегодня", text: "\(sets) / 20"),
+            RingData(value: Double(kcal), max: 500, color: Color(hex: 0x3FD6C9), label: "Ккал сегодня", text: "\(kcal) / 500")
+        ]
+    }
+
+    /// «Сегодня»: кольца — отдельный квадрат (нажатие — подробности), рядом — быстрый старт тренировки
+    private var todaySquares: some View {
+        HStack(spacing: 12) {
+            Button { ringsInfo = true } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Сегодня").font(.headline)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(Color.oxHint)
+                    }
+                    Spacer(minLength: 6)
+                    ActivityRings(rings: todayRings)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 6)
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
+                .oxCardBG(26)
+            }
+            .buttonStyle(.plain)
+            .reassembles(4)
+
+            Button { newWorkout = true } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.title2.bold())
+                        .foregroundStyle(Color.onLime)
+                        .frame(width: 48, height: 48)
+                        .background(Color.lime, in: Circle())
+                    Spacer()
+                    Text("Новая тренировка").font(.headline)
+                    Text("\(stats?.today?.sets ?? 0) подходов сегодня").font(.caption).foregroundStyle(Color.oxHint)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .aspectRatio(1, contentMode: .fit)
+                .oxCardBG(26)
+            }
+            .buttonStyle(.plain)
+            .reassembles(6)
+        }
     }
 
     private var ringsCard: some View {
@@ -328,29 +384,13 @@ struct HomeView: View {
                 QuickCard(icon: "camera.viewfinder", tint: Color.lime, title: "OXION Vision", sub: "Камера считает повторы") {
                     showVision = true
                 }
-                QuickCard(icon: "sparkles.rectangle.stack.fill", tint: Color(hex: 0x58F670), title: "OXION OS", sub: "Виджеты, Siri, часы") {
-                    push = .ecosystem
-                }
-            }
-            HStack(spacing: 12) {
-                QuickCard(icon: "book.fill", tint: Color.lime, title: "Справочник", sub: "9 групп мышц и техника") {
+                QuickCard(icon: "book.fill", tint: Color(hex: 0x58F670), title: "Справочник", sub: "Мышцы и техника") {
                     showExercises = true
-                }
-                QuickCard(icon: "chart.line.uptrend.xyaxis", tint: Color(hex: 0x3FD6C9), title: "Прогресс", sub: "Вес тела и статистика") {
-                    model.selectedTab = .diary
                 }
             }
             HStack(spacing: 12) {
                 QuickCard(icon: "flag.checkered", tint: Color(hex: 0x8E7CFF), title: "Челленджи", sub: "Соревнования с призами") {
                     push = .challenges
-                }
-                QuickCard(icon: "trophy.fill", tint: Color(hex: 0xFFD60A), title: "Рекорды", sub: "Лучшие веса и награды") {
-                    push = .records
-                }
-            }
-            HStack(spacing: 12) {
-                QuickCard(icon: "bag.fill", tint: Color(hex: 0xF0A030), title: "Магазин", sub: "Спортпит с доставкой") {
-                    showShop = true
                 }
                 QuickCard(icon: "heart.text.square.fill", tint: Color(hex: 0xFF5A4E), title: "Здоровье", sub: "Шаги, сон, пульс") {
                     push = .health
@@ -565,5 +605,59 @@ struct QuickCard: View {
             .oxCardBG(24)
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+/// Подробности по кольцам «Сегодня»
+struct RingsDetailSheet: View {
+    let rings: [RingData]
+    @Environment(\.dismiss) private var dismiss
+
+    private func hint(_ r: RingData) -> String {
+        let left = max(0, r.max - r.value)
+        if left == 0 { return "Кольцо закрыто — отличная работа!" }
+        switch r.label {
+        case let l where l.contains("Тренировки"): return "Осталось \(Int(left)) \(RU.plural(Int(left), "тренировка", "тренировки", "тренировок")) до цели недели"
+        case let l where l.contains("Подходы"): return "Ещё \(Int(left)) подходов — и кольцо закроется"
+        default: return "Ещё \(Int(left)) ккал активности сегодня"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Сегодня").font(.title2.bold()).padding(.top, 22)
+            ActivityRings(rings: rings).frame(width: 170, height: 170)
+            VStack(spacing: 0) {
+                ForEach(rings) { r in
+                    HStack(spacing: 12) {
+                        Circle().fill(r.color).frame(width: 12, height: 12)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(r.label).font(.subheadline.bold())
+                            Text(hint(r)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(r.text).font(.headline.monospacedDigit())
+                            Text("\(Int(min(100, r.value / max(1, r.max) * 100)))%").font(.caption).foregroundStyle(r.color)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    if r.id != rings.last?.id { Divider() }
+                }
+            }
+            .padding(.horizontal, 16)
+            .oxCardBG(22)
+            .padding(.horizontal, 16)
+            Button { dismiss() } label: { Text("Понятно").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6) }
+                .buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(Color.onLime)
+                .controlSize(.large)
+                .padding(.horizontal, 16).padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.oxBg)
+        .fitSheet()
+        .presentationCornerRadius(34)
+        .presentationDragIndicator(.visible)
     }
 }

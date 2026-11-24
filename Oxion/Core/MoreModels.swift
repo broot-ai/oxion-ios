@@ -36,6 +36,8 @@ struct Achievement: Decodable, Identifiable {
     let need: Double?
     let done: Bool
     let pct: Int?
+    var medal: String? = nil
+    var group: String? = nil
     var id: String { key }
 }
 struct AchievementsResponse: Decodable {

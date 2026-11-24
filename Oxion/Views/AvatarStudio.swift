@@ -36,17 +36,26 @@ struct AvatarComposite: View {
     let content: AvatarContent
     let bg: AvatarBG
     var size: CGFloat
+    /// приближение и сдвиг картинки (фото и Memoji)
+    var zoom: CGFloat = 1
+    var shift: CGSize = .zero
+    /// для сохранения: квадрат без круглой обрезки — иначе в JPEG углы становятся чёрными
+    var fullBleed = false
 
     var body: some View {
         ZStack {
             switch content {
             case .photo(let img):
                 Image(uiImage: img).resizable().scaledToFill()
+                    .scaleEffect(zoom)
+                    .offset(x: shift.width * size, y: shift.height * size)
             case .sticker(let img):
                 bg.gradient
                 Image(uiImage: img).resizable().scaledToFit()
                     .padding(size * 0.08)
                     .offset(y: size * 0.04)
+                    .scaleEffect(zoom)
+                    .offset(x: shift.width * size, y: shift.height * size)
             case .emoji(let e):
                 bg.gradient
                 Text(e).font(.system(size: size * 0.52))
@@ -60,7 +69,7 @@ struct AvatarComposite: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
+        .clipShape(fullBleed ? AnyShape(Rectangle()) : AnyShape(Circle()))
     }
 }
 
@@ -71,10 +80,15 @@ enum MemojiStore {
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }
-    static func all() -> [UIImage] {
+    struct Item: Identifiable { let url: URL; let image: UIImage; var id: URL { url } }
+    static func all() -> [Item] {
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.creationDateKey])) ?? []
-        return files.sorted { $0.lastPathComponent > $1.lastPathComponent }.prefix(7).compactMap { UIImage(contentsOfFile: $0.path) }
+        return files.sorted { $0.lastPathComponent > $1.lastPathComponent }.prefix(30).compactMap { u in
+            UIImage(contentsOfFile: u.path).map { Item(url: u, image: $0) }
+        }
     }
+    static func remove(_ item: Item) { try? FileManager.default.removeItem(at: item.url) }
+    static func removeAll() { all().forEach(remove) }
     static func add(_ img: UIImage) {
         guard let d = img.pngData() else { return }
         try? d.write(to: dir.appending(path: "\(Int(Date().timeIntervalSince1970 * 1000)).png"))
@@ -88,7 +102,12 @@ struct AvatarStudio: View {
     @State private var bg = AvatarBG.all[0]
     @State private var photoItem: PhotosPickerItem?
     @State private var picking: StickerInput.Mode?
-    @State private var memojis: [UIImage] = MemojiStore.all()
+    @State private var memojis: [MemojiStore.Item] = MemojiStore.all()
+    @State private var editingMemoji = false
+    @State private var zoom: CGFloat = 1
+    @State private var shift: CGSize = .zero
+    @State private var pinch: CGFloat = 1
+    @State private var drag: CGSize = .zero
     @State private var variants = false
     @State private var saving = false
     @State private var bump = false
@@ -150,9 +169,22 @@ struct AvatarStudio: View {
         }
     }
 
+    private var adjustable: Bool {
+        switch content { case .photo, .sticker: return true; default: return false }
+    }
+
+    private func delete(_ m: MemojiStore.Item) {
+        Haptic.tap(.medium)
+        MemojiStore.remove(m)
+        withAnimation(.spring(duration: 0.3)) {
+            memojis = MemojiStore.all()
+            if memojis.isEmpty { editingMemoji = false }
+        }
+    }
+
     private func set(_ c: AvatarContent) {
         Haptic.tap()
-        withAnimation(.spring(duration: 0.45, bounce: 0.3)) { content = c; bump.toggle() }
+        withAnimation(.spring(duration: 0.45, bounce: 0.3)) { content = c; bump.toggle(); zoom = 1; shift = .zero }
     }
 
     // MARK: главный экран
@@ -160,26 +192,104 @@ struct AvatarStudio: View {
     private var mainPage: some View {
         ScrollView {
             VStack(spacing: 18) {
-                AvatarComposite(content: content, bg: bg, size: 230)
+                AvatarComposite(content: content, bg: bg, size: 230,
+                                zoom: zoom * pinch,
+                                shift: CGSize(width: shift.width + drag.width / 230, height: shift.height + drag.height / 230))
                     .shadow(color: .black.opacity(0.25), radius: 20, y: 10)
                     .scaleEffect(bump ? 1 : 0.985)
                     .padding(.top, 8)
                     .contentTransition(.interpolate)
-                if hasBG {
-                    Button("Настроить") { withAnimation(.snappy) { variants = true } }
-                        .font(.headline)
-                        .buttonStyle(.glass)
-                }
-                section("Memoji") {
-                    circleButton(icon: "face.smiling.inverse") { picking = .sticker }
-                    ForEach(Array(memojis.prefix(3).enumerated()), id: \.offset) { _, m in
-                        Button { set(.sticker(m)) } label: { AvatarComposite(content: .sticker(m), bg: bg, size: 76) }
-                            .buttonStyle(.plain)
+                    // двумя пальцами — приблизить, одним — сдвинуть (для фото и Memoji)
+                    .gesture(adjustable ? MagnifyGesture()
+                        .onChanged { pinch = $0.magnification }
+                        .onEnded { _ in zoom = min(4, max(0.6, zoom * pinch)); pinch = 1 } : nil)
+                    .simultaneousGesture(adjustable ? DragGesture()
+                        .onChanged { drag = $0.translation }
+                        .onEnded { v in
+                            shift = CGSize(width: max(-0.6, min(0.6, shift.width + v.translation.width / 230)),
+                                           height: max(-0.6, min(0.6, shift.height + v.translation.height / 230)))
+                            drag = .zero
+                        } : nil)
+                HStack(spacing: 10) {
+                    if hasBG {
+                        Button("Настроить") { withAnimation(.snappy) { variants = true } }
+                            .font(.headline)
+                            .buttonStyle(.glass)
                     }
-                    if memojis.isEmpty {
-                        Text("Нажмите и выберите стикер Memoji в клавиатуре эмодзи")
-                            .font(.caption).foregroundStyle(.white.opacity(0.75))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    if adjustable && (zoom != 1 || shift != .zero) {
+                        Button("Сбросить") { withAnimation(.spring(duration: 0.35)) { zoom = 1; shift = .zero } }
+                            .font(.headline)
+                            .buttonStyle(.glass)
+                    }
+                }
+                if adjustable {
+                    HStack(spacing: 10) {
+                        Image(systemName: "minus.magnifyingglass")
+                        Slider(value: $zoom, in: 0.6...4).tint(.white)
+                        Image(systemName: "plus.magnifyingglass")
+                    }
+                    .font(.subheadline)
+                    .padding(.horizontal, 40)
+                    Text("Двигайте и приближайте пальцами").font(.caption).foregroundStyle(.white.opacity(0.7))
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Memoji").font(.title3.bold())
+                        Spacer()
+                        if !memojis.isEmpty {
+                            Button(editingMemoji ? "Готово" : "Изменить") {
+                                withAnimation(.spring(duration: 0.3)) { editingMemoji.toggle() }
+                            }
+                            .font(.subheadline.bold())
+                            .buttonStyle(.glass)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 12) {
+                            circleButton(icon: "face.smiling.inverse") { picking = .sticker }
+                            ForEach(memojis) { m in
+                                Button {
+                                    if editingMemoji { delete(m) } else { set(.sticker(m.image)) }
+                                } label: {
+                                    AvatarComposite(content: .sticker(m.image), bg: bg, size: 76)
+                                        .overlay(alignment: .topLeading) {
+                                            if editingMemoji {
+                                                Image(systemName: "minus.circle.fill")
+                                                    .font(.system(size: 24))
+                                                    .symbolRenderingMode(.palette)
+                                                    .foregroundStyle(.white, .red)
+                                                    .offset(x: -4, y: -4)
+                                                    .transition(.scale)
+                                            }
+                                        }
+                                        .rotationEffect(.degrees(editingMemoji ? 2 : 0))
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Удалить из коллекции", systemImage: "trash", role: .destructive) { delete(m) }
+                                }
+                            }
+                            if memojis.isEmpty {
+                                Text("Нажмите и выберите стикер Memoji в клавиатуре эмодзи")
+                                    .font(.caption).foregroundStyle(.white.opacity(0.75))
+                                    .frame(width: 200, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 4)
+                    }
+                    .scrollIndicators(.hidden)
+                    if editingMemoji && memojis.count > 1 {
+                        Button("Удалить все Memoji", role: .destructive) {
+                            OxAlert.confirm(title: "Удалить все Memoji?", message: "Сохранённые Memoji удалятся с этого iPhone.",
+                                            action: "Удалить", destructive: true) {
+                                MemojiStore.removeAll()
+                                withAnimation { memojis = []; editingMemoji = false }
+                            }
+                        }
+                        .font(.subheadline.bold())
+                        .padding(.horizontal, 24)
                     }
                 }
                 section("Фото") {
@@ -228,7 +338,7 @@ struct AvatarStudio: View {
     private var variantsPage: some View {
         ScrollView {
             VStack(spacing: 22) {
-                AvatarComposite(content: content, bg: bg, size: 230)
+                AvatarComposite(content: content, bg: bg, size: 230, zoom: zoom, shift: shift)
                     .shadow(color: .black.opacity(0.25), radius: 20, y: 10)
                     .padding(.top, 8)
                 VStack(alignment: .leading, spacing: 12) {
@@ -285,7 +395,8 @@ struct AvatarStudio: View {
     private func save() async {
         saving = true
         defer { saving = false }
-        let r = ImageRenderer(content: AvatarComposite(content: content, bg: bg, size: 512))
+        // квадрат без прозрачных углов: аватар везде обрезается кругом сам
+        let r = ImageRenderer(content: AvatarComposite(content: content, bg: bg, size: 512, zoom: zoom, shift: shift, fullBleed: true))
         r.scale = 2
         guard let img = r.uiImage, let jpg = img.jpegData(compressionQuality: 0.9) else { return }
         do {

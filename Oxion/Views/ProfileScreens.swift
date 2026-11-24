@@ -362,9 +362,7 @@ struct RecordsView: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                         ForEach(a.items) { x in
                             VStack(spacing: 8) {
-                                Text(x.icon).font(.system(size: 40))
-                                    .grayscale(x.done ? 0 : 1)
-                                    .opacity(x.done ? 1 : 0.45)
+                                MedalImage(a: x, size: 64)
                                 Text(x.title).font(.subheadline.bold()).multilineTextAlignment(.center)
                                 Text(x.desc ?? "").font(.caption).foregroundStyle(Color.oxHint).multilineTextAlignment(.center)
                                 ProgressView(value: Double(x.pct ?? 0), total: 100)
