@@ -87,6 +87,7 @@ struct TrainersView: View {
                 .padding(.vertical, 8)
             }
             .navigationTitle("Тренеры")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Int.self) { id in
                 TrainerDetailView(id: id)
             }

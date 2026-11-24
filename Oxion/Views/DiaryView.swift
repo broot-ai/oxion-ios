@@ -87,6 +87,7 @@ struct DiaryView: View {
                 .padding(.vertical, 8)
             }
             .navigationTitle("Дневник")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $openWorkout) { id in
                 WorkoutDetailView(workoutId: id) {
                     Task { await load() }
