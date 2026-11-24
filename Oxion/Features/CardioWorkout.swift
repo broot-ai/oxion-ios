@@ -687,6 +687,17 @@ struct CardioSessionView: View {
             case .ended: summary
             }
         }
+        .overlay(alignment: .topLeading) {
+            if e.phase == .countdown || e.phase == .idle {
+                Button { e.cancel(); dismiss() } label: {
+                    Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44)
+                }
+                .buttonStyle(.glass).buttonBorderShape(.circle)
+                .padding(.leading, 20)
+                .padding(.top, 8)
+                .accessibilityLabel("Отменить")
+            }
+        }
         .preferredColorScheme(.dark)
         .statusBarHidden(false)
         .onAppear {
@@ -716,15 +727,9 @@ struct CardioSessionView: View {
             .frame(width: 250, height: 250)
             Text(kind.title).font(.title2.bold()).foregroundStyle(.white)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { count = 0; e.start() }   // нажатие — старт без отсчёта
-        .overlay(alignment: .topLeading) {
-            Button { e.cancel(); dismiss() } label: {
-                Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44)
-            }
-            .buttonStyle(.glass).buttonBorderShape(.circle)
-            .padding(16)
-        }
     }
 
     private func runCountdown() {
@@ -755,6 +760,14 @@ struct CardioSessionView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea(edges: .bottom)
 
+            if locked {
+                // ловит случайные касания, но лежит ПОД панелью — ползунок разблокировки работает
+                Color.black.opacity(0.35).ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { Haptic.tap(.light) }
+                    .transition(.opacity)
+            }
+
             VStack(spacing: 0) {
                 if sheetOpen && !locked { actions.transition(.move(edge: .bottom).combined(with: .opacity)) }
                 bar
@@ -762,13 +775,7 @@ struct CardioSessionView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 6)
         }
-        .overlay(alignment: .top) { topRow }
-        .overlay {
-            if locked {
-                Color.black.opacity(0.001).ignoresSafeArea()
-                    .onTapGesture { Haptic.tap(.light) }
-            }
-        }
+        .overlay(alignment: .top) { topRow.allowsHitTesting(!locked) }
     }
 
     private var topRow: some View {
@@ -929,17 +936,9 @@ struct CardioSessionView: View {
                 .padding(.top, 8)
             HStack(spacing: 0) {
                 if locked {
-                    Button {
-                        Haptic.tap(.medium)
+                    SlideToUnlock {
                         withAnimation(.snappy) { locked = false }
-                    } label: {
-                        Label("Разблокировать", systemImage: "lock.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 64)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
                 } else {
                     Button { e.togglePause() } label: {
                         Image(systemName: e.paused ? "arrow.clockwise" : "pause.fill")
@@ -977,7 +976,7 @@ struct CardioSessionView: View {
         }
         .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 40, style: .continuous))
         .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 12).onEnded { v in
+        .simultaneousGesture(DragGesture(minimumDistance: 12).onEnded { v in
             guard !locked else { return }
             withAnimation(.spring(duration: 0.35)) { sheetOpen = v.translation.height < 0 }
         })
@@ -1142,5 +1141,88 @@ struct CardioSessionView: View {
         let i = Int(s), cs = Int((s - Double(i)) * 100)
         return i >= 3600 ? String(format: "%d:%02d:%02d", i / 3600, i / 60 % 60, i % 60)
                          : String(format: "%02d:%02d,%02d", i / 60, i % 60, cs)
+    }
+}
+
+/// «Потяните вправо, чтобы разблокировать» — круг с замком едет по дорожке
+struct SlideToUnlock: View {
+    let onUnlock: () -> Void
+    @State private var x: CGFloat = 0
+    @State private var hinted = false
+    private let knob: CGFloat = 60
+
+    var body: some View {
+        GeometryReader { g in
+            let maxX = max(1, g.size.width - knob - 4)
+            let p = min(1, x / maxX)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.08))
+                Capsule().fill(Color.lime.opacity(0.25 * p))
+                    .frame(width: x + knob + 4)
+                Text("Потяните, чтобы разблокировать")
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.75 * (1 - p)))
+                    .frame(maxWidth: .infinity)
+                    .padding(.leading, knob)
+                    .shimmering()
+                Circle()
+                    .fill(p > 0.9 ? Color.lime : Color.white)
+                    .frame(width: knob, height: knob)
+                    .overlay(
+                        Image(systemName: p > 0.9 ? "lock.open.fill" : "lock.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.black)
+                            .contentTransition(.symbolEffect(.replace))
+                    )
+                    .padding(2)
+                    .offset(x: x)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                x = min(maxX, max(0, v.translation.width))
+                                if x / maxX > 0.9, !hinted { hinted = true; Haptic.tap(.medium) }
+                                if x / maxX <= 0.9 { hinted = false }
+                            }
+                            .onEnded { _ in
+                                if x / maxX > 0.9 {
+                                    x = maxX
+                                    Haptic.success()
+                                    onUnlock()
+                                } else {
+                                    withAnimation(.spring(duration: 0.35, bounce: 0.3)) { x = 0 }
+                                }
+                            }
+                    )
+            }
+        }
+        .frame(height: 64)
+        .accessibilityElement()
+        .accessibilityLabel("Разблокировать")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onUnlock() }
+    }
+}
+
+private extension View {
+    /// мягкий бегущий блик по подсказке
+    func shimmering() -> some View {
+        modifier(Shimmer())
+    }
+}
+
+private struct Shimmer: ViewModifier {
+    @State private var phase: CGFloat = -1
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                LinearGradient(colors: [.clear, .white.opacity(0.6), .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 80)
+                    .offset(x: phase * 220)
+                    .blendMode(.plusLighter)
+                    .mask(content)
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) { phase = 1 }
+            }
     }
 }
