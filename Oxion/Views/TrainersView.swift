@@ -785,7 +785,7 @@ struct TrainerDetailView: View {
 
                 if let d = t.directions, !d.isEmpty {
                     block("Направления") {
-                        FlowChips(items: d) { name in
+                        FlowLabelChips(items: d) { name in
                             Label(name, systemImage: DirectionIcon.of(name))
                                 .font(.subheadline.weight(.semibold))
                                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1155,7 +1155,7 @@ struct ReviewSheet: View {
 }
 
 /// Чипы с переносом строк
-struct FlowChips<C: View>: View {
+struct FlowLabelChips<C: View>: View {
     let items: [String]
     let chip: (String) -> C
     var body: some View {
