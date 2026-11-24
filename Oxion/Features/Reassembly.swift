@@ -146,23 +146,19 @@ private struct ReassembleCard: ViewModifier {
         let path = ScatterPath(index: index ?? seed, amplitude: amplitude)
         let scattered = ra.phase == .scattered
         let lift = ra.phase == .pulling ? min(1, ra.pull) : 0
-        // небольшая задержка у каждой карточки — разлёт и сборка «волной»
         let delay = Double((index ?? seed) % 9) * 0.035
         let shape = RoundedRectangle(cornerRadius: max(radius, 1), style: .continuous)
+        let active = ra.phase != .idle
+        // в покое — только дешёвое преобразование; тени, «гнёзда» и свечение появляются лишь во время обновления
         return content
-            .matchedGeometryEffect(id: "slot", in: ns, properties: .frame, isSource: true)
             .modifier(ReassembleEffect(t: ra.reduceMotion ? 0 : (scattered ? 1 : 0), lift: ra.reduceMotion ? 0 : lift, path: path))
             .animation(.spring(duration: scattered ? 0.7 : 0.75, bounce: scattered ? 0.28 : 0.22).delay(delay), value: scattered)
-            .shadow(color: Color(hex: 0x5AC8FA).opacity(scattered ? 0.25 : 0.1 * lift), radius: scattered ? 20 : 10 * lift, y: scattered ? 8 : 5 * lift)
             .opacity(ra.reduceMotion && scattered ? 0.55 : 1)
             .background {
-                // стеклянное «гнездо» на исходном месте карточки
-                if ghost && !ra.reduceMotion {
+                if active && ghost && !ra.reduceMotion {
                     shape
-                        .fill(Color(hex: 0x5AC8FA).opacity(0.05))
-                        .overlay(shape.strokeBorder(Color(hex: 0x5AC8FA).opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [6, 6])))
-                        .matchedGeometryEffect(id: "slot", in: ns, properties: .frame, isSource: false)
-                        .opacity(scattered ? 1 : 0)
+                        .fill(Color(hex: 0x5AC8FA).opacity(scattered ? 0.05 : 0))
+                        .overlay(shape.strokeBorder(Color(hex: 0x5AC8FA).opacity(scattered ? 0.35 : 0), style: StrokeStyle(lineWidth: 1, dash: [6, 6])))
                         .animation(.easeInOut(duration: 0.35), value: scattered)
                         .allowsHitTesting(false)
                 }
@@ -180,15 +176,26 @@ private struct FlashRim: View {
     let delay: Double
     let radius: CGFloat
     @State private var on = false
+    @State private var visible = false
     var body: some View {
-        RoundedRectangle(cornerRadius: max(radius, 1), style: .continuous)
-            .strokeBorder(LinearGradient(colors: [Color(hex: 0x8FE3FF), Color(hex: 0x5AC8FA).opacity(0.2)], startPoint: .top, endPoint: .bottom), lineWidth: 1.5)
-            .shadow(color: Color(hex: 0x5AC8FA).opacity(0.8), radius: 12)
-            .opacity(on ? 1 : 0)
-            .onChange(of: trigger) {
-                withAnimation(.easeOut(duration: 0.25).delay(delay)) { on = true }
-                withAnimation(.easeIn(duration: 0.7).delay(delay + 0.3)) { on = false }
+        ZStack {
+            // рамка существует только во время вспышки — в покое ничего не рисуем
+            if visible {
+                RoundedRectangle(cornerRadius: max(radius, 1), style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [Color(hex: 0x8FE3FF), Color(hex: 0x5AC8FA).opacity(0.2)], startPoint: .top, endPoint: .bottom), lineWidth: 1.5)
+                    .shadow(color: Color(hex: 0x5AC8FA).opacity(0.8), radius: 12)
+                    .opacity(on ? 1 : 0)
             }
+        }
+        .onChange(of: trigger) {
+            visible = true
+            withAnimation(.easeOut(duration: 0.25).delay(delay)) { on = true }
+            withAnimation(.easeIn(duration: 0.7).delay(delay + 0.3)) { on = false }
+            Task {
+                try? await Task.sleep(for: .seconds(delay + 1.1))
+                visible = false
+            }
+        }
     }
 }
 
@@ -212,15 +219,20 @@ private struct ReassemblyHost: ViewModifier {
             }
             .overlay(alignment: .top) {
                 // подсказка сверху: голубое кольцо заполняется, пока тянешь; во время загрузки — крутится
-                PullOrb(phase: ra.phase, pull: ra.pull)
-                    .padding(.top, 4)
-                    .allowsHitTesting(false)
+                if ra.phase == .pulling || ra.phase == .scattered {
+                    PullOrb(phase: ra.phase, pull: ra.pull)
+                        .padding(.top, 4)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
             .overlay {
-                RadialGradient(colors: [Color(hex: 0x5AC8FA).opacity(0.35), .clear], center: .top, startRadius: 10, endRadius: 520)
-                    .ignoresSafeArea()
-                    .opacity(glow ? 1 : 0)
-                    .allowsHitTesting(false)
+                if glow {
+                    RadialGradient(colors: [Color(hex: 0x5AC8FA).opacity(0.35), .clear], center: .top, startRadius: 10, endRadius: 520)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
             .onChange(of: ra.flash) {
                 withAnimation(.easeOut(duration: 0.3)) { glow = true }

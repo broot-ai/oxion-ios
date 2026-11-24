@@ -162,7 +162,8 @@ struct LoginView: View {
         Haptic.tap()
         do {
             let s: LoginStart = try await API.call("/login/start", method: "POST", body: [:])
-            if let url = URL(string: s.link) { openURL(url) }
+            // вход — сразу в Telegram, минуя внутренний браузер
+            if let url = URL(string: s.link) { openTelegram(url) }
             pollTask?.cancel()
             let token = s.token
             pollTask = Task { await poll(token: token) }
@@ -227,5 +228,25 @@ struct LoginView: View {
         } catch {
             errorText = error.localizedDescription
         }
+    }
+}
+
+
+/// Открыть ссылку входа в приложении Telegram (tg://), а если его нет — в Safari
+@MainActor
+func openTelegram(_ url: URL) {
+    var tg: URL?
+    if (url.host ?? "").lowercased().hasSuffix("t.me"), let c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+        let parts = c.path.split(separator: "/").map(String.init)
+        if let bot = parts.first {
+            var t = URLComponents(string: "tg://resolve")!
+            t.queryItems = [URLQueryItem(name: "domain", value: bot)] + (c.queryItems ?? [])
+            tg = t.url
+        }
+    }
+    if let tg, UIApplication.shared.canOpenURL(tg) {
+        UIApplication.shared.open(tg)
+    } else {
+        UIApplication.shared.open(url, options: [.universalLinksOnly: false])
     }
 }

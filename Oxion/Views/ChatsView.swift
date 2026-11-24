@@ -56,7 +56,10 @@ final class ChatsStore {
     }
 
     func markRead(_ id: Int) {
-        for i in items.indices where items[i].id == id { items[i].unread = 0; items[i].marked = false }
+        // меняем список только если правда было непрочитанное — иначе лишняя перерисовка
+        guard let i = items.firstIndex(where: { $0.id == id }), items[i].unread != 0 || items[i].marked == true else { return }
+        items[i].unread = 0
+        items[i].marked = false
         AppBadge.update(items)
     }
 
@@ -538,6 +541,7 @@ struct ChatView: View {
     @State private var dissolving: [Int: Date] = [:]
     @State private var since: Double = 0
     @State private var didInitialScroll = false
+    @State private var lastReadSent = 0
     @State private var text = ""
     @State private var replyTo: Message?
     @State private var errorText: String?
@@ -1004,7 +1008,9 @@ struct ChatView: View {
             }
             loaded = true
             errorText = nil
-            if let last = messages.last?.id {
+            // отмечаем прочитанным только когда пришло новое — а не каждые 3 секунды
+            if let last = messages.last?.id, last != lastReadSent {
+                lastReadSent = last
                 let _: OK? = try? await API.call("/chats/\(chatId)/read", method: "POST", body: ["last_id": last])
                 chats.markRead(chatId)
             }

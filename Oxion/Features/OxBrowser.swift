@@ -1046,7 +1046,17 @@ struct InAppBrowserLinks: ViewModifier {
     func body(content: Content) -> some View {
         content.environment(\.openURL, OpenURLAction { url in
             guard OxBrowser.enabled, let s = url.scheme?.lowercased(), s == "http" || s == "https" else { return .systemAction }
+            // ссылки Telegram — сразу в приложение Telegram, не во внутренний браузер
+            if OxBrowser.isTelegram(url) { return .systemAction }
             return OxBrowser.shared.open(url) ? .handled : .systemAction
         })
+    }
+}
+
+
+extension OxBrowser {
+    static func isTelegram(_ url: URL) -> Bool {
+        let h = (url.host ?? "").lowercased()
+        return ["t.me", "telegram.me", "telegram.dog", "www.t.me"].contains(h) || url.scheme?.lowercased() == "tg"
     }
 }
