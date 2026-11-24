@@ -530,6 +530,11 @@ struct ChatView: View {
     @State private var messages: [Message] = []
     @State private var peer: Peer?
     @State private var peerReadId = 0
+    @State private var showStickers = false
+    /// удаляемые сообщения: распадаются на частицы, потом исчезают
+    @State private var dissolving: [Int: Date] = [:]
+    @State private var since: Double = 0
+    @State private var didInitialScroll = false
     @State private var text = ""
     @State private var replyTo: Message?
     @State private var errorText: String?
@@ -667,8 +672,20 @@ struct ChatView: View {
                     .ignoresSafeArea(edges: .top)
                     .allowsHitTesting(false)
             }
-            .onChange(of: messages.last?.id) {
-                if let id = messages.last?.id {
+            // при открытии — сразу внизу, без прокрутки сверху вниз
+            .opacity(didInitialScroll || messages.isEmpty ? 1 : 0)
+            .onChange(of: messages.last?.id) { old, new in
+                guard let id = new else { return }
+                if !didInitialScroll {
+                    var tr = Transaction()
+                    tr.disablesAnimations = true
+                    withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(60))
+                        withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
+                        withAnimation(.easeOut(duration: 0.15)) { didInitialScroll = true }
+                    }
+                } else {
                     withAnimation { proxy.scrollTo(id, anchor: .bottom) }
                 }
             }
@@ -870,8 +887,29 @@ struct ChatView: View {
                 TextField("Сообщение", text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
-                    .padding(.horizontal, 16)
+                    .padding(.leading, 16)
+                    .padding(.trailing, 42)
                     .padding(.vertical, 11)
+                    .overlay(alignment: .bottomTrailing) {
+                        // стикеры и эмодзи — вместо клавиатуры, как в Telegram
+                        Button {
+                            Haptic.tap(.soft)
+                            if showStickers {
+                                showStickers = false
+                                focused = true
+                            } else {
+                                focused = false
+                                withAnimation(.spring(duration: 0.35)) { showStickers = true }
+                            }
+                        } label: {
+                            Image(systemName: showStickers ? "keyboard" : "face.smiling")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                                .contentTransition(.symbolEffect(.replace))
+                                .frame(width: 40, height: 42)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     .glassEffect(.regular, in: .rect(cornerRadius: 22))
 
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending {
@@ -894,14 +932,21 @@ struct ChatView: View {
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
+            if showStickers {
+                StickerPanel(onSend: { ref, silent in Task { await sendSticker(ref, silent: silent) } },
+                             onEmoji: { text += $0 })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .padding(.top, 6)
+        .onChange(of: focused) { if focused && showStickers { withAnimation(.spring(duration: 0.3)) { showStickers = false } } }
     }
 
     private func load(initial: Bool) async {
         let after = initial ? 0 : (messages.last?.id ?? 0)
         var q: [String: String] = [:]
         if after > 0 { q["after"] = String(after) }
+        if after > 0 && since > 0 { q["since"] = String(Int(since)) }
         do {
             let r: ChatDetail = try await API.call("/chats/\(chatId)", query: q)
             peer = r.peer
@@ -909,11 +954,21 @@ struct ChatView: View {
             for s in r.senders ?? [] { senders[s.id] = s }
             if let p = r.protect { protect = p }
             peerReadId = r.peerReadId ?? peerReadId
+            if let n = r.serverNow { since = n - 2000 }
             if after == 0 {
-                messages = r.messages
-            } else if !r.messages.isEmpty {
+                // удалённые не показываем вовсе — без «Сообщение удалено»
+                messages = r.messages.filter { $0.deleted != true }
+            } else if !r.messages.isEmpty || !(r.changed ?? []).isEmpty {
+                // правки, реакции и удаления у собеседника
+                for c in r.changed ?? [] {
+                    if c.deleted == true {
+                        if messages.contains(where: { $0.id == c.id }) && dissolving[c.id] == nil { dissolve(c.id) }
+                    } else {
+                        replace(c)
+                    }
+                }
                 let have = Set(messages.map(\.id))
-                let fresh = r.messages.filter { !have.contains($0.id) }
+                let fresh = r.messages.filter { !have.contains($0.id) && $0.deleted != true }
                 withAnimation(.spring(duration: 0.4, bounce: 0.25)) { messages += fresh }
                 if fresh.contains(where: { !$0.mine }) { OxSound.play(.received) }
                 ChatAutoSave.handle(fresh, trainerChat: r.peer.trainer == true)
@@ -997,6 +1052,8 @@ struct ChatView: View {
                     case .call(let video): call = CallRequest(name: peer?.name ?? title, photo: peer?.photo, video: video)
                     }
                 }
+                    .modifier(DissolveModifier(start: dissolving[m.id]))
+                    .allowsHitTesting(dissolving[m.id] == nil)
                     .id(m.id)
                     .transition(Self.bubbleTransition(mine: m.mine))
     }
@@ -1138,11 +1195,41 @@ struct ChatView: View {
     }
 
     private func remove(_ m: Message) async {
+        // даём меню закрыться, потом сообщение рассыпается на частицы
+        try? await Task.sleep(for: .milliseconds(380))
+        dissolve(m.id)
         do {
-            let upd: Message = try await API.call("/messages/\(m.id)", method: "DELETE")
-            replace(upd)
+            let _: Message = try await API.call("/messages/\(m.id)", method: "DELETE")
         } catch {
             errorText = error.localizedDescription
+            await load(initial: true)
+        }
+    }
+
+    /// распад на «атомы» и исчезновение
+    private func dissolve(_ id: Int) {
+        dissolving[id] = Date()
+        Haptic.tap(.light)
+        Task {
+            try? await Task.sleep(for: .seconds(DissolveModifier.duration))
+            withAnimation(.spring(duration: 0.35)) { messages.removeAll { $0.id == id } }
+            dissolving[id] = nil
+        }
+    }
+
+    private func sendSticker(_ ref: String, silent: Bool) async {
+        var b: [String: Any] = ["kind": "sticker", "ref": ref]
+        if silent { b["silent"] = true }
+        if let r = replyTo { b["reply_to"] = r.id }
+        do {
+            let m: Message = try await API.call("/chats/\(chatId)/messages", method: "POST", body: b)
+            replyTo = nil
+            OxSound.play(.sent)
+            withAnimation(.spring(duration: 0.4, bounce: 0.25)) {
+                if !messages.contains(where: { $0.id == m.id }) { messages.append(m) }
+            }
+        } catch {
+            OxAlert.error(error.localizedDescription)
         }
     }
 
@@ -1191,6 +1278,13 @@ struct Bubble: View {
                                 meta(on: true).padding(.horizontal, 7).padding(.vertical, 3)
                                     .background(.black.opacity(0.45), in: Capsule())
                             }
+                    } else if isCardOnly, m.kind == "sticker" {
+                        // стикер — без пузыря, как в Telegram
+                        StickerView(ref: m.card?["id"]?.string ?? "", size: 170)
+                            .overlay(alignment: .bottomTrailing) {
+                                meta(on: true).padding(.horizontal, 7).padding(.vertical, 3)
+                                    .background(.black.opacity(0.35), in: Capsule())
+                            }
                     } else if isCardOnly, m.kind == "voice" {
                         ChatCard(kind: "voice", card: m.card, mine: m.mine, embedded: true, messageId: m.id)
                             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 20)
@@ -1213,7 +1307,7 @@ struct Bubble: View {
                         InlineButtonsRow(buttons: buttons, radius: max(8, style.radius * 0.7), onTap: onAction)
                     }
                 }
-                .frame(width: isCardOnly && !["vnote", "voice"].contains(m.kind ?? "") ? 294 : nil)
+                .frame(width: isCardOnly && !["vnote", "voice", "sticker"].contains(m.kind ?? "") ? 294 : nil)
                 // перетаскивать для пересылки только сам пузырь — без пустого места строки вокруг
                 .modifier(BubbleDrag(provider: dragProvider, menu: menu, shape: dragShape))
                 if let rs = m.reactions, !rs.isEmpty {

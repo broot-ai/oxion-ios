@@ -392,6 +392,7 @@ struct ChatDetail: Decodable {
     let peerReadId: Int?
     var group: GroupInfo? = nil
     var senders: [GSender]? = nil
+    var serverNow: Double? = nil
 }
 
 // MARK: - Группы и каналы
