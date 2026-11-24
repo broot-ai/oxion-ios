@@ -169,13 +169,15 @@ struct StickerPanel: View {
             bottomBar
         }
         .frame(height: 330)
+        // фон панели уходит под полоску «домой» — без пустой полосы снизу
         .background(
             UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous)
                 .fill(Color(white: 0.08))
                 .shadow(color: .black.opacity(0.35), radius: 16, y: -4)
+                .padding(.bottom, -120)
                 .ignoresSafeArea(edges: .bottom)
         )
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous))
+
         .environment(\.colorScheme, .dark)
         .overlay {
             if let p = preview {
