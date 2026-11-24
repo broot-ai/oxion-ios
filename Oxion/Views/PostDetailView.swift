@@ -581,6 +581,7 @@ struct WorkoutChooser: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
+            .oxFitSheet()
             .listStyle(.plain)
             .overlay {
                 if loaded && items.isEmpty {
@@ -600,7 +601,6 @@ struct WorkoutChooser: View {
                 loaded = true
             }
         }
-        .presentationDetents([.medium, .large])
     }
 }
 

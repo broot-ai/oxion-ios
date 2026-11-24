@@ -724,6 +724,7 @@ struct WeightEntrySheet: View {
                     DatePicker("Дата", selection: $date, in: ...Date(), displayedComponents: .date)
                 }
             }
+            .oxFitSheet()
             .navigationTitle("Вес")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -733,7 +734,6 @@ struct WeightEntrySheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 
     private func save() async {

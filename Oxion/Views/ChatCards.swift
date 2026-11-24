@@ -339,6 +339,7 @@ struct AttachSheet: View {
                     Text(errorText).foregroundStyle(.red)
                 }
             }
+            .oxFitSheet()
             .navigationTitle("Поделиться")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -349,7 +350,6 @@ struct AttachSheet: View {
                 do { opts = try await API.call("/chats/\(chatId)/attach") } catch { errorText = error.localizedDescription }
             }
         }
-        .presentationDetents([.medium, .large])
     }
 
     private func sendRow(_ title: String, sub: String, action: @escaping () async -> Void) -> some View {

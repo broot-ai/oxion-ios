@@ -184,6 +184,7 @@ struct ForwardSheet: View {
                     }
                 }
             }
+            .oxFitSheet()
             .listStyle(.plain)
             .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .always), prompt: "Поиск чатов")
             .navigationTitle("Переслать")
@@ -217,7 +218,6 @@ struct ForwardSheet: View {
             }
             .task { if chats.items.isEmpty { await chats.load() } }
         }
-        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 }
@@ -322,6 +322,7 @@ struct ChatSummarySheet: View {
                 .padding(20)
                 .animation(.smooth(duration: 0.35), value: data == nil)
             }
+            .oxFitSheet()
             .defaultScrollAnchor(.top)
             .navigationTitle("«\(title)»")
             .navigationBarTitleDisplayMode(.inline)
@@ -342,7 +343,6 @@ struct ChatSummarySheet: View {
             }
             .task { await load() }
         }
-        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 

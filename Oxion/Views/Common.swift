@@ -182,3 +182,45 @@ extension View {
         modifier(ToastModifier(text: text))
     }
 }
+
+// MARK: - Шторка по размеру содержимого
+
+/// Вешается на List / Form / ScrollView внутри шторки: шторка открывается ровно по высоте
+/// содержимого (мало пунктов — низкая шторка, много — до ~90% экрана), а потянув вверх, её можно раскрыть целиком.
+struct OxFitSheet: ViewModifier {
+    var minHeight: CGFloat = 220
+    @State private var h: CGFloat = 0
+    @State private var detent: PresentationDetent = .medium
+
+    private var maxHeight: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 800
+    }
+
+    private var detents: Set<PresentationDetent> {
+        guard h > 0 else { return [.medium, .large] }
+        return h >= maxHeight * 0.9 ? [.large] : [.height(h), .large]
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: CGFloat.self) { g in
+                // высота пунктов + шапка с заголовком + полоска «домой» снизу
+                g.contentSize.height + g.contentInsets.top + 28
+            } action: { _, v in
+                let nv = max(minHeight, v.rounded())
+                // только растём: при поиске по списку шторка не «прыгает» вниз на каждую букву
+                guard nv > h + 6 else { return }
+                h = nv
+                guard detent != .large else { return }     // пользователь сам раскрыл — не трогаем
+                let d: PresentationDetent = nv >= maxHeight * 0.9 ? .large : .height(nv)
+                withAnimation(.smooth(duration: 0.3)) { detent = d }
+            }
+            .presentationDetents(detents, selection: $detent)
+            .presentationDragIndicator(.visible)
+    }
+}
+
+extension View {
+    /// Шторка по количеству содержимого (см. OxFitSheet)
+    func oxFitSheet(min: CGFloat = 220) -> some View { modifier(OxFitSheet(minHeight: min)) }
+}

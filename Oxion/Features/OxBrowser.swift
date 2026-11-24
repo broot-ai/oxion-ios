@@ -997,11 +997,11 @@ struct BrowserBookmarksSheet: View {
                     Button("Очистить историю", role: .destructive) { BrowserStore.clearHistory(); hist = [] }
                 }
             }
+            .oxFitSheet()
             .navigationTitle(tab == 0 ? "Закладки" : "История")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
         }
-        .presentationDetents([.medium, .large])
     }
 }
 

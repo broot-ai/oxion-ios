@@ -272,11 +272,11 @@ struct NotifKindView: View {
                         }
                     }
                 }
+                .oxFitSheet()
                 .navigationTitle("Выключить звук")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { adding = false } } }
             }
-            .presentationDetents([.medium, .large])
         }
     }
 }

@@ -1090,6 +1090,7 @@ struct RejectPlaceSheet: View {
                     TextField("Причина отказа", text: $reason, axis: .vertical).lineLimit(2...4)
                 }
             }
+            .oxFitSheet()
             .navigationTitle("Отклонить «\(place.name)»")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1104,6 +1105,5 @@ struct RejectPlaceSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
     }
 }

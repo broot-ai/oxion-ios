@@ -139,6 +139,8 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
+            if let l = locations.last, l.horizontalAccuracy >= 0 { self.accuracy = l.horizontalAccuracy }
+            guard self.running, !self.paused else { return }   // до старта GPS только прогревается
             for l in locations where l.horizontalAccuracy >= 0 && l.horizontalAccuracy < 35 {
                 if let p = self.last {
                     let d = l.distance(from: p)
@@ -155,7 +157,7 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         let st = manager.authorizationStatus
         Task { @MainActor in
             self.denied = st == .denied || st == .restricted
-            if st == .authorizedWhenInUse || st == .authorizedAlways { self.askPrecise() }
+            if st == .authorizedWhenInUse || st == .authorizedAlways { self.askPrecise(); self.warmUp() }
         }
     }
 
@@ -189,6 +191,19 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// Прогрев GPS до старта: круг точности на карте сжимается, а «моё место» сразу находит вас
+    var accuracy: Double = -1
+
+    func warmUp() {
+        let st = manager.authorizationStatus
+        guard st == .authorizedWhenInUse || st == .authorizedAlways else { return }
+        manager.startUpdatingLocation()
+    }
+
+    func coolDown() {
+        if !running { manager.stopUpdatingLocation() }
+    }
+
     func stopMotion() {
         pedometer.stopUpdates()
         activity.stopActivityUpdates()
@@ -204,7 +219,7 @@ struct RunTrackerView: View {
 
     var body: some View {
         ZStack {
-            Map(position: $camera) {
+            Map(position: $camera, scope: mapScope) {
                 if t.coords.count > 1 {
                     MapPolyline(coordinates: t.coords)
                         .stroke(Color.lime, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
@@ -224,7 +239,21 @@ struct RunTrackerView: View {
             .overlay(alignment: .topTrailing) {
                 // кнопки карты — под шапкой, а не в строке состояния
                 VStack(spacing: 10) {
-                    MapUserLocationButton(scope: mapScope)
+                    Button {
+                        withAnimation(.smooth(duration: 0.6)) {
+                            camera = .userLocation(followsHeading: false, fallback: .automatic)
+                        }
+                        Haptic.tap(.soft)
+                    } label: {
+                        Image(systemName: camera.followsUserLocation ? "location.fill" : "location")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(Color.lime)
+                            .frame(width: 48, height: 48)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .accessibilityLabel("Моё местоположение")
                     MapCompass(scope: mapScope)
                 }
                 .buttonBorderShape(.circle)
@@ -257,8 +286,8 @@ struct RunTrackerView: View {
                 }
             }
         }
-        .onAppear { t.startMotion(); t.askPrecise() }
-        .onDisappear { t.stopMotion() }
+        .onAppear { t.startMotion(); t.askPrecise(); t.warmUp() }
+        .onDisappear { t.stopMotion(); t.coolDown() }
         .onChange(of: t.denied) {
             if t.denied { PermPrompt.show(.location, denied: true) }
         }

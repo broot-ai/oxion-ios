@@ -337,6 +337,15 @@ struct Body3DScreen: View {
                 .padding(.vertical, 2)
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
+            // чипы не вылезают за край стеклянной панели: обрезаем по ней и мягко гасим края
+            .clipShape(.rect)
+            .mask(
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 14)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 14)
+                }
+            )
 
             HStack(spacing: 10) {
                 Button {

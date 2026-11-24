@@ -237,13 +237,13 @@ struct LocationPickerSheet: View {
                     }
                 }
             }
+            .oxFitSheet()
             .navigationTitle("Местоположение")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Зал, парк, город")
             .onChange(of: query) { search.set(query) }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
         }
-        .presentationDetents([.medium, .large])
     }
 
     private func pick(_ s: String) {
@@ -295,6 +295,7 @@ struct PublishParamsSheet: View {
                     Text("Упомянутые — те, кого вы отметили в тексте через @имя.")
                 }
             }
+            .oxFitSheet()
             .navigationTitle("Параметры публикации")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
@@ -303,7 +304,6 @@ struct PublishParamsSheet: View {
                     .padding(.horizontal, 16).padding(.bottom, 8)
             }
         }
-        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 }
@@ -518,6 +518,7 @@ struct BioEditSheet: View {
                         .onChange(of: text) { if text.count > 150 { text = String(text.prefix(150)) } }
                 } footer: { Text("\(text.count)/150") }
             }
+            .oxFitSheet()
             .navigationTitle("О себе")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -528,7 +529,6 @@ struct BioEditSheet: View {
             }
             .onAppear { text = current }
         }
-        .presentationDetents([.medium])
     }
 
     private func save() async {

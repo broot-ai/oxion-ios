@@ -263,6 +263,7 @@ struct AddSetSheet: View {
                     }
                 }
             }
+            .oxFitSheet()
             .navigationTitle("Подход")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -282,7 +283,6 @@ struct AddSetSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 
     private func dbl(_ s: String) -> Double? { Double(s.replacingOccurrences(of: ",", with: ".")) }
