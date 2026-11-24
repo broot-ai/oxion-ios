@@ -17,8 +17,16 @@ struct PremiumPlan: Decodable, Identifiable, Hashable {
     var tint: Color {
         switch color {
         case "blue": Color(hex: 0x3B8CF5)
-        case "red": Color(hex: 0xFF4D5E)
+        case "red", "purple": Color(hex: 0x9B5CFF)
         default: Color(hex: 0x4CD964)
+        }
+    }
+    /// картинка коробки: зелёная / синяя / фиолетовая
+    var asset: String {
+        switch color {
+        case "blue": "gift-blue"
+        case "red", "purple": "gift-purple"
+        default: "gift-green"
         }
     }
     var priceText: String { "\(price.formatted(.number.locale(Locale(identifier: "ru_RU")))) ₽" }
@@ -47,40 +55,40 @@ private func untilText(_ ms: Double) -> String {
 
 // MARK: - Коробка подарка
 
-/// Нарисованная коробка с бантом и звездой — цвет по тарифу
+/// Коробка подарка (картинка по тарифу) — слегка «дышит»
 struct GiftBoxIcon: View {
-    var tint: Color
+    var asset: String
     var size: CGFloat = 64
     @State private var float = false
 
     var body: some View {
-        ZStack {
-            // крышка + коробка
-            VStack(spacing: size * 0.02) {
-                RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
-                    .fill(LinearGradient(colors: [tint.mix(with: .white, by: 0.25), tint], startPoint: .top, endPoint: .bottom))
-                    .frame(width: size * 0.86, height: size * 0.2)
-                RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
-                    .fill(LinearGradient(colors: [tint, tint.mix(with: .black, by: 0.3)], startPoint: .top, endPoint: .bottom))
-                    .frame(width: size * 0.74, height: size * 0.44)
+        Image(asset)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .shadow(color: .black.opacity(0.25), radius: size * 0.08, y: size * 0.06)
+            .offset(y: float ? -size * 0.03 : size * 0.02)
+            .rotationEffect(.degrees(float ? -2 : 2))
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { float = true }
             }
-            .overlay {
-                // лента
-                Rectangle().fill(Color(hex: 0xFFD54A)).frame(width: size * 0.13)
-                    .offset(y: size * 0.01)
-            }
-            .offset(y: size * 0.16)
-            // звезда сверху
-            Image(systemName: "star.fill")
-                .font(.system(size: size * 0.42))
-                .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFE680), Color(hex: 0xFFB000)], startPoint: .top, endPoint: .bottom))
-                .shadow(color: Color(hex: 0xFFB000).opacity(0.6), radius: size * 0.08)
-                .offset(y: -size * 0.2 + (float ? -size * 0.04 : 0))
-        }
-        .frame(width: size, height: size)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { float = true }
-        }
+    }
+}
+
+/// Диагональная лаймовая лента в углу карточки
+struct LimeRibbon: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .heavy))
+            .foregroundStyle(Color.onLime)
+            .frame(width: 96, height: 20)
+            .background(
+                LinearGradient(colors: [Color.lime, Color.lime.mix(with: .green, by: 0.25)], startPoint: .leading, endPoint: .trailing)
+            )
+            .shadow(color: Color.lime.opacity(0.5), radius: 4)
+            .rotationEffect(.degrees(45))
+            .offset(x: 28, y: 16)
     }
 }
 
@@ -124,13 +132,12 @@ struct GiftPremiumPanel: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 ZStack {
-                    Sparkles().frame(height: 150).padding(.horizontal, 30)
-                    Avatar(url: API.media(photo ?? info?.to?.photo), name: name, size: 96)
+                    Sparkles().frame(height: 118).padding(.horizontal, 20)
+                    Avatar(url: API.media(photo ?? info?.to?.photo), name: name, size: 92)
                         .shadow(color: Color(hex: 0xFFC53D).opacity(0.35), radius: 20)
                 }
-                .padding(.top, 8)
 
                 Text("Подарить Premium").font(.system(size: 26, weight: .heavy))
                 (Text("Подарите **\(name)** доступ к эксклюзивным функциям Oxion. ")
@@ -138,7 +145,8 @@ struct GiftPremiumPanel: View {
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.top, -4)
                     .onTapGesture { showPerks = true }
 
                 if let until = info?.to?.premiumUntil {
@@ -150,12 +158,15 @@ struct GiftPremiumPanel: View {
                 }
 
                 if let plans = info?.plans {
-                    HStack(spacing: 10) {
-                        ForEach(plans) { p in
-                            PlanCard(plan: p) { pick = p }
+                    GlassEffectContainer(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(plans) { p in
+                                PlanCard(plan: p) { pick = p }
+                            }
                         }
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 4)
                 } else if let error {
                     Text(error).font(.footnote).foregroundStyle(.secondary).padding()
                 } else {
@@ -170,9 +181,9 @@ struct GiftPremiumPanel: View {
                         .font(.subheadline.bold()).foregroundStyle(Color.lime)
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 14)
+                .padding(.top, 10)
             }
-            .padding(.bottom, 110)
+            .padding(.bottom, 96)
         }
         .task {
             do { info = try await API.call("/premium", query: ["to": String(userId)]) }
@@ -191,35 +202,30 @@ struct GiftPremiumPanel: View {
 private struct PlanCard: View {
     let plan: PremiumPlan
     var tap: () -> Void
-    @State private var pressed = false
 
     var body: some View {
         Button(action: { Haptic.tap(); tap() }) {
-            VStack(spacing: 6) {
-                GiftBoxIcon(tint: plan.tint, size: 58).padding(.top, 10)
-                Text(plan.title).font(.subheadline.bold()).foregroundStyle(.primary)
-                Text("Premium").font(.caption).foregroundStyle(.secondary)
+            VStack(spacing: 2) {
+                GiftBoxIcon(asset: plan.asset, size: 76)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+                Text(plan.title).font(.subheadline.weight(.heavy)).foregroundStyle(.primary)
+                Text("Premium").font(.caption.weight(.medium)).foregroundStyle(.primary.opacity(0.8))
                 Text(plan.priceText)
-                    .font(.caption.bold())
+                    .font(.caption.bold().monospacedDigit())
                     .foregroundStyle(Color.lime)
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Color.lime.opacity(0.14), in: Capsule())
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Color.lime.opacity(0.16), in: Capsule())
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
             }
             .frame(maxWidth: .infinity)
-            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(alignment: .topTrailing) {
-                if let d = plan.discount, d > 0 {
-                    Text("−\(d)%")
-                        .font(.system(size: 10, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .frame(width: 70, height: 16)
-                        .background(Color(hex: 0x9B5CFF))
-                        .rotationEffect(.degrees(45))
-                        .offset(x: 20, y: 10)
-                }
+                if let d = plan.discount, d > 0 { LimeRibbon(text: "−\(d)%") }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(GiftPress())
     }
@@ -254,18 +260,18 @@ struct GiftConfirmSheet: View {
                     .buttonStyle(.glass).buttonBorderShape(.circle)
                 Spacer()
             }
-            .padding(.horizontal, 16).padding(.top, 14)
+            .padding(.horizontal, 16).padding(.top, 12)
 
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
                     Text("Вы отправляете подарок за \(plan.priceText)")
                         .font(.caption.bold()).foregroundStyle(.secondary)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(.white.opacity(0.08), in: Capsule())
 
-                    VStack(spacing: 8) {
-                        GiftBoxIcon(tint: plan.tint, size: 110)
-                            .padding(.top, 14)
+                    VStack(spacing: 6) {
+                        GiftBoxIcon(asset: plan.asset, size: 120)
+                            .padding(.top, 12)
                             .scaleEffect(sent ? 1.25 : 1)
                             .rotationEffect(.degrees(sent ? -8 : 0))
                         Text(plan.titleFull).font(.headline)
@@ -279,19 +285,23 @@ struct GiftConfirmSheet: View {
                             .background(.white.opacity(0.12), in: Capsule())
                             .padding(.bottom, 16)
                     }
-                    .frame(width: 220)
+                    .frame(width: 230)
                     .padding(.horizontal, 10)
                     .background(
-                        LinearGradient(colors: [plan.tint.opacity(0.28), Color.oxCard], startPoint: .top, endPoint: .bottom),
-                        in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        RadialGradient(colors: [plan.tint.opacity(0.35), .clear], center: .top, startRadius: 4, endRadius: 200),
+                        in: RoundedRectangle(cornerRadius: 26, style: .continuous)
                     )
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(plan.tint.opacity(0.35)))
+                    .overlay(alignment: .topTrailing) {
+                        if let d = plan.discount, d > 0 { LimeRibbon(text: "−\(d)%") }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
 
                     TextField("Ваше сообщение (необязательно)", text: $note, axis: .vertical)
                         .lineLimit(1...3)
                         .focused($focus)
-                        .padding(.horizontal, 16).padding(.vertical, 13)
-                        .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.horizontal, 18).padding(.vertical, 14)
+                        .glassEffect(.regular.interactive(), in: Capsule())
                         .onChange(of: note) { if note.count > 200 { note = String(note.prefix(200)) } }
 
                     Label("Тестовый режим: подарок активируется сразу, деньги не списываются", systemImage: "testtube.2")
@@ -299,7 +309,6 @@ struct GiftConfirmSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 6)
             }
             .scrollDismissesKeyboard(.interactively)
 
@@ -357,19 +366,19 @@ struct GiftBubble: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            GiftBoxIcon(tint: plan.tint, size: 96).padding(.top, 18)
-            Text(plan.titleFull).font(.headline).foregroundStyle(.white)
+            GiftBoxIcon(asset: plan.asset, size: 104).padding(.top, 14)
+            Text(plan.titleFull).font(.headline)
             Text(mine ? "Вы подарили \(card?["to"]?.string ?? "собеседнику") подписку Oxion Premium"
                       : "\(card?["from"]?.string ?? "Собеседник") дарит вам подписку Oxion Premium")
-                .font(.caption).foregroundStyle(.white.opacity(0.75)).multilineTextAlignment(.center)
+                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             if let n = card?["note"]?.string, !n.isEmpty {
-                Text("«\(n)»").font(.subheadline.italic()).foregroundStyle(.white).multilineTextAlignment(.center)
+                Text("«\(n)»").font(.subheadline.italic()).multilineTextAlignment(.center)
             }
             Button(mine ? "Подробнее" : "Посмотреть возможности") { showPerks = true }
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.lime)
                 .padding(.horizontal, 16).padding(.vertical, 7)
-                .background(.white.opacity(0.16), in: Capsule())
+                .background(Color.lime.opacity(0.16), in: Capsule())
                 .buttonStyle(.plain)
                 .padding(.bottom, 16)
         }
@@ -377,12 +386,12 @@ struct GiftBubble: View {
         .frame(maxWidth: .infinity)
         .background {
             ZStack {
-                LinearGradient(colors: [plan.tint.opacity(0.55), Color(hex: 0x15161A)], startPoint: .top, endPoint: .bottom)
-                Sparkles(color: .white).opacity(0.6)
+                RadialGradient(colors: [plan.tint.opacity(0.4), .clear], center: .top, startRadius: 4, endRadius: 220)
+                Sparkles().opacity(0.7)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(plan.tint.opacity(0.5)))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .sheet(isPresented: $showPerks) { NavigationStack { PremiumView(embedded: true) } }
     }
 }
