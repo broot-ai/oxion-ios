@@ -270,6 +270,7 @@ struct NewWorkoutSheet: View {
     @State private var groups: [String] = []
     @State private var saving = false
     @State private var errorText: String?
+    @State private var show3D = false
 
     private let pick: [(String, String, [String])] = [
         ("shoulders", "Дельты", ["shoulders"]), ("chest", "Грудь", ["chest"]), ("arms", "Руки", ["biceps", "triceps"]),
@@ -308,6 +309,10 @@ struct NewWorkoutSheet: View {
                     }
                     .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
                     .listRowBackground(Color.clear)
+                    Button { show3D = true } label: {
+                        Label("Выбрать на 3D-модели", systemImage: "figure.arms.open")
+                            .font(.subheadline.weight(.semibold))
+                    }
                 } header: {
                     Text("Что тренируете")
                 }
@@ -338,6 +343,12 @@ struct NewWorkoutSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .fullScreenCover(isPresented: $show3D) {
+            Body3DScreen(onPick: { picked in
+                for g in picked where !groups.contains(g) { groups.append(g) }
+                if title.isEmpty, let first = pick.first(where: { $0.2.contains { picked.contains($0) } }) { title = "День: " + first.1.lowercased() }
+            })
+        }
     }
 
     private func save() async {

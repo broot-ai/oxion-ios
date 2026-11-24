@@ -25,6 +25,8 @@ struct Body3DScreen: View {
     @State private var showMotion = false
     @State private var showGuide = false
     @State private var showStats = false
+    /// Режим выбора для новой тренировки: возвращает ключи групп (chest, back, …)
+    var onPick: (([String]) -> Void)? = nil
 
     struct PromptBox: Identifiable { let id = UUID(); let text: String }
 
@@ -51,6 +53,7 @@ struct Body3DScreen: View {
                 if ctrl.mode == .ar { arBanner }
                 if ctrl.colorMode == .load && ctrl.mode == .studio { legend }
                 Spacer()
+                if let onPick { pickBar(onPick) }
                 bottom
             }
         }
@@ -92,6 +95,31 @@ struct Body3DScreen: View {
                 Task { await ctrl.load(); if ctrl.source != .custom { OxAlert.show(icon: "exclamationmark.triangle.fill", tint: .orange, title: "Модель не подошла", message: "В файле нет объектов с именами мышц. Показываю встроенную модель.") } }
             } catch { OxAlert.error(error.localizedDescription) }
         }
+    }
+
+    private func pickedGroups() -> [String] {
+        var out: [String] = []
+        for p in sel.selected {
+            if let g = MuscleDataManager.byId[p.muscle]?.group, !out.contains(g) { out.append(g) }
+        }
+        return out
+    }
+
+    private func pickBar(_ done: @escaping ([String]) -> Void) -> some View {
+        let groups = pickedGroups()
+        return Button {
+            Haptic.tap(.medium)
+            done(groups)
+            dismiss()
+        } label: {
+            Label(groups.isEmpty ? "Нажмите на мышцы" : "Готово · групп: \(groups.count)",
+                  systemImage: groups.isEmpty ? "hand.tap" : "checkmark")
+                .font(.headline)
+                .frame(maxWidth: .infinity).frame(height: 52)
+        }
+        .buttonStyle(.glassProminent).tint(Color.lime)
+        .disabled(groups.isEmpty)
+        .padding(.horizontal, 16)
     }
 
     // MARK: верх
@@ -150,6 +178,9 @@ struct Body3DScreen: View {
                     Button { showStats = true } label: { Label("Аналитика нагрузки", systemImage: "chart.bar.xaxis") }
                 }
                 Section("Выбор") {
+                    Toggle(isOn: Binding(get: { sel.wholeGroups }, set: { sel.wholeGroups = $0 })) {
+                        Label("Целыми группами", systemImage: "square.stack.3d.up.fill")
+                    }
                     Toggle(isOn: Binding(get: { sel.bothSides }, set: { sel.bothSides = $0 })) {
                         Label("Обе стороны сразу", systemImage: "arrow.left.and.right")
                     }

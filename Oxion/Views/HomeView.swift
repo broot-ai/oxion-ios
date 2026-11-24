@@ -106,6 +106,7 @@ struct HomeView: View {
                 }
                 .glassEffect(.regular.tint(Color.lime.opacity(0.3)).interactive(), in: .capsule)
             }
+            InboxBell()
         }
         .padding(.top, 8)
     }

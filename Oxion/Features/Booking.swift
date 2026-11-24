@@ -636,17 +636,12 @@ struct HomeTrainerCard: View {
     @State private var store = BookingStore.shared
     var body: some View {
         let today = store.trainerSlots.filter { $0.status == "booked" && $0.date > Date().addingTimeInterval(-3600) }.sorted { $0.startsAt < $1.startsAt }
+        VStack(spacing: 8) {
         NavigationLink { TrainerScheduleView() } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("Расписание", systemImage: "calendar").font(.caption.bold()).foregroundStyle(Color.limeInk)
                     Spacer()
-                    if store.pendingClients > 0 {
-                        Text("заявок: \(store.pendingClients)")
-                            .font(.caption.bold()).foregroundStyle(Color.onLime)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Color.lime, in: Capsule())
-                    }
                 }
                 if let s = today.first {
                     Text(BookingFormat.when(s.date)).font(.title3.bold())
@@ -664,6 +659,21 @@ struct HomeTrainerCard: View {
                         in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
         .buttonStyle(.plain)
+            if store.pendingClients > 0 {
+                NavigationLink { InboxView() } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "person.crop.circle.badge.plus").font(.title3).foregroundStyle(Color.limeInk)
+                        Text("Новые заявки: \(store.pendingClients)").font(.subheadline.bold())
+                        Spacer()
+                        Text("Посмотреть").font(.subheadline).foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
+                    }
+                    .padding(14)
+                    .background(Color.lime.opacity(0.14), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
         .onAppear { store.refreshTrainer() }
     }
 }

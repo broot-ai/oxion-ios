@@ -19,8 +19,20 @@ final class MuscleSelectionManager {
     /// Выбирать сразу левую и правую сторону
     var bothSides = true
 
+    /// Выбирать целую группу: пресс — весь пресс, спина — вся спина, ноги — все ноги
+    var wholeGroups: Bool = UserDefaults.standard.object(forKey: "body3d.groups") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(wholeGroups, forKey: "body3d.groups") }
+    }
+
     func toggle(_ p: MusclePartID) {
-        let set: Set<MusclePartID> = bothSides ? [p, p.mirror] : [p]
+        var set: Set<MusclePartID> = bothSides ? [p, p.mirror] : [p]
+        if wholeGroups, let region = MuscleDataManager.byId[p.muscle]?.region {
+            // все мышцы этого раздела, обе стороны
+            for m in MuscleDataManager.all where m.region == region {
+                set.insert(MusclePartID(muscle: m.id, side: .l))
+                set.insert(MusclePartID(muscle: m.id, side: .r))
+            }
+        }
         if selected.contains(p) {
             selected.subtract(set)
             if let f = focused, set.contains(f) { focused = selected.sorted().first }

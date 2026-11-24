@@ -724,6 +724,7 @@ struct ClientsView: View {
     @State private var showQR = false
     @State private var chat: ChatRef?
     @State private var food: ChatRef?
+    @State private var card: ChatRef?
 
     var body: some View {
         ScrollView {
@@ -752,16 +753,28 @@ struct ClientsView: View {
                     ForEach(d.items) { c in
                         HStack(spacing: 12) {
                             Avatar(url: API.media(c.photo), name: c.name ?? "?", size: 50)
+                                .onTapGesture { card = ChatRef(id: c.id, name: c.name ?? "Клиент") }
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(c.name ?? "Клиент").font(.headline)
+                                if c.status == "pending" {
+                                    Text("Заявка · нажмите, чтобы посмотреть профиль").font(.caption.bold()).foregroundStyle(Color.limeInk)
+                                }
                                 Text("Неделя: \(c.weekN ?? 0) из \(c.weekGoal ?? 3)" + (c.lastDate.map { " · был \(RU.human($0).lowercased())" } ?? ""))
                                     .font(.caption).foregroundStyle(Color.oxHint)
                                 ProgressView(value: Double(min(c.weekN ?? 0, c.weekGoal ?? 3)), total: Double(max(1, c.weekGoal ?? 3)))
                                     .tint(Color.lime)
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture { card = ChatRef(id: c.id, name: c.name ?? "Клиент") }
                             Spacer()
                             if let n = c.checksNew, n > 0 {
                                 Text("\(n)").font(.caption.bold()).foregroundStyle(.black).padding(6).background(Color.lime, in: Circle())
+                            }
+                            if c.status == "pending" {
+                                Button { Task { await decide(c.id, false) } } label: { Image(systemName: "xmark") }
+                                    .buttonStyle(.glass)
+                                Button { Task { await decide(c.id, true) } } label: { Image(systemName: "checkmark") }
+                                    .buttonStyle(.glassProminent).tint(Color.lime)
                             }
                             if c.status != "pending" {
                                 Button {
@@ -787,6 +800,7 @@ struct ClientsView: View {
         .navigationTitle("Мои клиенты")
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
         .navigationDestination(item: $food) { FoodDiaryView(clientId: $0.id, clientName: $0.name) }
+        .navigationDestination(item: $card) { ClientCardView(userId: $0.id, name: $0.name) }
         .fullScreenCover(isPresented: $showQR) { MyCardSheet() }
         .oxRefreshable { await load() }
         .task { await load() }
@@ -794,6 +808,16 @@ struct ClientsView: View {
 
     private func load() async {
         do { data = try await API.call("/coach/clients") as ClientsResponse } catch { errorText = error.localizedDescription }
+    }
+
+    private func decide(_ id: Int, _ accept: Bool) async {
+        do {
+            let _: OK = try await API.call("/coach/clients/\(id)", method: accept ? "POST" : "DELETE", body: [:])
+            accept ? Haptic.success() : Haptic.tap()
+            BookingStore.shared.refreshTrainer()
+            InboxStore.shared.refresh()
+            await load()
+        } catch { OxAlert.error(error.localizedDescription) }
     }
 
     private func openChat(_ c: ClientItem) async {
