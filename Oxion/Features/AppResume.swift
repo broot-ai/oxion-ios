@@ -261,7 +261,7 @@ struct ResumeProgressBar: View {
 final class OverlayWindows {
     static let shared = OverlayWindows()
     private var resumeWindow: UIWindow?
-    private var islandWindow: PassthroughWindow?
+    private var islandWindow: OxPassWindow?
     private weak var scene: UIWindowScene?
 
     func install() {
@@ -307,7 +307,7 @@ final class OverlayWindows {
             return
         }
         if islandWindow == nil {
-            let w = PassthroughWindow(windowScene: scene)
+            let w = OxPassWindow(windowScene: scene)
             w.windowLevel = .statusBar + 1
             w.backgroundColor = .clear
             let vc = UIHostingController(rootView: IslandBrandView(kind: rect.kind))
@@ -322,7 +322,7 @@ final class OverlayWindows {
 }
 
 /// Окно, которое никогда не забирает касания
-final class PassthroughWindow: UIWindow {
+final class OxPassWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
 }
 
@@ -336,7 +336,7 @@ enum IslandGeometry {
     enum Kind { case island, notch }
 
     static func rect(in scene: UIWindowScene) -> (frame: CGRect, kind: Kind)? {
-        guard let win = scene.windows.first(where: { !($0 is PassthroughWindow) && $0.windowLevel == .normal }) ?? scene.windows.first else { return nil }
+        guard let win = scene.windows.first(where: { !($0 is OxPassWindow) && $0.windowLevel == .normal }) ?? scene.windows.first else { return nil }
         let size = win.bounds.size
         guard size.height > size.width else { return nil }               // только портрет
         guard UIDevice.current.userInterfaceIdiom == .phone else { return nil }
