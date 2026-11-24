@@ -43,6 +43,7 @@ enum API {
         req.httpMethod = method
         req.timeoutInterval = 30
         if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        req.setValue(L10n.lang, forHTTPHeaderField: "X-Lang")
         return req
     }
 

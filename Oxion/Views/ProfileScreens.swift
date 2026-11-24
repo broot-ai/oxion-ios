@@ -1376,7 +1376,7 @@ struct TicketView: View {
                 ForEach(t?.messages ?? []) { m in
                     HStack {
                         if m.fromAdmin == 1 { Spacer(minLength: 50) }
-                        Text(m.text ?? "")
+                        Text(verbatim: m.text ?? "")
                             .padding(.horizontal, 14).padding(.vertical, 9)
                             .foregroundStyle(m.fromAdmin == 1 ? Color.onLime : Color.primary)
                             .background(m.fromAdmin == 1 ? Color.lime : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))

@@ -827,7 +827,7 @@ struct PollView: View {
                             }
                         }
                         HStack {
-                            Text(o.text).font(.subheadline.weight(poll.mine == i ? .semibold : .regular))
+                            Text(verbatim: o.text).font(.subheadline.weight(poll.mine == i ? .semibold : .regular))
                             if poll.mine == i { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.limeInk) }
                             Spacer()
                             if showResults { Text("\(Int(Double(o.votes ?? 0) / Double(total) * 100))%").font(.subheadline) }

@@ -879,7 +879,7 @@ struct ChatView: View {
                         Text(r.mine ? "Ответ себе" : "Ответ")
                             .font(.caption.bold())
                             .foregroundStyle(Color.limeInk)
-                        Text(r.text.map { PremiumEmoji.plain($0) } ?? "Фото")
+                        (r.text.map { Text(verbatim: PremiumEmoji.plain($0)) } ?? Text("Фото"))
                             .font(.caption)
                             .lineLimit(1)
                             .foregroundStyle(.secondary)

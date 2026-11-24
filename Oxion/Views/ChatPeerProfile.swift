@@ -260,7 +260,7 @@ struct ChatPeerProfileView: View {
                 ForEach(found.reversed()) { m in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(m.mine ? "Вы" : (peer.name ?? "Собеседник")).font(.caption.bold()).foregroundStyle(Color.limeInk)
-                        Text(m.text ?? "").font(.subheadline)
+                        Text(verbatim: m.text ?? "").font(.subheadline)
                         Text(ChatTime.short(m.at ?? 0)).font(.caption2).foregroundStyle(Color.oxHint)
                     }
                 }
