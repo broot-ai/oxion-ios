@@ -531,6 +531,7 @@ struct ChatView: View {
     @State private var peer: Peer?
     @State private var peerReadId = 0
     @State private var showStickers = false
+    @AppStorage("chat.quickReaction") private var quickReaction = "❤️"
     @State private var stickerMenu: Message?
     @State private var stickerPack: StickerPacks.Pack?
     /// удаляемые сообщения: распадаются на частицы, потом исчезают
@@ -1079,6 +1080,12 @@ struct ChatView: View {
                                                overlayParticles: ["sticker", "vnote", "video", "voice", "photos"].contains(m.kind ?? "") || m.photo != nil,
                                                tint: m.mine ? Color.lime : Color.white))
                     .allowsHitTesting(dissolving[m.id] == nil)
+                    // двойное нажатие — быстрая реакция (выбирается в «Стикеры и эмодзи»)
+                    .simultaneousGesture(TapGesture(count: 2).onEnded {
+                        guard m.deleted != true else { return }
+                        Haptic.tap(.medium)
+                        Task { await react(m, quickReaction) }
+                    })
                     .id(m.id)
                     .transition(Self.bubbleTransition(mine: m.mine))
     }
