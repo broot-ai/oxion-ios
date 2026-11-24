@@ -59,7 +59,6 @@ private func untilText(_ ms: Double) -> String {
 struct GiftBoxIcon: View {
     var asset: String
     var size: CGFloat = 64
-    @State private var float = false
 
     var body: some View {
         Image(asset)
@@ -67,11 +66,41 @@ struct GiftBoxIcon: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .shadow(color: .black.opacity(0.25), radius: size * 0.08, y: size * 0.06)
-            .offset(y: float ? -size * 0.03 : size * 0.02)
-            .rotationEffect(.degrees(float ? -2 : 2))
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { float = true }
-            }
+    }
+}
+
+/// Золотой кубок Oxion «живой»: парит, слегка покачивается, по золоту пробегает блик
+struct AnimatedTrophy: View {
+    var height: CGFloat = 150
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        TimelineView(.animation(paused: reduce)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            let lift = reduce ? 0 : sin(t * 1.6) * 6
+            let tilt = reduce ? 0 : sin(t * 1.1) * 3
+            // блик пробегает раз в ~3.2 с
+            let sweep = (t / 3.2).truncatingRemainder(dividingBy: 1)
+            let img = Image("premium-trophy").resizable().scaledToFit()
+            img
+                .frame(height: height)
+                .overlay {
+                    GeometryReader { g in
+                        LinearGradient(colors: [.clear, .white.opacity(0.75), .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: g.size.width * 0.35)
+                            .rotationEffect(.degrees(20))
+                            .offset(x: -g.size.width * 0.5 + sweep * g.size.width * 2)
+                            .blendMode(.plusLighter)
+                    }
+                    .mask(img)
+                    .opacity(reduce ? 0 : 1)
+                }
+                .rotation3DEffect(.degrees(tilt * 2), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+                .rotationEffect(.degrees(tilt))
+                .offset(y: -lift)
+                .shadow(color: Color(hex: 0xFFB000).opacity(0.25 + 0.15 * (1 + sin(t * 1.6)) / 2), radius: 22, y: 8 + lift * 0.5)
+        }
+        .frame(height: height + 14)
     }
 }
 
@@ -167,6 +196,8 @@ struct GiftPremiumPanel: View {
     var name: String
     var photo: String?
     var onSent: (Int?) -> Void = { _ in }
+    /// высота содержимого — чтобы шторка открывалась ровно по нему
+    var onHeight: (CGFloat) -> Void = { _ in }
 
     @State private var info: PremiumInfo?
     @State private var error: String?
@@ -226,8 +257,10 @@ struct GiftPremiumPanel: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 10)
             }
-            .padding(.bottom, 96)
+            .padding(.bottom, 92)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
         }
+        .scrollBounceBehavior(.basedOnSize)
         .task {
             do { info = try await API.call("/premium", query: ["to": String(userId)]) }
             catch { self.error = error.localizedDescription }
@@ -497,11 +530,7 @@ struct PremiumView: View {
             VStack(spacing: 14) {
                 ZStack {
                     Sparkles().frame(height: 190)
-                    Image("premium-trophy")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 150)
-                        .shadow(color: Color(hex: 0xFFB000).opacity(0.35), radius: 22, y: 6)
+                    AnimatedTrophy(height: 150)
                 }
                 Text("Oxion Premium").font(.system(size: 30, weight: .heavy))
                 if let u = info?.until {
@@ -585,3 +614,163 @@ struct PremiumView: View {
         } catch { OxAlert.error(error.localizedDescription) }
     }
 }
+
+
+// MARK: - Подарок в переписке по центру, как системное уведомление Telegram
+
+struct GiftServiceRow: View {
+    let m: Message
+    var peerName: String?
+    @State private var details = false
+
+    private var card: JSONValue? { m.card }
+    private var plan: PremiumPlan {
+        PremiumPlan(key: card?["plan"]?.string ?? "m1", months: Int(card?["months"]?.string ?? "1") ?? 1,
+                    title: card?["title"]?.string ?? "", price: Int(card?["price"]?.string ?? "0") ?? 0, discount: nil, color: card?["color"]?.string)
+    }
+    private var price: String { "\(plan.price.formatted(.number.locale(Locale(identifier: "ru_RU")))) ₽" }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(m.mine ? "Вы отправили подарок стоимостью \(price)"
+                        : "\(card?["from"]?.string ?? peerName ?? "Собеседник") отправил(а) вам подарок стоимостью \(price)")
+                .font(.caption.bold())
+                .foregroundStyle(.primary.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(Color.primary.opacity(0.08), in: Capsule())
+
+            Button { details = true } label: {
+                VStack(spacing: 6) {
+                    GiftBoxIcon(asset: plan.asset, size: 110).padding(.top, 14)
+                    Text(plan.titleFull).font(.headline)
+                    Text("Подписка на эксклюзивные функции Oxion").font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    if let n = card?["note"]?.string, !n.isEmpty {
+                        Text("«\(n)»").font(.subheadline.italic()).multilineTextAlignment(.center).padding(.top, 2)
+                    }
+                    Text("Подробнее")
+                        .font(.subheadline.bold())
+                        .padding(.horizontal, 18).padding(.vertical, 8)
+                        .background(Color.primary.opacity(0.1), in: Capsule())
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
+                }
+                .padding(.horizontal, 16)
+                .frame(width: 236)
+                .background(RadialGradient(colors: [plan.tint.opacity(0.3), .clear], center: .top, startRadius: 4, endRadius: 200))
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            }
+            .buttonStyle(GiftPress())
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .sheet(isPresented: $details) { GiftDetailsSheet(m: m, plan: plan) }
+    }
+}
+
+/// «Подарок вам»: кто подарил, когда, до какого числа действует
+struct GiftDetailsSheet: View {
+    let m: Message
+    let plan: PremiumPlan
+    @Environment(\.dismiss) private var dismiss
+    @State private var perks = false
+    @State private var openUser: GiftUserRef?
+
+    private var card: JSONValue? { m.card }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Sparkles().frame(height: 170)
+                GiftBoxIcon(asset: plan.asset, size: 120)
+            }
+            .padding(.top, 6)
+            Text(m.mine ? "Вы подарили" : "Подарок вам").font(.system(size: 26, weight: .heavy))
+            Text("+ \(plan.titleFull)").font(.headline).foregroundStyle(Color.lime)
+            (Text("Безлимитный ИИ-тренер, сканер еды и особое оформление в Oxion. ")
+             + Text("Что даёт Premium ›").foregroundColor(Color.lime))
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 24)
+                .onTapGesture { perks = true }
+
+            VStack(spacing: 0) {
+                person("От", id: Int(card?["from_id"]?.string ?? "") ?? (m.mine ? nil : m.fromId),
+                       name: card?["from"]?.string ?? "Пользователь", photo: card?["from_photo"]?.string)
+                Divider()
+                person("Кому", id: Int(card?["to_id"]?.string ?? ""), name: card?["to"]?.string ?? "Пользователь", photo: card?["to_photo"]?.string)
+                Divider()
+                row("Дата", value: dateText(m.at))
+                if let u = card?["until"]?.number {
+                    Divider()
+                    row("Действует до", value: dateText(u))
+                }
+            }
+            .background(Color.oxCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+
+            Text("Тестовый режим: подарок активирован без оплаты").font(.caption).foregroundStyle(.secondary)
+
+            Button { dismiss() } label: {
+                Text("ОК").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Color.lime).foregroundStyle(Color.onLime)
+            .controlSize(.large)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+        }
+        .overlay(alignment: .topLeading) {
+            Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 36, height: 36) }
+                .buttonStyle(.glass).buttonBorderShape(.circle)
+                .padding(16)
+        }
+        .background(Color.oxBg)
+        .fitSheet()
+        .presentationCornerRadius(34)
+        .presentationDragIndicator(.visible)
+        .sheet(isPresented: $perks) { PremiumView(embedded: true) }
+        .sheet(item: $openUser) { u in NavigationStack { UserProfileView(userId: u.id) } }
+    }
+
+    private func dateText(_ ms: Double?) -> String {
+        guard let ms else { return "—" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "dd.MM.yy 'в' HH:mm"
+        return f.string(from: Date(timeIntervalSince1970: ms > 1e11 ? ms / 1000 : ms))
+    }
+
+    private func row(_ t: String, value: String) -> some View {
+        HStack(spacing: 0) {
+            Text(t).font(.subheadline).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
+            Text(value).font(.subheadline)
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+    }
+
+    private func person(_ t: String, id: Int?, name: String, photo: String?) -> some View {
+        Button {
+            guard let id else { return }
+            openUser = GiftUserRef(id: id)
+        } label: {
+            HStack(spacing: 0) {
+                Text(t).font(.subheadline).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
+                Avatar(url: API.media(photo), name: name, size: 24).padding(.trailing, 8)
+                Text(name).font(.subheadline.bold()).foregroundStyle(Color.lime).lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct GiftUserRef: Identifiable { let id: Int }

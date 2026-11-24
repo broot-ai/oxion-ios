@@ -608,6 +608,8 @@ struct ChatView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 4)
                             .id(m.id)
+                        } else if m.kind == "gift" && m.deleted != true {
+                            GiftServiceRow(m: m, peerName: peer?.name).id(m.id)
                         } else {
                         bubbleRow(m)
                         }

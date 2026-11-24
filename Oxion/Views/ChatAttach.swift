@@ -114,6 +114,10 @@ struct ChatAttachSheet: View {
     }
     private var tabs: [Tab] { Tab.allCases.filter { $0 != .gift || giftTo != nil } }
     @State private var detent: PresentationDetent = .medium
+    @State private var giftH: CGFloat = 0
+    private var detents: Set<PresentationDetent> {
+        giftH > 0 ? [.medium, .large, .height(giftH)] : [.medium, .large]
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var g = GalleryModel()
@@ -135,10 +139,16 @@ struct ChatAttachSheet: View {
                     case .gallery: gallery
                     case .gift:
                         if let p = giftTo {
-                            GiftPremiumPanel(userId: p.id, name: p.name ?? "собеседник", photo: p.photo) { _ in
+                            GiftPremiumPanel(userId: p.id, name: p.name ?? "собеседник", photo: p.photo, onSent: { _ in
                                 onGift()
                                 dismiss()
-                            }
+                            }, onHeight: { h in
+                                // шторка ровно по содержимому вкладки «Подарок» (+ заголовок)
+                                let full = min(h + 64, UIScreen.main.bounds.height - 60)
+                                guard abs(full - giftH) > 4 else { return }
+                                giftH = full
+                                if tab == .gift { withAnimation(.spring(duration: 0.35)) { detent = .height(full) } }
+                            })
                         }
                     case .cards: AttachCardsList(chatId: chatId) { m in onSent(m); dismiss() }
                     case .location: LocationAttach(chatId: chatId) { m in onSent(m); dismiss() }
@@ -196,7 +206,7 @@ struct ChatAttachSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDetents(detents, selection: $detent)
         .presentationCornerRadius(34)
         .presentationDragIndicator(.visible)
         .task { await g.start() }
@@ -285,7 +295,7 @@ struct ChatAttachSheet: View {
                         Button {
                             Haptic.tap()
                             tab = t
-                            if t == .gift { withAnimation(.spring(duration: 0.4)) { detent = .large } }
+                            if t == .gift { withAnimation(.spring(duration: 0.4)) { detent = giftH > 0 ? .height(giftH) : .large } }
                         } label: {
                             VStack(spacing: 3) {
                                 Image(systemName: t.icon).font(.system(size: 19, weight: .semibold))
