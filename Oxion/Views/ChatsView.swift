@@ -1271,11 +1271,11 @@ struct Bubble: View {
     /// меню по долгому нажатию — превью повторяет форму пузыря
     var menu: (() -> AnyView)? = nil
     var groupMode = false
-    var onAction: (InlineBtn.Action) -> Void = { _ in }
-    var style = BubbleStyle()
     /// стикер: нажатие — набор, удержание — своё меню (без квадратной подложки системного меню)
     var onStickerTap: (() -> Void)? = nil
     var onStickerHold: (() -> Void)? = nil
+    var onAction: (InlineBtn.Action) -> Void = { _ in }
+    var style = BubbleStyle()
 
     private var isSticker: Bool { m.kind == "sticker" && m.deleted != true }
     private var isCardOnly: Bool { m.kind != nil && (m.text ?? "").isEmpty && m.photo == nil && m.deleted != true && m.forward == nil }
