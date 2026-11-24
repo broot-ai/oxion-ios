@@ -914,7 +914,7 @@ struct ChatView: View {
                         }
                     }
                     .padding(.leading, 16)
-                    .padding(.trailing, 42)
+                    .padding(.trailing, 48)
                     .padding(.vertical, 11)
                     .overlay(alignment: .bottomTrailing) {
                         // стикеры и эмодзи — вместо клавиатуры, как в Telegram
@@ -932,9 +932,11 @@ struct ChatView: View {
                                 .font(.title3)
                                 .foregroundStyle(.secondary)
                                 .contentTransition(.symbolEffect(.replace))
-                                .frame(width: 40, height: 42)
+                                .frame(width: 46, height: 44)
+                                // нажимается вся область кнопки, а не только линии значка
+                                .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(StickerToggleStyle())
                     }
                     .glassEffect(.regular, in: .rect(cornerRadius: 22))
 
@@ -1655,5 +1657,16 @@ struct BubbleDrag: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+
+/// Кнопка стикеров в поле ввода: срабатывает сразу, при нажатии слегка сжимается
+private struct StickerToggleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1)
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .animation(.spring(duration: 0.18), value: configuration.isPressed)
     }
 }
