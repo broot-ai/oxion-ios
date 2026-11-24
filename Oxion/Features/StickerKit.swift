@@ -11,7 +11,7 @@ enum StickerPacks {
     static func refs(_ p: Pack) -> [String] { (1...p.count).map { String(format: "%@/%03d", p.id, $0) } }
     static func file(_ ref: String) -> String { ref.replacingOccurrences(of: "/", with: "-") }
     static func pack(of ref: String) -> Pack? { all.first { ref.hasPrefix($0.id + "/") } }
-    static func isAnimated(_ ref: String) -> Bool { pack(of: ref) != nil }
+    static func isAnimated(_ ref: String) -> Bool { pack(of: ref) != nil || PremiumEmoji.isEmoji(ref) }
 }
 
 /// Недавние и избранные — на iPhone
@@ -141,6 +141,10 @@ struct StickerView: View {
 struct StickerPanel: View {
     var onSend: (_ ref: String, _ silent: Bool) -> Void
     var onEmoji: (String) -> Void
+    /// премиум-эмодзи: вставить метку в текст
+    var onPremiumEmoji: (String) -> Void = { _ in }
+    @State private var premium = PremiumStatus.shared
+    @State private var upsell = false
 
     enum Mode { case stickers, emoji }
     @State private var mode: Mode = .stickers
@@ -293,14 +297,48 @@ struct StickerPanel: View {
     }
 
     private var emojiGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
-            ForEach(Self.emojis, id: \.self) { e in
-                Button { onEmoji(e); Haptic.tap(.soft) } label: { Text(e).font(.system(size: 30)) }
-                    .buttonStyle(.plain)
+        LazyVStack(spacing: 6) {
+            // анимированные премиум-эмодзи
+            ForEach(PremiumEmoji.packs) { p in
+                header(p.title.uppercased(), id: "e-" + p.id, clear: nil)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 8), spacing: 8) {
+                    ForEach(StickerPacks.refs(p), id: \.self) { r in
+                        StickerView(ref: r, size: 36)
+                            .opacity(premium.active ? 1 : 0.85)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if premium.active {
+                                    Haptic.tap(.soft)
+                                    onPremiumEmoji(PremiumEmoji.token(r))
+                                } else {
+                                    upsell = true
+                                }
+                            }
+                    }
+                }
+                .padding(.horizontal, 8)
+                if !premium.active {
+                    Button { upsell = true } label: {
+                        Label("Получить \(p.title)", systemImage: "lock.fill")
+                            .font(.subheadline.bold()).frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(Color(hex: 0x7B5CFF))
+                    .padding(.horizontal, 12).padding(.top, 4)
+                }
             }
+            header("ЭМОДЗИ", id: "e-std", clear: nil)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
+                ForEach(Self.emojis, id: \.self) { e in
+                    Button { onEmoji(e); Haptic.tap(.soft) } label: { Text(e).font(.system(size: 30)) }
+                        .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
         }
-        .padding(12)
         .padding(.bottom, 80)
+        .task { await premium.refresh() }
+        .sheet(isPresented: $upsell) { PremiumEmojiUpsell() }
     }
 
     // снизу: «Стикеры | Эмодзи» по центру и шестерёнка справа, как в Telegram

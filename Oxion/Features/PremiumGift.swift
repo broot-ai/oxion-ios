@@ -588,6 +588,7 @@ struct PremiumView: View {
         defer { buying = false }
         do {
             let _: GiftResult = try await API.call("/premium/buy", method: "POST", body: ["plan": p.key])
+            PremiumStatus.shared.active = true
             OxHaptics.play(.workoutDone)
             OxAlert.show(icon: "star.circle.fill", tint: Color(hex: 0xFFB000), title: "Premium подключён", message: "Тестовый режим — без списания денег")
             await load()

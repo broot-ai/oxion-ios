@@ -548,7 +548,7 @@ struct ChatView: View {
     @State private var call: CallRequest?
     @State private var protect: ChatProtect?
     @State private var protectBusy = false
-    @FocusState private var focused: Bool
+    @State private var focused = false
     @Namespace private var zoomNS
     @State private var translateText: String?
     @State private var productBox: AppModel.IdBox?
@@ -875,7 +875,7 @@ struct ChatView: View {
                         Text(r.mine ? "Ответ себе" : "Ответ")
                             .font(.caption.bold())
                             .foregroundStyle(Color.limeInk)
-                        Text(r.text ?? "Фото")
+                        Text(r.text.map { PremiumEmoji.plain($0) } ?? "Фото")
                             .font(.caption)
                             .lineLimit(1)
                             .foregroundStyle(.secondary)
@@ -906,9 +906,13 @@ struct ChatView: View {
                 }
                 .glassEffect(.regular.interactive(), in: .circle)
 
-                TextField("Сообщение", text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($focused)
+                // поле ввода, в котором видны анимированные эмодзи
+                EmojiComposer(text: $text, focused: $focused)
+                    .overlay(alignment: .leading) {
+                        if text.isEmpty {
+                            Text("Сообщение").foregroundStyle(.tertiary).allowsHitTesting(false)
+                        }
+                    }
                     .padding(.leading, 16)
                     .padding(.trailing, 42)
                     .padding(.vertical, 11)
@@ -956,7 +960,8 @@ struct ChatView: View {
             .padding(.bottom, 6)
             if showStickers {
                 StickerPanel(onSend: { ref, silent in Task { await sendSticker(ref, silent: silent) } },
-                             onEmoji: { text += $0 })
+                             onEmoji: { text += $0 },
+                             onPremiumEmoji: { text += $0 })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -1348,6 +1353,13 @@ struct Bubble: View {
                             }
                     } else if isCardOnly, let k = m.kind {
                         cardBubble(k)
+                    } else if let refs = PremiumEmoji.onlyEmoji(m.text), m.kind == nil, m.photo == nil, m.forward == nil, m.reply == nil, m.deleted != true {
+                        // только анимированные эмодзи — крупно, без пузыря
+                        VStack(alignment: .trailing, spacing: 2) {
+                            BigEmojiRow(refs: refs)
+                            meta(on: true).padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(.black.opacity(0.3), in: Capsule())
+                        }
                     } else if bigEmoji, let e = onlyEmoji {
                         // «Крупные эмодзи»: 1–3 эмодзи без пузыря, как в Telegram
                         VStack(alignment: .trailing, spacing: 2) {
@@ -1435,7 +1447,7 @@ struct Bubble: View {
                     Capsule().fill(m.mine ? Color.black.opacity(0.45) : Color.lime).frame(width: 3)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(r.mine == true ? "Вы" : "Ответ").font(.caption.bold())
-                        Text(r.text ?? "").font(.caption).lineLimit(2)
+                        Text(PremiumEmoji.plain(r.text)).font(.caption).lineLimit(2)
                     }
                     .opacity(0.85)
                     .padding(.trailing, 6)
@@ -1467,7 +1479,15 @@ struct Bubble: View {
                     ChatCard(kind: k, card: m.card, mine: m.mine, embedded: true, messageId: m.id)
                         .padding(.horizontal, -6)
                 }
-                if let t = m.text, !t.isEmpty {
+                if let t = m.text, !t.isEmpty, PremiumEmoji.hasTokens(t) {
+                    // текст с анимированными эмодзи
+                    VStack(alignment: .trailing, spacing: 2) {
+                        EmojiMessageText(text: t, fontSize: style.fontSize, color: m.mine ? Color.onLime : Color.primary,
+                                         linkColor: m.mine ? Color.onLime : Color.limeInk)
+                        // место под время (оно рисуется поверх в правом нижнем углу)
+                        Color.clear.frame(width: 64, height: 12)
+                    }
+                } else if let t = m.text, !t.isEmpty {
                     // время встаёт в конец последней строки, пузырь — по ширине текста
                     (Text(Linkify.attributed(t, color: m.mine ? Color.onLime : Color.limeInk, underline: true)) + timeSpacer)
                         .font(.system(size: style.fontSize))
