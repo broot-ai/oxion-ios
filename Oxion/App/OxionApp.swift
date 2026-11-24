@@ -486,7 +486,7 @@ struct MainTabView: View {
             case .compose: ComposerView(request: ComposeRequest()) { _ in }
             case .progress: NavigationStack { ProgressHubView() }
             case .permissions: NavigationStack { PermissionsView() }
-            case .run: NavigationStack { RunTrackerView() }
+            case .run: NavigationStack { CardioHubView() }
             case .scanner: NavigationStack { LabelScannerView() }
             case .music: NavigationStack { WorkoutMusicView() }
             case .screenLock: NavigationStack { ScreenTimeLockView() }

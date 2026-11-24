@@ -152,8 +152,8 @@ struct DiaryView: View {
     private var quickActions: some View {
         HStack(spacing: 10) {
             quick("Тренировка", "plus") { newPreset = NewWorkoutPreset() }
-            NavigationLink { RunTrackerView() } label: {
-                quickLabel("Пробежка", "figure.run")
+            NavigationLink { CardioHubView() } label: {
+                quickLabel("Кардио", "figure.run")
             }
             .buttonStyle(.plain)
             quick("Повторить", "arrow.clockwise") {

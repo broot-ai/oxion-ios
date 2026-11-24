@@ -101,7 +101,8 @@ struct ProfileView: View {
                     nav("Рекорды и достижения", "trophy.fill", Color(hex: 0xF0A030)) { RecordsView() }
                     nav("Медали", "medal.fill", Color(hex: 0xFFB000)) { MedalsView() }
                     nav("Челленджи", "flag.checkered", Color(hex: 0x3FD6C9)) { ChallengesView() }
-                    nav("Пробежка с GPS", "figure.run", Color(hex: 0x58F670)) { RunTrackerView() }
+                    nav("Кардио: бег, ходьба, вело", "figure.run", Color(hex: 0x58F670)) { CardioHubView() }
+                    nav("Карта маршрута (GPS)", "map.fill", Color(hex: 0x3FD6C9)) { RunTrackerView() }
                 }
                 Section("Питание") {
                     nav("Сканер еды", "text.viewfinder", Color(hex: 0x3FD6C9)) { LabelScannerView() }
@@ -242,7 +243,7 @@ struct ProfileView: View {
             list.append(OxSearchItem("План на 4 недели", I, "calendar.badge.plus", Color.lime, ["план", "программа", "4 недели", "gym strength", "ии", "тренировки на месяц"], push: { ProgramBuilderView() }))
             list.append(OxSearchItem("Что нового", I, "sparkles.rectangle.stack", Color.lime, ["новое", "обновление", "что нового"], run: { model.sheet = .whatsNew }))
             list.append(OxSearchItem("Карта", I, "map.fill", Color(hex: 0x3FD6C9), ["карта", "залы", "спортзал", "фитнес", "стадион", "бассейн", "спортпит", "магазин", "рядом", "map"], run: { model.showMap = true }))
-            list.append(OxSearchItem("Пробежка с GPS", I, "figure.run", Color(hex: 0x58F670), ["бег", "gps", "карта", "маршрут", "run", "кардио", "пробежка", "километры"], push: { RunTrackerView() }))
+            list.append(OxSearchItem("Пробежка с GPS", I, "figure.run", Color(hex: 0x58F670), ["бег", "gps", "карта", "маршрут", "run", "кардио", "пробежка", "километры"], push: { CardioHubView() }))
             list.append(OxSearchItem("Дневник питания", I, "fork.knife", Color(hex: 0x58C770), ["питание", "калории", "еда", "кбжу", "рацион"], push: { FoodDiaryView() }))
         list.append(OxSearchItem("Сканер еды", I, "text.viewfinder", Color(hex: 0x3FD6C9), ["калории", "бжу", "еда", "питание", "состав", "сканер", "продукты", "белок"], push: { LabelScannerView() }))
             list.append(OxSearchItem("Будильники", I, "alarm.fill", Color(hex: 0xF0A030), ["будильник", "напоминания", "alarm", "утро", "подъем"], push: { AlarmSettingsView() }))

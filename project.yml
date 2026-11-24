@@ -97,6 +97,7 @@ targets:
         UIBackgroundModes:
           - fetch
           - location
+          - workout-processing
         BGTaskSchedulerPermittedIdentifiers:
           - ru.oxion.app.refresh
         UIApplicationShortcutItems:
