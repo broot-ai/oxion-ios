@@ -23,15 +23,23 @@ private struct ShieldRepresentable<Content: View>: UIViewRepresentable {
     let content: Content
 
     func makeUIView(context: Context) -> ShieldView {
-        let host = UIHostingController(rootView: AnyView(content.environment(\.colorScheme, .dark).tint(Color.lime).modifier(InAppBrowserLinks())))
+        let host = UIHostingController(rootView: wrapped(context))
         host.view.backgroundColor = .clear
-        host.safeAreaRegions = []
+        // безопасные отступы (шапка, поле ввода, полоска «домой») сохраняем — иначе сообщения уходят под панели
+        host.sizingOptions = []
         context.coordinator.host = host
         return ShieldView(hosted: host.view)
     }
 
     func updateUIView(_ uiView: ShieldView, context: Context) {
-        context.coordinator.host?.rootView = AnyView(content.environment(\.colorScheme, .dark).tint(Color.lime).modifier(InAppBrowserLinks()))
+        context.coordinator.host?.rootView = wrapped(context)
+    }
+
+    private func wrapped(_ context: Context) -> AnyView {
+        AnyView(content
+            .environment(\.colorScheme, context.environment.colorScheme)
+            .tint(Color.lime)
+            .modifier(InAppBrowserLinks()))
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -48,8 +56,10 @@ final class ShieldView: UIView {
         field.isSecureTextEntry = true
         field.layoutIfNeeded()
         let container: UIView
+        backgroundColor = .clear
         if let canvas = field.subviews.first {
             canvas.subviews.forEach { $0.removeFromSuperview() }
+            canvas.backgroundColor = .clear
             canvas.isUserInteractionEnabled = true
             container = canvas
             secured = true

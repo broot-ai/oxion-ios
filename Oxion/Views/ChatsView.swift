@@ -582,6 +582,20 @@ struct ChatView: View {
 
     private var shielded: Bool { protect?.on == true }
 
+    /// Мгновенно встать на последнее сообщение (несколько попыток — ленивый список дорисовывает высоты)
+    private func jumpToBottom(_ proxy: ScrollViewProxy, _ id: Int) {
+        var tr = Transaction()
+        tr.disablesAnimations = true
+        withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
+        Task {
+            for ms in [50, 150, 300] {
+                try? await Task.sleep(for: .milliseconds(ms))
+                withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
+            }
+            withAnimation(.easeOut(duration: 0.15)) { didInitialScroll = true }
+        }
+    }
+
     var body: some View {
         ScreenShield(enabled: shielded) {
         ScrollViewReader { proxy in
@@ -669,7 +683,6 @@ struct ChatView: View {
                 fwdDrag = id
                 fwdPending = nil
             }, onEnd: { fwdPending = nil }))
-            .background { ChatWallpaperBackground() }
             // как в Telegram: сверху нет плашки, переписка мягко растворяется под шапкой
             .scrollEdgeEffectStyle(.soft, for: .top)
             .overlay(alignment: .top) {
@@ -684,21 +697,35 @@ struct ChatView: View {
             .onChange(of: messages.last?.id) { old, new in
                 guard let id = new else { return }
                 if !didInitialScroll {
-                    var tr = Transaction()
-                    tr.disablesAnimations = true
-                    withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(60))
-                        withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
-                        withAnimation(.easeOut(duration: 0.15)) { didInitialScroll = true }
-                    }
+                    jumpToBottom(proxy, id)
                 } else {
                     withAnimation { proxy.scrollTo(id, anchor: .bottom) }
                 }
             }
+            // сообщения уже были (из кэша) — onChange не сработает, прокручиваем при появлении
+            .onAppear {
+                if let id = messages.last?.id, !didInitialScroll { jumpToBottom(proxy, id) }
+            }
+            // защита включилась/выключилась — переписка перестраивается, снова встаём вниз
+            .onChange(of: shielded) {
+                if let id = messages.last?.id {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(80))
+                        var tr = Transaction(); tr.disablesAnimations = true
+                        withTransaction(tr) { proxy.scrollTo(id, anchor: .bottom) }
+                    }
+                }
+            }
+            .task {
+                // страховка: переписка никогда не остаётся невидимой
+                try? await Task.sleep(for: .milliseconds(700))
+                if !didInitialScroll { didInitialScroll = true }
+            }
         }
         .environment(chats)
         }
+        // обои снаружи защищённого слоя: там не работают шейдеры и размытие (было чёрное), а на скриншот они и так могут попасть
+        .background { ChatWallpaperBackground() }
         .overlay {
             if let id = fwdDrag {
                 ForwardDragPanel(currentChatId: chatId, messageId: id) { fwdDrag = nil }

@@ -35,7 +35,6 @@ struct ChatPeerProfileView: View {
     @State private var user: FUser?
     @State private var posts: [FeedItem] = []
     @State private var tab = 0
-    @State private var pull: CGFloat = 0
     @State private var searching = false
     @State private var query = ""
 
@@ -53,7 +52,6 @@ struct ChatPeerProfileView: View {
             }
             .padding(.bottom, 40)
         }
-        .onScrollGeometryChange(for: CGFloat.self) { g in -(g.contentOffset.y + g.contentInsets.top) } action: { _, v in pull = max(0, v) }
         .ignoresSafeArea(edges: .top)
         .background(Color.oxBg)
         .navigationBarTitleDisplayMode(.inline)
@@ -65,7 +63,7 @@ struct ChatPeerProfileView: View {
     // MARK: большое фото
 
     private var header: some View {
-        let h: CGFloat = 430 + pull
+        let h: CGFloat = 430
         return ZStack(alignment: .bottomLeading) {
             Group {
                 if let u = API.media(peer.photo ?? user?.photo) {
@@ -79,6 +77,11 @@ struct ChatPeerProfileView: View {
             .frame(maxWidth: .infinity)
             .frame(height: h)
             .clipped()
+            // оттянули вниз — фото растягивается вверх; размеры вёрстки не меняются, поэтому ничего не дёргается
+            .visualEffect { c, proxy in
+                let y = proxy.frame(in: .scrollView(axis: .vertical)).minY
+                return c.scaleEffect(y > 0 ? 1 + y / h : 1, anchor: .bottom)
+            }
             LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -98,8 +101,6 @@ struct ChatPeerProfileView: View {
             .padding(.bottom, 16)
         }
         .frame(height: h)
-        .offset(y: -pull)
-        .padding(.bottom, -pull)
     }
 
     // MARK: кнопки как в Telegram
