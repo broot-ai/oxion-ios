@@ -58,7 +58,6 @@ targets:
           UIImageRespectsSafeAreaInsets: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        UIUserInterfaceStyle: Dark
         LSApplicationQueriesSchemes:
           - tg
         NSSupportsLiveActivities: true
