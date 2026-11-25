@@ -3828,3 +3828,15 @@
 "Эта ссылка открывает ваш профиль:" = "This link opens your profile:";
 "Пользователь не найден" = "User not found";
 "возможно, имя изменили или освободили." = "the username may have been changed or released.";
+"Поблизости" = "Nearby";
+"рядом · уточняем расстояние" = "nearby · measuring distance";
+"Вас видят только те, у кого тоже открыт экран «Рядом». Точное расстояние и направление — на iPhone 11 и новее (кроме SE), когда UWB есть у обоих. Данные не отправляются на сервер." = "Only people who also have Nearby open can see you. Precise distance and direction work on iPhone 11 and later (except SE) when both have UWB. Nothing is sent to the server.";
+"впереди" = "ahead";
+"позади" = "behind";
+"справа" = "to the right";
+"слева" = "to the left";
+"Вы почти на месте" = "You’re almost there";
+"Медленно поворачивайтесь — уточняем направление" = "Turn slowly — finding direction";
+"Идите по стрелке" = "Follow the arrow";
+"расстояние" = "distance";
+"Открыть профиль" = "Open profile";
