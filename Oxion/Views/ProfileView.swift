@@ -264,6 +264,7 @@ struct ProfileView: View {
         list.append(OxSearchItem("Изменить мой профиль", S, "person.crop.circle.badge.pencil", Color.lime, ["профиль", "аватар", "имя", "телефон", "номер"], push: { EditMyProfileView() }))
         list.append(OxSearchItem("Oxion Premium", S, "star.circle.fill", Color(hex: 0xFFB000), ["премиум", "подписка", "подарок", "подарить", "premium"], push: { PremiumView() }))
         list.append(OxSearchItem("Конфиденциальность и безопасность", S, "hand.raised.fill", Color(hex: 0x3B8CF5), ["откровенные", "деликатный", "камера", "геопозиция", "приватность", "безопасность"], push: { SafetyView() }))
+        list.append(OxSearchItem("Сообщения", S, "bubble.left.and.bubble.right.fill", Color(hex: 0x34C759), ["запросы", "кто может писать", "сообщения", "незнакомцы", "спам", "директ"], push: { MessageSettingsView() }))
         list.append(OxSearchItem("Уведомления", S, "bell.badge.fill", Color(hex: 0xFF5A4E), ["push", "пуши", "оповещения", "уведомления"], push: { NotificationSettingsView() }))
             list.append(OxSearchItem("Умные уведомления", S, "bell.and.waves.left.and.right", Color(hex: 0xFF5A4E), ["напоминания", "умные", "уведомления"], push: { SmartNotifySettingsView() }))
             list.append(OxSearchItem("Оформление", S, "paintbrush.fill", Color(hex: 0x8E7CFF), ["тема", "темная", "светлая", "иконка приложения", "шрифт", "размер текста", "пузыри", "цвет"], push: { AppearanceSettingsView() }))
@@ -515,6 +516,7 @@ struct AppSettingsHubView: View {
             }
             Section {
                 link("Конфиденциальность и безопасность", "hand.raised.fill", Color(hex: 0x3B8CF5)) { SafetyView() }
+                link("Сообщения", "bubble.left.and.bubble.right.fill", Color(hex: 0x34C759)) { MessageSettingsView() }
                 link("Доступы и разрешения", "checkmark.shield.fill", Color(hex: 0x0A84FF)) { PermissionsView() }
                 link("Ключи входа · \(Biometry.name)", Biometry.icon, Color(hex: 0x58C770)) { LoginKeysView() }
             }

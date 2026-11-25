@@ -3843,3 +3843,23 @@
 "Звук — удерживайте. Видео — нажмите." = "Maintenez pour l’audio. Touchez pour la vidéo.";
 "Видео — удерживайте. Звук — нажмите." = "Maintenez pour la vidéo. Touchez pour l’audio.";
 "Влево — отмена" = "Glisser pour annuler";
+
+/* Запросы на переписку */
+"Запросы на переписку" = "Demandes de message";
+"Скрытые запросы" = "Demandes masquées";
+"новый запрос" = "nouvelle demande";
+"новых запроса" = "nouvelles demandes";
+"новых запросов" = "nouvelles demandes";
+"Запросы" = "Demandes";
+"Скрыто" = "Masqué";
+"Нет запросов" = "Aucune demande";
+"Нет скрытых запросов" = "Aucune demande masquée";
+"Подписан(а) на вас" = "Vous suit";
+"Кто может отправлять вам сообщения" = "Qui peut vous envoyer des messages";
+"Только те, на кого вы подписаны" = "Seulement les personnes que vous suivez";
+"Как работают запросы\nна переписку" = "Comment fonctionnent\nles demandes de message";
+"Вы сами решаете, какие запросы принять" = "Vous décidez quelles demandes accepter";
+"Вы можете отключить запросы" = "Vous pouvez désactiver les demandes";
+"Запрос на переписку отправлен" = "Demande de message envoyée";
+"Заблокировать?" = "Bloquer ?";
+"Этот человек больше не сможет вам писать." = "Cette personne ne pourra plus vous écrire.";

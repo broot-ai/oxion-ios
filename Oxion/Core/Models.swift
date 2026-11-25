@@ -406,7 +406,7 @@ struct ChatItem: Decodable, Identifiable {
     let lastId: Int?
 }
 
-struct ChatsResponse: Decodable { let items: [ChatItem] }
+struct ChatsResponse: Decodable { let items: [ChatItem]; var requests: ReqCounts? = nil }
 
 struct MsgReply: Decodable { let id: Int?; let mine: Bool?; let text: String? }
 struct MsgReaction: Decodable, Hashable { let emoji: String; let n: Int; let mine: Bool? }
@@ -441,6 +441,7 @@ struct ChatDetail: Decodable {
     var group: GroupInfo? = nil
     var senders: [GSender]? = nil
     var serverNow: Double? = nil
+    var request: ChatRequestState? = nil
 }
 
 // MARK: - Группы и каналы

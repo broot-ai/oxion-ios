@@ -3843,3 +3843,23 @@
 "Звук — удерживайте. Видео — нажмите." = "Hold to record audio. Tap for video.";
 "Видео — удерживайте. Звук — нажмите." = "Hold to record video. Tap for audio.";
 "Влево — отмена" = "Slide to cancel";
+
+/* Запросы на переписку */
+"Запросы на переписку" = "Message requests";
+"Скрытые запросы" = "Hidden requests";
+"новый запрос" = "new request";
+"новых запроса" = "new requests";
+"новых запросов" = "new requests";
+"Запросы" = "Requests";
+"Скрыто" = "Hidden";
+"Нет запросов" = "No requests";
+"Нет скрытых запросов" = "No hidden requests";
+"Подписан(а) на вас" = "Follows you";
+"Кто может отправлять вам сообщения" = "Who can message you";
+"Только те, на кого вы подписаны" = "Only people you follow";
+"Как работают запросы\nна переписку" = "How message\nrequests work";
+"Вы сами решаете, какие запросы принять" = "You decide which requests to accept";
+"Вы можете отключить запросы" = "You can turn off requests";
+"Запрос на переписку отправлен" = "Message request sent";
+"Заблокировать?" = "Block?";
+"Этот человек больше не сможет вам писать." = "This person won't be able to message you.";

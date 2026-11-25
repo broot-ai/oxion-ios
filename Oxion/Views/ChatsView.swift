@@ -9,6 +9,8 @@ import UserNotifications
 @Observable
 final class ChatsStore {
     var items: [ChatItem] = []
+    /// запросы на переписку от незнакомых — отдельно от чатов
+    var requests = ReqCounts()
     var loading = false
     var loaded = false
     var errorText: String?
@@ -45,6 +47,7 @@ final class ChatsStore {
         do {
             let r: ChatsResponse = try await API.call("/chats")
             items = r.items
+            if let q = r.requests, q != requests { requests = q }
             errorText = nil
             AppBadge.update(items)
             LocalChatNotifier.markSeen(r.items)
@@ -137,7 +140,7 @@ struct ChatsView: View {
     @State private var newChat = false
     @State private var stories = StoriesStore.shared
 
-    enum ChatRoute: Hashable { case chat(ChatRef), archive, ai }
+    enum ChatRoute: Hashable { case chat(ChatRef), archive, ai, requests }
 
     private var filtered: [ChatItem] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -164,6 +167,11 @@ struct ChatsView: View {
                     Button { path.append(.ai) } label: { AIChatRow() }
                         .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 14))
                         .listSectionSeparator(.hidden, edges: .top)
+                        .selectionDisabled()
+                }
+                if ((store.requests.pending ?? 0) + (store.requests.hidden ?? 0)) > 0 && query.isEmpty && !editing {
+                    Button { path.append(.requests) } label: { RequestsEntryRow(counts: store.requests) }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 14))
                         .selectionDisabled()
                 }
                 if !store.archived.isEmpty && query.isEmpty && !editing {
@@ -257,6 +265,7 @@ struct ChatsView: View {
                 case .chat(let ref): ChatView(chatId: ref.id, title: ref.name)
                 case .archive: ArchivedChatsView { path.append(.chat($0)) }
                 case .ai: AICoachView()
+                case .requests: MessageRequestsView { path.append(.chat($0)) }
                 }
             }
             .sheet(isPresented: $newChat) {
@@ -576,6 +585,7 @@ struct ChatView: View {
     @State private var messages: [Message] = []
     @State private var peer: Peer?
     @State private var peerReadId = 0
+    @State private var request: ChatRequestState?
     @AppStorage("chat.quickReaction") private var quickReaction = "❤️"
     /// удаляемые сообщения: распадаются на частицы, потом исчезают
     @State private var dissolving: [Int: Date] = [:]
@@ -794,8 +804,23 @@ struct ChatView: View {
         .safeAreaInset(edge: .bottom) {
             if let g = group, g.canPost != true {
                 channelBar
+            } else if request?.state == "incoming" {
+                IncomingRequestBar(name: peer?.name ?? title, chatId: chatId) { action in
+                    if action == "accept" {
+                        withAnimation(.snappy) { request = nil }
+                        Task { await chats.load() }
+                    } else {
+                        Task { await chats.load() }
+                        dismiss()
+                    }
+                }
             } else {
-                inputBar
+                VStack(spacing: 6) {
+                    if let r = request, r.state == "outgoing" {
+                        OutgoingRequestNote(left: r.left ?? 0, limit: r.limit ?? 3)
+                    }
+                    inputBar
+                }
             }
         }
         .navigationTitle(peer?.name ?? title)
@@ -1030,6 +1055,7 @@ struct ChatView: View {
             for s in r.senders ?? [] { senders[s.id] = s }
             if let p = r.protect { protect = p }
             peerReadId = r.peerReadId ?? peerReadId
+            if r.request != request { withAnimation(.snappy) { request = r.request } }
             if let n = r.serverNow { since = n - 2000 }
             if after == 0 {
                 // удалённые не показываем вовсе — без «Сообщение удалено»
