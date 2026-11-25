@@ -3823,3 +3823,8 @@
 "неактивно" = "inaktiv";
 "Порядок" = "Reihenfolge";
 "Доступно только владельцам и администраторам. Активные имена видны в профиле, и по ним вас можно найти. Порядок меняется перетаскиванием." = "Nur für Inhaber und Admins. Aktive Namen sind im Profil sichtbar und auffindbar. Zum Sortieren ziehen.";
+"Скопировать имя" = "Namen kopieren";
+"также" = "auch";
+"Эта ссылка открывает ваш профиль:" = "Dieser Link öffnet dein Profil:";
+"Пользователь не найден" = "Benutzer nicht gefunden";
+"возможно, имя изменили или освободили." = "der Name wurde evtl. geändert oder freigegeben.";

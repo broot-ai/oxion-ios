@@ -88,8 +88,23 @@ struct UsernameSettingsView: View {
                     Text(st?.privileged == true
                          ? "Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Как владельцу или администратору, вам доступны имена от 1 символа."
                          : "Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Минимальная длина — 5 символов.")
-                    if !trimmed.isEmpty, case .ok = status {
-                        Text("По этому имени вас найдут в поиске: **@\(trimmed)**")
+                    if !original.isEmpty && trimmed == original {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Эта ссылка открывает ваш профиль:")
+                            HStack(spacing: 14) {
+                                Button {
+                                    UIPasteboard.general.string = ProfileLink.string(original)
+                                    Haptic.success()
+                                    OxAlert.show(icon: "link", title: String(localized: "Ссылка скопирована"))
+                                } label: {
+                                    Text(ProfileLink.short(original)).foregroundStyle(Color.limeInk).lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                ShareLink(item: ProfileLink.url(original)) {
+                                    Image(systemName: "square.and.arrow.up").foregroundStyle(Color.limeInk)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -281,5 +296,41 @@ struct UsernameSettingsView: View {
 
     private func saveOrder() async {
         let _: UsernameState? = try? await API.call("/usernames/extra/order", method: "POST", body: ["order": extras.map { $0.username }])
+    }
+}
+
+// MARK: - Ссылка на профиль по имени: …/@username (как t.me/username)
+
+extension Notification.Name {
+    static let oxionOpenRoute = Notification.Name("oxionOpenRoute")
+}
+
+enum ProfileLink {
+    /// полная ссылка для «Поделиться»
+    static func url(_ username: String) -> URL {
+        URL(string: AppSettings.serverURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/@" + username)!
+    }
+    static func string(_ username: String) -> String { url(username).absoluteString }
+    /// красиво для подписи: fit-app…/@name
+    static func short(_ username: String) -> String {
+        (AppSettings.serverURL.host ?? "oxion") + "/@" + username
+    }
+
+    /// маршрут внутри приложения для своей ссылки: oxion://u/имя, oxion://user/12, https://наш-сервер/@имя, …/u/имя
+    static func route(for url: URL) -> String? {
+        let scheme = url.scheme?.lowercased() ?? ""
+        if scheme == "oxion" {
+            let host = url.host ?? ""
+            let rest = url.pathComponents.filter { $0 != "/" }
+            if (host == "u" || host == "user"), let first = rest.first { return host + "/" + first }
+            if host.hasPrefix("@") { return "u/" + host.dropFirst() }
+            return nil
+        }
+        guard scheme == "http" || scheme == "https",
+              let h = url.host?.lowercased(), h == AppSettings.serverURL.host?.lowercased() else { return nil }
+        let p = url.pathComponents.filter { $0 != "/" }
+        if p.count == 1, p[0].hasPrefix("@"), p[0].count > 1 { return "u/" + p[0].dropFirst() }
+        if p.count == 2, p[0] == "u" { return "u/" + p[1] }
+        return nil
     }
 }

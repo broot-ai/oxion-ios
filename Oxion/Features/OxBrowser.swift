@@ -1023,6 +1023,25 @@ enum Linkify {
             a[lo..<hi].link = u
             if let color { a[lo..<hi].foregroundColor = color }
         }
+        addMentions(&a, color: color)
+    }
+
+    private static let mention = try? NSRegularExpression(pattern: "(?<![A-Za-z0-9_@/])@([A-Za-z][A-Za-z0-9_]{0,31})")
+
+    /// @имя в тексте — ссылка на профиль, как в Telegram
+    static func addMentions(_ a: inout AttributedString, color: Color? = nil) {
+        guard let re = mention else { return }
+        let s = String(a.characters)
+        let ns = s as NSString
+        for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            guard let r = Range(m.range, in: s), let nr = Range(m.range(at: 1), in: s),
+                  let u = URL(string: "oxion://u/" + s[nr]) else { continue }
+            let lo = a.characters.index(a.startIndex, offsetBy: s.distance(from: s.startIndex, to: r.lowerBound))
+            let hi = a.characters.index(lo, offsetBy: s.distance(from: r.lowerBound, to: r.upperBound))
+            if a[lo..<hi].runs.contains(where: { $0.link != nil }) { continue }
+            a[lo..<hi].link = u
+            if let color { a[lo..<hi].foregroundColor = color }
+        }
     }
 
     static func attributed(_ s: String, color: Color? = nil, underline: Bool = false) -> AttributedString {
@@ -1037,6 +1056,7 @@ enum Linkify {
             if let color { out[lo..<hi].foregroundColor = color }
             if underline { out[lo..<hi].underlineStyle = .single }
         }
+        addMentions(&out, color: color)
         return out
     }
 }
@@ -1045,6 +1065,11 @@ enum Linkify {
 struct InAppBrowserLinks: ViewModifier {
     func body(content: Content) -> some View {
         content.environment(\.openURL, OpenURLAction { url in
+            // свои ссылки: oxion://u/имя и …/@имя — открываем профиль прямо в приложении
+            if let r = ProfileLink.route(for: url) {
+                NotificationCenter.default.post(name: .oxionOpenRoute, object: r)
+                return .handled
+            }
             guard OxBrowser.enabled, let s = url.scheme?.lowercased(), s == "http" || s == "https" else { return .systemAction }
             // ссылки Telegram — сразу в приложение Telegram, не во внутренний браузер
             if OxBrowser.isTelegram(url) { return .systemAction }

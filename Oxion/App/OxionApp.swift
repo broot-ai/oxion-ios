@@ -73,7 +73,11 @@ struct OxionApp: App {
                 .modifier(AppTextSize())
                 // ссылки открываются во встроенном браузере, как в Telegram
                 .modifier(InAppBrowserLinks())
+                .onReceive(NotificationCenter.default.publisher(for: .oxionOpenRoute)) { n in
+                    if let r = n.object as? String { model.handle(route: r) }
+                }
                 .onOpenURL { url in
+                    if let r = ProfileLink.route(for: url) { model.handle(route: r); return }
                     // ссылки из виджетов и Live Activity: oxion://diary, oxion://trainer/15 …
                     let route = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/")
                     model.handle(route: route)
@@ -85,6 +89,7 @@ struct OxionApp: App {
                 // универсальные ссылки …/clip/trainer/34, …/clip/tag/<id> (QR и NFC в зале), если OXION уже установлен
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { a in
                     guard let u = a.webpageURL else { return }
+                    if let r = ProfileLink.route(for: u) { model.handle(route: r); return }
                     let p = u.pathComponents.filter { $0 != "/" }
                     guard let i = p.firstIndex(of: "clip"), p.count > i + 2 else { return }
                     switch p[i + 1] {
@@ -166,6 +171,8 @@ final class AppModel {
     var showCatalog = false
     var offerLoginKey = false
     var exerciseBox: IdBox?
+    /// профиль, открытый по ссылке …/@имя или упоминанию @имя
+    var profileBox: IdBox?
 
     struct IdBox: Identifiable { let id: Int }
 
@@ -240,6 +247,22 @@ final class AppModel {
         case "trainer":
             selectedTab = .trainers
             if parts.count > 1, let id = Int(parts[1]), id > 0 { openTrainerId = id }
+        case "user" where parts.count > 1:
+            if let id = Int(parts[1]), id > 0 { profileBox = IdBox(id: id) }
+        case "u" where parts.count > 1:
+            let name = parts[1].replacingOccurrences(of: "@", with: "")
+            struct R: Decodable { let id: Int }
+            Task {
+                do {
+                    let r: R = try await API.call("/usernames/resolve/" + name)
+                    OxHaptics.play(.select)
+                    profileBox = IdBox(id: r.id)
+                } catch {
+                    OxAlert.show(icon: "person.crop.circle.badge.questionmark", tint: .orange,
+                                 title: String(localized: "Пользователь не найден"),
+                                 message: "@\(name) — " + String(localized: "возможно, имя изменили или освободили."))
+                }
+            }
         default: selectedTab = .home
         }
     }
@@ -540,6 +563,12 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $model.offerLoginKey) { LoginKeyOfferSheet() }
         .sheet(item: $model.exerciseBox) { b in ExerciseSheet(id: b.id) }
+        .sheet(item: $model.profileBox) { b in
+            NavigationStack {
+                UserProfileView(userId: b.id)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.profileBox = nil } } }
+            }
+        }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }
         .sheet(item: $model.bookTrainer) { b in BookingSheet(trainerId: b.id, trainerName: model.bookTrainerName) }
         .onChange(of: chats.unread) { QuickActions.update(unread: chats.unread) }

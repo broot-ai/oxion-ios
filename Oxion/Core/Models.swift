@@ -165,6 +165,8 @@ struct FUser: Decodable {
     let pinned: Post?
     var note: String? = nil
     var todo: [FTodo]? = nil
+    var username: String? = nil
+    var usernames: [String]? = nil
 }
 
 struct FPerson: Decodable, Identifiable {

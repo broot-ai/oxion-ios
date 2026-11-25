@@ -86,7 +86,7 @@ struct UserProfileView: View {
                                 Task { await toggle("block", !(u.blocked ?? false)) }
                             }
                         } label: { Label(u.blocked == true ? "Разблокировать" : "Заблокировать", systemImage: "hand.raised") }
-                        ShareLink(item: AppSettings.serverURL.absoluteString + "/#u/\(u.id)") { Label("Поделиться профилем", systemImage: "square.and.arrow.up") }
+                        ShareLink(item: (u.username.map { ProfileLink.string($0) } ?? AppSettings.serverURL.absoluteString + "/#u/\(u.id)")) { Label("Поделиться профилем", systemImage: "square.and.arrow.up") }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
@@ -114,6 +114,26 @@ struct UserProfileView: View {
                     HStack(spacing: 6) {
                         Text(u.name ?? "").font(.title.bold())
                         if u.trainer == true { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk) }
+                    }
+                    if let un = u.username {
+                        Menu {
+                            Button {
+                                UIPasteboard.general.string = ProfileLink.string(un)
+                                Haptic.success()
+                            } label: { Label("Скопировать ссылку", systemImage: "link") }
+                            Button {
+                                UIPasteboard.general.string = "@" + un
+                                Haptic.success()
+                            } label: { Label("Скопировать имя", systemImage: "at") }
+                            ShareLink(item: ProfileLink.url(un)) { Label("Поделиться", systemImage: "square.and.arrow.up") }
+                        } label: {
+                            Text("@" + un).font(.subheadline.weight(.medium)).foregroundStyle(Color.limeInk)
+                        }
+                        let more = (u.usernames ?? []).dropFirst()
+                        if !more.isEmpty {
+                            Text(String(localized: "также") + " " + more.map { "@" + $0 }.joined(separator: ", "))
+                                .font(.caption).foregroundStyle(Color.oxHint).lineLimit(2)
+                        }
                     }
                     if let c = u.city { Label(c, systemImage: "mappin").font(.subheadline).foregroundStyle(Color.oxHint) }
                 }
@@ -144,7 +164,7 @@ struct UserProfileView: View {
                         Label("Моя визитка", systemImage: "qrcode").frame(maxWidth: .infinity).padding(.vertical, 4)
                     }
                     .buttonStyle(.glass)
-                    ShareLink(item: AppSettings.serverURL.absoluteString + "/#u/\(u.id)") {
+                    ShareLink(item: (u.username.map { ProfileLink.string($0) } ?? AppSettings.serverURL.absoluteString + "/#u/\(u.id)")) {
                         Label("Поделиться", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity).padding(.vertical, 4)
                     }
                     .buttonStyle(.glass)
