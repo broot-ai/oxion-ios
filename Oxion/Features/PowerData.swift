@@ -314,6 +314,9 @@ struct OxRemoteImage<Placeholder: View>: View {
         let shown = img ?? url.flatMap { u in
             (!gated || SensitiveGuard.shared.cached(u) == false) ? MediaLoader.shared.cached(u, maxPixel: maxPixel) : nil
         }
+        // Color.clear занимает ровно отведённое место, фото заполняет его и обрезается по краям —
+        // иначе «заполняющая» картинка раздвигает карточку и всю страницу вбок
+        Color.clear.overlay {
         ZStack {
             if let img = shown {
                 Image(uiImage: img).resizable().scaledToFill()
@@ -341,6 +344,8 @@ struct OxRemoteImage<Placeholder: View>: View {
                 }
             }
         }
+        }
+        .clipped()
         .task(id: url) { await fetch(force: false) }
     }
 

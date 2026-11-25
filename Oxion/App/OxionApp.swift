@@ -70,15 +70,6 @@ struct OxionApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                // анимация запуска OXION Pulse — поверх интерфейса, один раз за запуск
-                .overlay {
-                    if PulseLaunch.shared.visible {
-                        PulseLaunchView(ready: !model.isLoading) {
-                            PulseLaunch.shared.visible = false
-                        }
-                        .transition(.identity)
-                    }
-                }
                 .modifier(AppTextSize())
                 // ссылки открываются во встроенном браузере, как в Telegram
                 .modifier(InAppBrowserLinks())

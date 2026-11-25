@@ -37,7 +37,6 @@ struct HomeView: View {
                     .reassembles(3)
                     todaySquares
                     if model.me?.mode != "trainer" { featuredBlock.reassembles(5) }
-                    FitnessPlusBanner { push = .fitnessPlus }.reassembles(6)
                     quickCards.reassembles(7)
                     todayBlock.reassembles(8)
                 }
@@ -67,7 +66,6 @@ struct HomeView: View {
                 case .challenges: ChallengesView()
                 case .records: RecordsView()
                 case .ecosystem: EcosystemView()
-                case .fitnessPlus: FitnessPlusView()
                 }
             }
             .reassemblyRefreshable { await load() }
@@ -453,7 +451,7 @@ struct HomeView: View {
     }
 }
 
-enum HomeRoute: Hashable { case pro, coach, health, challenges, records, ecosystem, fitnessPlus }
+enum HomeRoute: Hashable { case pro, coach, health, challenges, records, ecosystem }
 
 // MARK: - Элементы главной
 
@@ -666,51 +664,3 @@ struct RingsDetailSheet: View {
     }
 }
 
-/// Баннер OXION+ на главной
-struct FitnessPlusBanner: View {
-    var action: () -> Void
-    var body: some View {
-        Button(action: { Haptic.tap(); action() }) {
-            ZStack(alignment: .bottomLeading) {
-                HStack(spacing: 3) {
-                    FillImage(name: "fplus-2")
-                    FillImage(name: "fplus-4")
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 170)
-                LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "flame.fill").foregroundStyle(Color.lime)
-                            Text(verbatim: "OXION+").font(.title2.weight(.heavy))
-                        }
-                        Text("Тренировки с видео, программы, тренеры и музыка").font(.subheadline).foregroundStyle(.white.opacity(0.8))
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right.circle.fill").font(.title).foregroundStyle(Color.lime)
-                }
-                .foregroundStyle(.white)
-                .padding(16)
-            }
-            .frame(height: 170)
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// Картинка «заполнить и обрезать», которая НЕ раздувает родителя:
-/// размер задаёт контейнер, а картинка лишь рисуется поверх и обрезается
-struct FillImage: View {
-    let name: String
-    var flip = false
-    var body: some View {
-        Color.clear
-            .overlay {
-                Image(name).resizable().scaledToFill()
-                    .scaleEffect(x: flip ? -1 : 1, y: 1)
-            }
-            .clipped()
-    }
-}
