@@ -23,14 +23,26 @@ final class SegmentVoiceRecorder: NSObject {
 
     var duration: Double { done + (segStart.map { Date().timeIntervalSince($0) } ?? 0) }
 
-    func begin(fresh: Bool) async -> Bool {
-        if fresh {
-            guard await AVAudioApplication.requestRecordPermission() else {
-                OxAlert.show(icon: "mic.slash.fill", tint: .orange, title: "Нет доступа к микрофону", message: "Настройки → Oxion → Микрофон")
-                return false
-            }
-            segments = []; levels = []; done = 0
+    private var prepared: (AVAudioRecorder, URL)?
+    private var warming: Task<Void, Never>?
+
+    /// Заготовка в момент касания: сессия звука и файл готовы заранее, запись стартует мгновенно
+    func warmUp() {
+        guard prepared == nil, warming == nil, AVAudioApplication.shared.recordPermission == .granted else { return }
+        warming = Task { @MainActor in
+            defer { warming = nil }
+            _ = makeRecorder()
         }
+    }
+    /// Короткое нажатие — заготовка не понадобилась
+    func coolDown() {
+        guard !recording else { return }
+        if let p = prepared { p.0.deleteRecording(); prepared = nil }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    @discardableResult
+    private func makeRecorder() -> Bool {
+        if prepared != nil { return true }
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? s.setActive(true)
@@ -39,6 +51,26 @@ final class SegmentVoiceRecorder: NSObject {
                                        AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue]
         guard let r = try? AVAudioRecorder(url: u, settings: settings) else { return false }
         r.isMeteringEnabled = true
+        r.prepareToRecord()
+        prepared = (r, u)
+        return true
+    }
+
+    func begin(fresh: Bool) async -> Bool {
+        if fresh {
+            if AVAudioApplication.shared.recordPermission != .granted {
+                // первый раз iOS спросит доступ — после ответа нужно нажать ещё раз
+                guard await AVAudioApplication.requestRecordPermission() else {
+                    OxAlert.show(icon: "mic.slash.fill", tint: .orange, title: "Нет доступа к микрофону", message: "Настройки → Oxion → Микрофон")
+                    return false
+                }
+            }
+            segments = []; levels = []; done = 0
+        }
+        if let w = warming { await w.value }
+        guard makeRecorder(), let p = prepared else { return false }
+        let r = p.0, u = p.1
+        prepared = nil
         r.record()
         recorder = r
         segments.append(u)
@@ -136,6 +168,12 @@ final class ChatRecorder {
         Task { try? await Task.sleep(for: .seconds(2.4)); if tip == t { withAnimation(.easeOut(duration: 0.25)) { tip = nil } } }
     }
 
+    /// касание: заранее готовим микрофон, пока палец ещё не «удержал»
+    @ObservationIgnored var pressing = false
+    func touchDown() { pressing = true; if mode == .voice { voice.warmUp() } }
+    func touchUp() { pressing = false }
+    func touchCancelled() { if mode == .voice && phase == .idle { voice.coolDown() } }
+
     func begin() async {
         tip = nil
         if mode == .voice {
@@ -144,8 +182,12 @@ final class ChatRecorder {
             guard await video.prepare() else { return }
             video.start()
         }
-        Haptic.tap(.medium)
-        withAnimation(.spring(duration: 0.35, bounce: 0.35)) { phase = .holding }
+        // палец отпустили, пока микрофон включался, — тихо отменяем
+        guard pressing else {
+            if mode == .voice { voice.cancel() } else { video.stop { [weak self] _ in self?.video.shutdown() } }
+            return
+        }
+        withAnimation(.spring(duration: 0.3, bounce: 0.35)) { phase = .holding }
     }
 
     func lock() {
@@ -243,7 +285,7 @@ struct ChatMicButton: View {
     @State private var pressStart: Date?
     @State private var holdTask: Task<Void, Never>?
 
-    private let big: CGFloat = 84
+    private let big: CGFloat = 78
 
     var body: some View {
         ZStack {
@@ -289,9 +331,12 @@ struct ChatMicButton: View {
             .onChanged { v in
                 if pressStart == nil {
                     pressStart = Date()
+                    rec.touchDown()
                     holdTask = Task {
-                        try? await Task.sleep(for: .milliseconds(200))
-                        if !Task.isCancelled, pressStart != nil, rec.phase == .idle { await rec.begin() }
+                        try? await Task.sleep(for: .milliseconds(120))
+                        guard !Task.isCancelled, pressStart != nil, rec.phase == .idle else { return }
+                        Haptic.tap(.medium)
+                        await rec.begin()
                     }
                 }
                 guard rec.phase == .holding else { return }
@@ -300,11 +345,13 @@ struct ChatMicButton: View {
                 else if v.translation.width < -130 { rec.cancel() }
             }
             .onEnded { _ in
-                let short = (pressStart.map { Date().timeIntervalSince($0) } ?? 1) < 0.2
+                let short = (pressStart.map { Date().timeIntervalSince($0) } ?? 1) < 0.12
                 pressStart = nil
                 holdTask?.cancel()
+                rec.touchUp()
                 if rec.phase == .holding { rec.send() }
-                else if short && rec.phase == .idle { rec.toggleMode() }
+                else if short && rec.phase == .idle { rec.touchCancelled(); rec.toggleMode() }
+                else if rec.phase == .idle { rec.touchCancelled() }
                 if rec.phase != .locked { rec.drag = .zero }
             }
     }
@@ -340,7 +387,7 @@ struct ChatMicButton: View {
                     .allowsHitTesting(false)
             }
         }
-        .offset(x: 6, y: 0)
+        .frame(width: big, height: big)
     }
 
     @ViewBuilder private var topPill: some View {
