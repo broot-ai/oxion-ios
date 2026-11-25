@@ -683,6 +683,9 @@ struct ChatView: View {
                 fwdDrag = id
                 fwdPending = nil
             }, onEnd: { fwdPending = nil }))
+            // обои: без защиты — как раньше, внутри прокрутки (скругления при жестах навигации);
+            // с защитой — снаружи защищённого слоя, где шейдеры не работают
+            .background { if !shielded { ChatWallpaperBackground() } }
             // как в Telegram: сверху нет плашки, переписка мягко растворяется под шапкой
             .scrollEdgeEffectStyle(.soft, for: .top)
             .overlay(alignment: .top) {
@@ -725,7 +728,7 @@ struct ChatView: View {
         .environment(chats)
         }
         // обои снаружи защищённого слоя: там не работают шейдеры и размытие (было чёрное), а на скриншот они и так могут попасть
-        .background { ChatWallpaperBackground() }
+        .background { if shielded { ChatWallpaperBackground() } }
         .overlay {
             if let id = fwdDrag {
                 ForwardDragPanel(currentChatId: chatId, messageId: id) { fwdDrag = nil }

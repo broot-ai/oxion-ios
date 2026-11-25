@@ -191,92 +191,311 @@ extension NearbyManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate, M
 struct NearbyPeopleView: View {
     @Environment(AppModel.self) private var model
     @State private var m = NearbyManager()
-    @State private var pulse = false
+    @State private var focusId: MCPeerID?
+    @State private var lastBucket: Int?
+
+    private var focus: NearbyPeer? {
+        if let focusId, let p = m.peers.first(where: { $0.id == focusId }) { return p }
+        return nil
+    }
 
     var body: some View {
-        VStack(spacing: 18) {
-            radar
-                .frame(height: 300)
-                .padding(.top, 8)
-            if let e = m.errorText {
-                Label(e, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
-            }
-            if m.peers.isEmpty {
-                VStack(spacing: 6) {
-                    Text("Ищем пользователей OXION рядом…").font(.headline)
-                    Text("Попросите друга тоже открыть «Рядом». Точное расстояние и направление работают на iPhone 11 и новее (кроме SE) — с чипом UWB у обоих.")
-                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                }
-                .padding(.horizontal, 24)
+        ZStack {
+            // тёмный фон с мягким лаймовым свечением в центре
+            Color.black.ignoresSafeArea()
+            RadialGradient(colors: [Color.lime.opacity(glowLevel), .clear], center: .center, startRadius: 10, endRadius: 420)
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.6), value: glowLevel)
+
+            if let p = focus {
+                LocatorView(peer: p) { withAnimation(.spring(duration: 0.4)) { focusId = nil } }
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             } else {
-                List(m.peers) { p in
-                    NavigationLink {
-                        if let uid = p.userId { UserProfileView(userId: uid) } else { Text(p.name) }
-                    } label: { row(p) }
+                ScrollView {
+                    VStack(spacing: 22) {
+                        NearbyRadar(peers: m.peers, me: model.me) { p in
+                            Haptic.tap(.medium)
+                            withAnimation(.spring(duration: 0.45)) { focusId = p.id }
+                        }
+                        .frame(height: 340)
+                        .padding(.top, 6)
+
+                        if let e = m.errorText {
+                            Label(e, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+                        }
+                        if m.peers.isEmpty {
+                            VStack(spacing: 8) {
+                                Text("Ищем пользователей OXION рядом…").font(.headline)
+                                Text("Попросите друга тоже открыть «Рядом». Точное расстояние и направление работают на iPhone 11 и новее (кроме SE) — с чипом UWB у обоих.")
+                                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            }
+                            .padding(.horizontal, 28)
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(m.peers.sorted { ($0.distance ?? 99) < ($1.distance ?? 99) }) { p in card(p) }
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                    }
+                    .padding(.bottom, 30)
                 }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
+                .transition(.opacity)
             }
-            Spacer(minLength: 0)
         }
-        .navigationTitle("Рядом")
+        .preferredColorScheme(.dark)
+        .navigationTitle(focus == nil ? "Рядом" : (focus?.name ?? ""))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             m.start(uid: model.me?.id ?? 0, name: model.me?.name ?? model.me?.tgName ?? "OXION", photo: model.me?.photoUrl)
-            pulse = true
         }
         .onDisappear { m.stop() }
-    }
-
-    private var radar: some View {
-        GeometryReader { g in
-            let r = min(g.size.width, g.size.height) / 2 - 10
-            ZStack {
-                ForEach(0..<3) { i in
-                    Circle().stroke(Color.lime.opacity(0.18), lineWidth: 1)
-                        .frame(width: r * 2 * CGFloat(i + 1) / 3, height: r * 2 * CGFloat(i + 1) / 3)
-                }
-                Circle().fill(Color.lime.opacity(0.12))
-                    .frame(width: r * 2, height: r * 2)
-                    .scaleEffect(pulse ? 1 : 0.2)
-                    .opacity(pulse ? 0 : 0.8)
-                    .animation(.easeOut(duration: 2.2).repeatForever(autoreverses: false), value: pulse)
-                Avatar(url: API.media(model.me?.photoUrl), name: model.me?.name ?? "Я", size: 44)
-                ForEach(m.peers) { p in
-                    let d = CGFloat(min(p.distance ?? 6, 6)) / 6 * r
-                    let a = CGFloat(p.horizontalAngle ?? atan2(p.direction?.x ?? 0, -(p.direction?.z ?? -1)))
-                    VStack(spacing: 2) {
-                        Avatar(url: API.media(p.photo), name: p.name, size: 40)
-                            .overlay(Circle().stroke(Color.lime, lineWidth: 2))
-                        if let dist = p.distance {
-                            Text(String(format: "%.1f м", dist)).font(.caption2.bold().monospacedDigit())
-                                .padding(.horizontal, 6).padding(.vertical, 2).background(.ultraThinMaterial, in: Capsule())
-                        }
-                    }
-                    .offset(x: sin(a) * d, y: -cos(a) * d)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: p.distance)
-                }
+        // вибрация «теплее/холоднее»: каждые полметра — щелчок, совсем рядом — успех
+        .onChange(of: focus?.distance) { _, d in
+            guard let d else { return }
+            let b = Int(d / 0.5)
+            if let lb = lastBucket, b != lb {
+                if d < 0.5 { Haptic.success() } else { Haptic.tap(b < lb ? .medium : .light) }
             }
-            .frame(width: g.size.width, height: g.size.height)
+            lastBucket = b
         }
+        .onChange(of: focusId) { lastBucket = nil }
     }
 
-    private func row(_ p: NearbyPeer) -> some View {
+    /// чем ближе выбранный человек, тем ярче фон
+    private var glowLevel: Double {
+        guard let d = focus?.distance else { return 0.10 }
+        return 0.10 + 0.35 * Double(max(0, 1 - min(d, 8) / 8))
+    }
+
+    private func card(_ p: NearbyPeer) -> some View {
         HStack(spacing: 12) {
-            Avatar(url: API.media(p.photo), name: p.name, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
+            Avatar(url: API.media(p.photo), name: p.name, size: 48)
+                .overlay(Circle().stroke(Color.lime, lineWidth: 2))
+            VStack(alignment: .leading, spacing: 3) {
                 Text(p.name).font(.headline)
-                Text(p.distance.map { String(format: "%.1f м", $0) } ?? "рядом · расстояние уточняется")
+                Text(p.distance.map { NearbyFmt.dist($0) } ?? "рядом · расстояние уточняется")
                     .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
             }
             Spacer()
-            if p.direction != nil || p.horizontalAngle != nil {
-                let a = Double(p.horizontalAngle ?? atan2(p.direction?.x ?? 0, -(p.direction?.z ?? -1)))
+            if let a = NearbyFmt.angle(p) {
                 Image(systemName: "location.north.fill")
-                    .font(.title2).foregroundStyle(Color.limeInk)
+                    .font(.title3).foregroundStyle(Color.lime)
                     .rotationEffect(.radians(a))
                     .animation(.spring(response: 0.3), value: a)
             }
+            Button {
+                Haptic.tap(.medium)
+                withAnimation(.spring(duration: 0.45)) { focusId = p.id }
+            } label: {
+                Text("Найти").font(.subheadline.bold()).padding(.horizontal, 6)
+            }
+            .buttonStyle(.glassProminent).tint(Color.lime).foregroundStyle(Color.onLime)
+            if let uid = p.userId {
+                NavigationLink { UserProfileView(userId: uid) } label: {
+                    Image(systemName: "person.crop.circle").font(.title3)
+                }
+                .buttonStyle(.glass)
+            }
         }
+        .padding(12)
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+    }
+}
+
+enum NearbyFmt {
+    static func dist(_ d: Float) -> String {
+        d < 1 ? String(format: "%.0f см", d * 100) : String(format: "%.1f м", d).replacingOccurrences(of: ".", with: ",")
+    }
+    static func angle(_ p: NearbyPeer) -> Double? {
+        if let h = p.horizontalAngle { return Double(h) }
+        if let d = p.direction { return Double(atan2(d.x, -d.z)) }
+        return nil
+    }
+    /// 0…1 по радиусу радара: ближние метры растянуты
+    static func radius(_ d: Float?) -> CGFloat {
+        guard let d else { return 0.82 }
+        return CGFloat(min(1, sqrt(max(0, d) / 9)))
+    }
+}
+
+// MARK: - Радар
+
+struct NearbyRadar: View {
+    let peers: [NearbyPeer]
+    let me: Me?
+    var onPick: (NearbyPeer) -> Void
+
+    var body: some View {
+        GeometryReader { g in
+            let r = min(g.size.width, g.size.height) / 2 - 12
+            let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
+            ZStack {
+                // круги расстояний с подписями
+                ForEach([1, 3, 6, 9], id: \.self) { m in
+                    let rr = r * NearbyFmt.radius(Float(m))
+                    Circle().stroke(Color.lime.opacity(m == 9 ? 0.35 : 0.16), lineWidth: m == 9 ? 1.5 : 1)
+                        .frame(width: rr * 2, height: rr * 2)
+                    Text("\(m) м").font(.system(size: 9, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.lime.opacity(0.55))
+                        .offset(x: rr * 0.72, y: -rr * 0.72)
+                }
+                // деления по краю, как у компаса
+                ForEach(0..<36, id: \.self) { i in
+                    Capsule().fill(Color.lime.opacity(i % 9 == 0 ? 0.7 : 0.22))
+                        .frame(width: i % 9 == 0 ? 2 : 1, height: i % 9 == 0 ? 10 : 5)
+                        .offset(y: -r - 2)
+                        .rotationEffect(.degrees(Double(i) * 10))
+                }
+                // бегущий луч
+                TimelineView(.animation(minimumInterval: 1 / 30, paused: !PowerSaver.allowsNow(.interface))) { tl in
+                    let t = tl.date.timeIntervalSinceReferenceDate
+                    let ang = (t.truncatingRemainder(dividingBy: 3) / 3) * 360
+                    ZStack {
+                        AngularGradient(colors: [Color.lime.opacity(0.0), Color.lime.opacity(0.0), Color.lime.opacity(0.35)],
+                                        center: .center, startAngle: .degrees(0), endAngle: .degrees(90))
+                            .mask(Circle().frame(width: r * 2, height: r * 2))
+                            .rotationEffect(.degrees(ang - 90))
+                        Rectangle().fill(LinearGradient(colors: [Color.lime.opacity(0.9), .clear], startPoint: .bottom, endPoint: .top))
+                            .frame(width: 1.5, height: r)
+                            .offset(y: -r / 2)
+                            .rotationEffect(.degrees(ang))
+                        // расходящиеся волны
+                        ForEach(0..<3, id: \.self) { k in
+                            let ph = ((t / 2.4) + Double(k) / 3).truncatingRemainder(dividingBy: 1)
+                            Circle().stroke(Color.lime.opacity(0.5 * (1 - ph)), lineWidth: 1.5)
+                                .frame(width: r * 2 * ph, height: r * 2 * ph)
+                        }
+                    }
+                    .frame(width: g.size.width, height: g.size.height)
+                }
+                .allowsHitTesting(false)
+
+                // я
+                Avatar(url: API.media(me?.photoUrl), name: me?.name ?? "Я", size: 50)
+                    .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+                    .shadow(color: Color.lime.opacity(0.6), radius: 12)
+                    .position(c)
+
+                // люди рядом
+                ForEach(peers) { p in
+                    let a = NearbyFmt.angle(p) ?? Double(abs(p.id.hashValue % 628)) / 100
+                    let d = r * NearbyFmt.radius(p.distance)
+                    Button { onPick(p) } label: {
+                        VStack(spacing: 3) {
+                            Avatar(url: API.media(p.photo), name: p.name, size: 42)
+                                .overlay(Circle().stroke(Color.lime, lineWidth: 2.5))
+                                .background(PulseDot())
+                            Text(p.distance.map { NearbyFmt.dist($0) } ?? p.name)
+                                .font(.caption2.bold().monospacedDigit())
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .glassEffect(.regular, in: Capsule())
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .position(x: c.x + sin(a) * d, y: c.y - cos(a) * d)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: p.distance)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: a)
+                }
+            }
+        }
+    }
+}
+
+/// пульсирующее свечение вокруг найденного человека
+struct PulseDot: View {
+    @State private var on = false
+    var body: some View {
+        Circle().fill(Color.lime.opacity(0.35))
+            .scaleEffect(on ? 1.9 : 1)
+            .opacity(on ? 0 : 0.9)
+            .onAppear { withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { on = true } }
+    }
+}
+
+// MARK: - Локатор одного человека (как «Локатор» Apple)
+
+struct LocatorView: View {
+    let peer: NearbyPeer
+    var onClose: () -> Void
+
+    private var close: Bool { (peer.distance ?? 99) < 0.6 }
+
+    var body: some View {
+        VStack(spacing: 24) {
+            HStack(spacing: 10) {
+                Avatar(url: API.media(peer.photo), name: peer.name, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(peer.name).font(.headline)
+                    Text(hint).font(.subheadline).foregroundStyle(.secondary).contentTransition(.opacity)
+                }
+                Spacer()
+                Button { onClose() } label: { Image(systemName: "xmark").font(.headline).frame(width: 40, height: 40) }
+                    .buttonStyle(.glass).buttonBorderShape(.circle)
+            }
+            .padding(.horizontal, 20)
+
+            Spacer()
+
+            ZStack {
+                if close {
+                    // совсем рядом — вместо стрелки пульсирующий круг
+                    Circle().fill(Color.lime).frame(width: 190, height: 190)
+                        .overlay(Avatar(url: API.media(peer.photo), name: peer.name, size: 150))
+                        .background(PulseDot().frame(width: 190, height: 190))
+                        .transition(.scale.combined(with: .opacity))
+                } else if let a = NearbyFmt.angle(peer) {
+                    Image(systemName: "location.north.fill")
+                        .font(.system(size: 170, weight: .bold))
+                        .foregroundStyle(LinearGradient(colors: [.white, Color.lime], startPoint: .top, endPoint: .bottom))
+                        .shadow(color: Color.lime.opacity(0.6), radius: 30)
+                        .rotationEffect(.radians(a))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: a)
+                } else {
+                    // направления пока нет: только расстояние
+                    ZStack {
+                        Circle().stroke(Color.lime.opacity(0.25), lineWidth: 2).frame(width: 200, height: 200)
+                        PulseDot().frame(width: 120, height: 120)
+                        Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 54, weight: .semibold)).foregroundStyle(Color.lime)
+                    }
+                }
+            }
+            .frame(height: 260)
+            .animation(.spring(duration: 0.4), value: close)
+
+            VStack(spacing: 4) {
+                Text(peer.distance.map { NearbyFmt.dist($0) } ?? "—")
+                    .font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: peer.distance)
+                Text(close ? "Вы рядом!" : sideText)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(close ? Color.lime : .secondary)
+            }
+
+            Spacer()
+
+            if let uid = peer.userId {
+                NavigationLink { UserProfileView(userId: uid) } label: {
+                    Label("Открыть профиль", systemImage: "person.crop.circle").font(.headline)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                }
+                .buttonStyle(.glass)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private var hint: String {
+        if NearbyFmt.angle(peer) == nil { return "Медленно повернитесь — уточняем направление" }
+        return "Идите по стрелке"
+    }
+
+    private var sideText: String {
+        guard let a = NearbyFmt.angle(peer) else { return "расстояние" }
+        let deg = a * 180 / .pi
+        if abs(deg) < 20 { return "прямо перед вами" }
+        if abs(deg) > 150 { return "позади вас" }
+        return deg > 0 ? "справа" : "слева"
     }
 }
