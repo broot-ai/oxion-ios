@@ -1,6 +1,7 @@
 import SwiftUI
 import RealityKit
 import ARKit
+import AVFoundation
 import Observation
 
 // AR MOTION (экспериментально) — отслеживание тела ARKit Body Tracking.
@@ -24,6 +25,12 @@ final class BodyTrackingManager: NSObject, ARSessionDelegate {
     private(set) var depthBest: Double = 180
     private(set) var errorText: String?
     private(set) var lastRepScore: Int?
+
+    enum CamState: Equatable { case starting, running, denied, failed(String) }
+    /// Состояние камеры: пока нет первого кадра — показываем «Запускаю камеру…», а не чёрный экран
+    private(set) var camState: CamState = .starting
+    @ObservationIgnored nonisolated(unsafe) private var frameSeen = false
+    @ObservationIgnored private var watchdog: Task<Void, Never>?
 
     static var supported: Bool { ARBodyTrackingConfiguration.isSupported }
 
@@ -72,18 +79,58 @@ final class BodyTrackingManager: NSObject, ARSessionDelegate {
             root.addChild(e)
             boneEntities[i] = e
         }
-        start()
+        // сессию запускаем, когда экран уже на месте (begin), — иначе камера иногда не стартует и экран чёрный
         return v
+    }
+
+    /// Запуск: доступ к камере → сессия → сторож: нет кадров 3 с — перезапуск, ещё 4 с — понятная ошибка
+    func begin() async {
+        guard Self.supported else { errorText = "Отслеживание тела не поддерживается на этом устройстве"; return }
+        camState = .starting
+        if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
+            _ = await AVCaptureDevice.requestAccess(for: .video)
+        }
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { camState = .denied; return }
+        // даём SwiftUI вставить ARView в окно
+        for _ in 0..<20 where view?.window == nil { try? await Task.sleep(for: .milliseconds(50)) }
+        start()
+        watchdog?.cancel()
+        watchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, !Task.isCancelled, !self.frameSeen else { return }
+            self.start()
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled, !self.frameSeen else { return }
+            self.camState = .failed("Камера не запустилась. Закройте другие приложения с камерой и нажмите «Повторить».")
+        }
     }
 
     func start() {
         guard Self.supported else { errorText = "Отслеживание тела не поддерживается на этом устройстве"; return }
+        frameSeen = false
         let c = ARBodyTrackingConfiguration()
         c.automaticSkeletonScaleEstimationEnabled = true
         view?.session.run(c, options: [.resetTracking, .removeExistingAnchors])
     }
 
-    func stop() { view?.session.pause() }
+    func stop() {
+        watchdog?.cancel()
+        view?.session.pause()
+    }
+
+    nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        guard !frameSeen else { return }
+        frameSeen = true
+        Task { @MainActor in self.camState = .running }
+    }
+
+    nonisolated func sessionWasInterrupted(_ session: ARSession) {
+        Task { @MainActor in self.camState = .failed("Камера занята — например, звонком или другим приложением.") }
+    }
+
+    nonisolated func sessionInterruptionEnded(_ session: ARSession) {
+        Task { @MainActor in self.camState = .starting; self.start() }
+    }
 
     func resetReps() { reps = 0; depthBest = 180; lastRepScore = nil }
 
@@ -105,7 +152,7 @@ final class BodyTrackingManager: NSObject, ARSessionDelegate {
 
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
         let t = error.localizedDescription
-        Task { @MainActor in self.errorText = t }
+        Task { @MainActor in self.errorText = t; self.camState = .failed(t) }
     }
 
     private func apply(_ p: [String: SIMD3<Float>], tracked: Bool) {
@@ -216,6 +263,9 @@ struct BodyTrackingScreen: View {
                                        description: Text("Этому iPhone недоступен ARKit Body Tracking. Студия и AR работают как обычно."))
                     .foregroundStyle(.white)
             }
+            if BodyTrackingManager.supported && m.camState != .running {
+                camOverlay
+            }
             VStack(spacing: 10) {
                 HStack {
                     Button { m.stop(); dismiss() } label: {
@@ -247,7 +297,41 @@ struct BodyTrackingScreen: View {
             .foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
+        .task { await m.begin() }
         .onDisappear { m.stop() }
+    }
+
+    /// Вместо чёрного экрана — понятное состояние камеры
+    @ViewBuilder private var camOverlay: some View {
+        ZStack {
+            Color(hex: 0x0B0C0E).ignoresSafeArea()
+            VStack(spacing: 14) {
+                switch m.camState {
+                case .starting:
+                    ProgressView().controlSize(.large).tint(Color.lime)
+                    Text("Запускаю камеру…").font(.headline)
+                    Text("Нужна задняя камера. Встаньте в 2–3 м от человека.").font(.subheadline).foregroundStyle(.white.opacity(0.6))
+                case .denied:
+                    Image(systemName: "camera.fill").font(.largeTitle)
+                    Text("Нет доступа к камере").font(.headline)
+                    Text("Разрешите камеру для Oxion в Настройках.").font(.subheadline).foregroundStyle(.white.opacity(0.6))
+                    Button("Открыть настройки") {
+                        if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                    }
+                    .buttonStyle(.glassProminent).tint(Color.lime)
+                case .failed(let t):
+                    Image(systemName: "exclamationmark.triangle.fill").font(.largeTitle).foregroundStyle(.orange)
+                    Text(t).font(.subheadline).multilineTextAlignment(.center)
+                    Button("Повторить") { Task { await m.begin() } }
+                        .buttonStyle(.glassProminent).tint(Color.lime)
+                case .running:
+                    EmptyView()
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 40)
+        }
+        .transition(.opacity)
     }
 
     private var panel: some View {

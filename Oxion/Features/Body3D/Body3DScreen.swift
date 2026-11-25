@@ -87,7 +87,7 @@ struct Body3DScreen: View {
         }
         .sheet(isPresented: $showGuide) { Body3DModelGuide(source: ctrl.source) }
         .sheet(isPresented: $showStats) { MuscleLoadOverview(intel: ctrl.intel).presentationDetents([.medium, .large]) }
-        .fullScreenCover(isPresented: $showMotion) { BodyTrackingScreen() }
+        .fullScreenCover(isPresented: $showMotion, onDismiss: { ctrl.resumeAfterOverlay() }) { BodyTrackingScreen() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.usdz]) { r in
             guard case .success(let url) = r else { return }
             do {
@@ -141,23 +141,34 @@ struct Body3DScreen: View {
                         Haptic.tap()
                     } label: {
                         Text(m.title).font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 40)
                             .foregroundStyle(ctrl.mode == m ? Color.onLime : .white)
                             .background(ctrl.mode == m ? Color.lime : .clear, in: Capsule())
+                            // вся капсула нажимается, а не только буквы — иначе касание уходило в 3D-сцену под кнопкой
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
                 Button {
-                    Task { await ctrl.setMode(.studio) }
-                    showMotion = true
+                    Haptic.tap()
+                    // сначала выключаем AR этого экрана: две камеры сразу iPhone не даёт — отсюда был чёрный экран
+                    Task {
+                        await ctrl.setMode(.studio)
+                        ctrl.pauseForOverlay()
+                        showMotion = true
+                    }
                 } label: {
                     Text("Движение").font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 40)
                         .foregroundStyle(.white)
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
             .padding(4)
+            .contentShape(Capsule())
             .glassEffect(.regular, in: .capsule)
             Spacer()
 

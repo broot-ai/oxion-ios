@@ -166,6 +166,15 @@ final class Body3DController: NSObject, UIGestureRecognizerDelegate, ARSessionDe
         return v
     }
 
+    /// Пока открыт «Движение»: 3D-студия не рисует и не держит сессию, чтобы камера досталась отслеживанию тела
+    func pauseForOverlay() {
+        view?.session.pause()
+        view?.isHidden = true
+    }
+    func resumeAfterOverlay() {
+        view?.isHidden = false
+    }
+
     func teardown() {
         motion.stopDeviceMotionUpdates()
         view?.session.pause()
