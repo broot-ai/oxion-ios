@@ -3800,3 +3800,26 @@
 "ВИДЕО" = "VIDEO";
 "ФОТО" = "PHOTO";
 "Не удалось записать видео" = "Couldn’t record the video";
+
+/* Имя пользователя */
+"Имя пользователя" = "Username";
+"Не задано" = "Not set";
+"Проверка имени…" = "Checking username…";
+"Это ваше имя пользователя." = "This is your username.";
+"свободно." = "is available.";
+"Имя пользователя не может начинаться с цифры." = "Username can’t start with a number.";
+"Имя пользователя должно содержать минимум 5 символов." = "Username must have at least 5 characters.";
+"Это имя пользователя уже занято." = "This username is already taken.";
+"Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Минимальная длина — 5 символов." = "You can choose a public username on Oxion. People will be able to find you by it and message you.\n\nYou can use a–z, 0–9 and underscores. Minimum length is 5 characters.";
+"Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Как владельцу или администратору, вам доступны имена от 1 символа." = "You can choose a public username on Oxion. People will be able to find you by it and message you.\n\nYou can use a–z, 0–9 and underscores. As an owner or admin, you can use names from 1 character.";
+"Дополнительные имена" = "Additional usernames";
+"Добавить имя" = "Add username";
+"Новое имя" = "New username";
+"Латинские буквы, цифры и подчёркивания." = "Latin letters, numbers and underscores.";
+"Скрыть из профиля" = "Hide from profile";
+"Показать в профиле" = "Show in profile";
+"Освободить имя" = "Release username";
+"активно" = "active";
+"неактивно" = "inactive";
+"Порядок" = "Reorder";
+"Доступно только владельцам и администраторам. Активные имена видны в профиле, и по ним вас можно найти. Порядок меняется перетаскиванием." = "Only for owners and admins. Active usernames are shown in your profile and can be used to find you. Drag to reorder.";

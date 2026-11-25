@@ -3800,3 +3800,26 @@
 "ВИДЕО" = "VIDEO";
 "ФОТО" = "FOTO";
 "Не удалось записать видео" = "Video konnte nicht aufgenommen werden";
+
+/* Имя пользователя */
+"Имя пользователя" = "Benutzername";
+"Не задано" = "Nicht festgelegt";
+"Проверка имени…" = "Wird geprüft…";
+"Это ваше имя пользователя." = "Das ist dein Benutzername.";
+"свободно." = "ist verfügbar.";
+"Имя пользователя не может начинаться с цифры." = "Der Benutzername darf nicht mit einer Ziffer beginnen.";
+"Имя пользователя должно содержать минимум 5 символов." = "Der Benutzername muss mindestens 5 Zeichen haben.";
+"Это имя пользователя уже занято." = "Dieser Benutzername ist bereits vergeben.";
+"Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Минимальная длина — 5 символов." = "Du kannst einen öffentlichen Benutzernamen in Oxion wählen. Andere können dich so finden und dir schreiben.\n\nErlaubt sind a–z, 0–9 und Unterstriche. Mindestlänge: 5 Zeichen.";
+"Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Как владельцу или администратору, вам доступны имена от 1 символа." = "Du kannst einen öffentlichen Benutzernamen in Oxion wählen. Andere können dich so finden und dir schreiben.\n\nErlaubt sind a–z, 0–9 und Unterstriche. Als Inhaber oder Admin ab 1 Zeichen.";
+"Дополнительные имена" = "Weitere Benutzernamen";
+"Добавить имя" = "Namen hinzufügen";
+"Новое имя" = "Neuer Name";
+"Латинские буквы, цифры и подчёркивания." = "Lateinische Buchstaben, Ziffern und Unterstriche.";
+"Скрыть из профиля" = "Im Profil ausblenden";
+"Показать в профиле" = "Im Profil anzeigen";
+"Освободить имя" = "Namen freigeben";
+"активно" = "aktiv";
+"неактивно" = "inaktiv";
+"Порядок" = "Reihenfolge";
+"Доступно только владельцам и администраторам. Активные имена видны в профиле, и по ним вас можно найти. Порядок меняется перетаскиванием." = "Nur für Inhaber und Admins. Aktive Namen sind im Profil sichtbar und auffindbar. Zum Sortieren ziehen.";

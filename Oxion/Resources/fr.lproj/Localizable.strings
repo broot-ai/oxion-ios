@@ -3800,3 +3800,26 @@
 "ВИДЕО" = "VIDÉO";
 "ФОТО" = "PHOTO";
 "Не удалось записать видео" = "Impossible d’enregistrer la vidéo";
+
+/* Имя пользователя */
+"Имя пользователя" = "Nom d’utilisateur";
+"Не задано" = "Non défini";
+"Проверка имени…" = "Vérification…";
+"Это ваше имя пользователя." = "C’est votre nom d’utilisateur.";
+"свободно." = "est disponible.";
+"Имя пользователя не может начинаться с цифры." = "Le nom d’utilisateur ne peut pas commencer par un chiffre.";
+"Имя пользователя должно содержать минимум 5 символов." = "Le nom d’utilisateur doit contenir au moins 5 caractères.";
+"Это имя пользователя уже занято." = "Ce nom d’utilisateur est déjà pris.";
+"Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Минимальная длина — 5 символов." = "Vous pouvez choisir un nom d’utilisateur public sur Oxion. Les autres pourront vous trouver et vous écrire.\n\nVous pouvez utiliser a–z, 0–9 et des tirets bas. Longueur minimale : 5 caractères.";
+"Вы можете выбрать публичное имя пользователя в Oxion. Тогда другие люди смогут найти вас по этому имени и написать вам.\n\nМожно использовать a–z, 0–9 и подчёркивания. Как владельцу или администратору, вам доступны имена от 1 символа." = "Vous pouvez choisir un nom d’utilisateur public sur Oxion. Les autres pourront vous trouver et vous écrire.\n\nVous pouvez utiliser a–z, 0–9 et des tirets bas. En tant que propriétaire ou administrateur, dès 1 caractère.";
+"Дополнительные имена" = "Noms supplémentaires";
+"Добавить имя" = "Ajouter un nom";
+"Новое имя" = "Nouveau nom";
+"Латинские буквы, цифры и подчёркивания." = "Lettres latines, chiffres et tirets bas.";
+"Скрыть из профиля" = "Masquer du profil";
+"Показать в профиле" = "Afficher dans le profil";
+"Освободить имя" = "Libérer le nom";
+"активно" = "actif";
+"неактивно" = "inactif";
+"Порядок" = "Ordre";
+"Доступно только владельцам и администраторам. Активные имена видны в профиле, и по ним вас можно найти. Порядок меняется перетаскиванием." = "Réservé aux propriétaires et administrateurs. Les noms actifs sont visibles dans le profil et permettent de vous trouver. Faites glisser pour réordonner.";

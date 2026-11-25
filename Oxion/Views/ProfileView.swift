@@ -462,6 +462,15 @@ struct EditMyProfileView: View {
                             Text("Изменить").foregroundStyle(Color.limeInk)
                         }
                     }
+                    NavigationLink { UsernameSettingsView() } label: {
+                        HStack {
+                            Label("Имя пользователя", systemImage: "at")
+                            Spacer()
+                            Text(me.username.map { "@" + $0 } ?? String(localized: "Не задано"))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                     NavigationLink { PhoneSettingsView() } label: {
                         Label("Номер телефона", systemImage: "phone.fill")
                     }
