@@ -620,8 +620,9 @@ struct BeforeAfterView: View {
     }
 
     private func labeled(_ i: UIImage, _ p: ProgressPhoto, _ t: String) -> some View {
-        Image(uiImage: i).resizable().scaledToFill()
-            .frame(maxWidth: .infinity).frame(maxHeight: .infinity).clipped()
+        Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { Image(uiImage: i).resizable().scaledToFill() }
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(alignment: .topLeading) { tag(t + " · " + p.date.formatted(.dateTime.day().month(.abbreviated))).padding(8) }
     }
@@ -1083,8 +1084,9 @@ struct ReplayPlayerView: View {
     }
 
     private func baPhoto(_ i: UIImage, _ t: String, _ d: Date) -> some View {
-        Image(uiImage: i).resizable().scaledToFill()
-            .frame(maxWidth: .infinity).frame(maxHeight: .infinity).clipped()
+        Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { Image(uiImage: i).resizable().scaledToFill() }
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading) {

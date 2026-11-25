@@ -673,9 +673,10 @@ struct FitnessPlusBanner: View {
         Button(action: { Haptic.tap(); action() }) {
             ZStack(alignment: .bottomLeading) {
                 HStack(spacing: 3) {
-                    Image("fplus-2").resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
-                    Image("fplus-4").resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
+                    FillImage(name: "fplus-2")
+                    FillImage(name: "fplus-4")
                 }
+                .frame(maxWidth: .infinity)
                 .frame(height: 170)
                 LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
                 HStack(alignment: .bottom) {
@@ -696,5 +697,20 @@ struct FitnessPlusBanner: View {
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Картинка «заполнить и обрезать», которая НЕ раздувает родителя:
+/// размер задаёт контейнер, а картинка лишь рисуется поверх и обрезается
+struct FillImage: View {
+    let name: String
+    var flip = false
+    var body: some View {
+        Color.clear
+            .overlay {
+                Image(name).resizable().scaledToFill()
+                    .scaleEffect(x: flip ? -1 : 1, y: 1)
+            }
+            .clipped()
     }
 }

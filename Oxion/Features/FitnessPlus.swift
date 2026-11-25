@@ -41,7 +41,7 @@ struct FitnessPlusView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPremium) { NavigationStack { PremiumView() } }
         .task { await load() }
@@ -89,6 +89,7 @@ struct FitnessPlusView: View {
     private var hero: some View {
         VStack(spacing: 0) {
             collage
+                .frame(maxWidth: .infinity)
                 .frame(height: 300)
                 .overlay(alignment: .bottom) {
                     LinearGradient(colors: [.clear, Color(white: 0.11)], startPoint: .top, endPoint: .bottom).frame(height: 110)
@@ -156,12 +157,8 @@ struct FitnessPlusView: View {
     }
 
     private func tile(_ i: Int, flip: Bool = false) -> some View {
-        Image("fplus-\(i)")
-            .resizable()
-            .scaledToFill()
-            .scaleEffect(x: flip ? -1 : 1, y: 1)
+        FillImage(name: "fplus-\(i)", flip: flip)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -306,7 +303,7 @@ struct FitnessPlusView: View {
             title("Кардио", sub: "Бег, ходьба, велосипед — с GPS, пульсом и отрезками")
             NavigationLink { CardioHubView() } label: {
                 ZStack(alignment: .bottomLeading) {
-                    Image("fplus-3").resizable().scaledToFill().frame(height: 190).clipped()
+                    FillImage(name: "fplus-3").frame(maxWidth: .infinity).frame(height: 190)
                     LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Время двигаться").font(.system(size: 26, weight: .heavy))
@@ -391,7 +388,7 @@ struct FitnessPlusView: View {
     private func tip(_ t: String, _ key: String, _ img: Int) -> some View {
         NavigationLink { TopicFeedView(key: key, name: t) } label: {
             ZStack(alignment: .topLeading) {
-                Image("fplus-\(img)").resizable().scaledToFill().frame(width: 280, height: 180).clipped()
+                FillImage(name: "fplus-\(img)").frame(width: 280, height: 180)
                 LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom)
                 Text(t).font(.system(size: 22, weight: .heavy)).foregroundStyle(.white)
                     .multilineTextAlignment(.leading).padding(16)

@@ -242,7 +242,7 @@ struct NearbyPeopleView: View {
                 .transition(.opacity)
             }
         }
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .navigationTitle(focus == nil ? "Рядом" : (focus?.name ?? ""))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

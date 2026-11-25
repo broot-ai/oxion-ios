@@ -308,7 +308,8 @@ final class OverlayWindows {
         }
         if islandWindow == nil {
             let w = OxPassWindow(windowScene: scene)
-            w.windowLevel = .statusBar + 1
+            // чуть ниже окна «обновления из острова» (IslandHUD), чтобы не перекрывать его анимацию
+            w.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.statusBar.rawValue + 0.5)
             w.backgroundColor = .clear
             let vc = UIHostingController(rootView: IslandBrandView(kind: rect.kind))
             // окно лежит в зоне выреза: без этого SwiftUI сдвигает содержимое вниз на высоту «безопасной зоны»
