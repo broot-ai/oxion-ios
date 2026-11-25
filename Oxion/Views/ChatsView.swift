@@ -583,6 +583,7 @@ struct ChatView: View {
     @State private var didInitialScroll = false
     @State private var lastReadSent = 0
     @State private var text = ""
+    @State private var rec = ChatRecorder()
     @State private var replyTo: Message?
     @State private var errorText: String?
     @State private var sending = false
@@ -962,16 +963,17 @@ struct ChatView: View {
                         .frame(width: 44, height: 44)
                 }
                 .glassEffect(.regular.interactive(), in: .circle)
+                .opacity(rec.active ? 0 : 1)
 
                 // обычное системное поле ввода — лёгкое и быстрое
                 PlainComposer(text: $text, focused: $focused)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 11)
                     .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                    .opacity(rec.active ? 0 : 1)
 
-                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending {
-                    RecordButton(onVoice: { url, dur, wave in Task { await sendVoice(url, dur: dur, wave: wave) } },
-                                 onVideo: { url, dur in Task { await sendVideoNote(url, dur: dur) } })
+                if (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending) || rec.active {
+                    ChatMicButton(rec: rec)
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     Button {
@@ -987,10 +989,33 @@ struct ChatView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
+            // запись как в Telegram: плашка встаёт на место скрепки и поля
+            .overlay(alignment: .bottom) {
+                if rec.active {
+                    ChatRecordPanel(rec: rec)
+                        .padding(.trailing, rec.phase == .preview ? 52 : 22)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let t = rec.tip, !rec.active {
+                    ChatRecTip(text: t).offset(y: -48)
+                }
+            }
+            .animation(.spring(duration: 0.3), value: rec.tip)
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
         }
         .padding(.top, 6)
+        .overlay(alignment: .bottomTrailing) {
+            if rec.mode == .video && (rec.phase == .holding || rec.phase == .locked) {
+                ChatVideoNoteLive(rec: rec).offset(x: -40, y: -200)
+            }
+        }
+        .onAppear {
+            rec.onVoice = { url, dur, wave in Task { await sendVoice(url, dur: dur, wave: wave) } }
+            rec.onVideo = { url, dur in Task { await sendVideoNote(url, dur: dur) } }
+        }
+        .onChange(of: rec.active) { _, a in if a { focused = false } }
     }
 
     private func load(initial: Bool) async {

@@ -3840,3 +3840,6 @@
 "Идите по стрелке" = "Suivez la flèche";
 "расстояние" = "distance";
 "Открыть профиль" = "Ouvrir le profil";
+"Звук — удерживайте. Видео — нажмите." = "Maintenez pour l’audio. Touchez pour la vidéo.";
+"Видео — удерживайте. Звук — нажмите." = "Maintenez pour la vidéo. Touchez pour l’audio.";
+"Влево — отмена" = "Glisser pour annuler";

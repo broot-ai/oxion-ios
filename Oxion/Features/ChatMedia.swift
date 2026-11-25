@@ -145,7 +145,7 @@ final class VideoNoteRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
     }
 }
 
-private struct CameraPreviewLayer: UIViewRepresentable {
+struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
     final class V: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
