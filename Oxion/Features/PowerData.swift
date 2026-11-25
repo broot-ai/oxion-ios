@@ -303,6 +303,7 @@ final class MediaLoader: @unchecked Sendable {
 struct OxRemoteImage<Placeholder: View>: View {
     let url: URL?
     var gated = false
+    var fit = false
     @ViewBuilder var placeholder: () -> Placeholder
     @State private var img: UIImage?
     @State private var waiting = false
@@ -319,8 +320,8 @@ struct OxRemoteImage<Placeholder: View>: View {
         Color.clear.overlay {
         ZStack {
             if let img = shown {
-                Image(uiImage: img).resizable().scaledToFill()
-                    .blur(radius: sensitive && !revealed ? 40 : 0, opaque: true)
+                Image(uiImage: img).resizable().aspectRatio(contentMode: fit ? .fit : .fill)
+                    .blur(radius: sensitive && !revealed ? 40 : 0, opaque: !fit)
                     .transition(.opacity)
                 if sensitive && !revealed {
                     GeometryReader { g in

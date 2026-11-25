@@ -84,9 +84,11 @@ struct Avatar: View {
 struct RemoteImage: View {
     let url: URL?
     var icon: String = "photo"
+    /// true — показать фото целиком (товары), false — заполнить и обрезать края
+    var fit: Bool = false
 
     var body: some View {
-        OxRemoteImage(url: url, gated: true) {
+        OxRemoteImage(url: url, gated: true, fit: fit) {
             ZStack {
                 Rectangle().fill(Color.primary.opacity(0.06))
                 Image(systemName: icon)

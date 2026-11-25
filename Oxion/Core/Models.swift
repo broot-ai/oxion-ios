@@ -640,6 +640,21 @@ struct MProduct: Decodable, Identifiable, Hashable {
     let ratingCount: Int?
     let photo: String?
     var fav: Bool?
+    // для кнопок корзины прямо в карточке
+    var variantId: Int? = nil
+    var variantAvailable: Int? = nil
+    var variantsCount: Int? = nil
+    var variants: [MVariantShort]? = nil
+    var cartQty: Int? = nil
+    var cartVariantId: Int? = nil
+}
+
+struct MVariantShort: Decodable, Identifiable, Hashable {
+    let id: Int
+    let label: String
+    let priceKop: Int?
+    let oldPriceKop: Int?
+    let available: Int?
 }
 
 struct MStoreShort: Decodable, Identifiable, Hashable {
