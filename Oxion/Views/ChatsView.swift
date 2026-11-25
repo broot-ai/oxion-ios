@@ -135,6 +135,7 @@ struct ChatsView: View {
     @State private var path: [ChatRoute] = []
     @State private var protectAll = false
     @State private var newChat = false
+    @State private var stories = StoriesStore.shared
 
     enum ChatRoute: Hashable { case chat(ChatRef), archive, ai }
 
@@ -154,7 +155,15 @@ struct ChatsView: View {
                     .listRowBackground(Color.clear)
                 }
                 if query.isEmpty && !editing {
+                    StoriesHeaderRow()
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listSectionSeparator(.hidden, edges: .top)
+                        .listRowBackground(Color.clear)
+                        .selectionDisabled()
                     Button { path.append(.ai) } label: { AIChatRow() }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 14))
+                        .listSectionSeparator(.hidden, edges: .top)
                         .selectionDisabled()
                 }
                 if !store.archived.isEmpty && query.isEmpty && !editing {
@@ -162,7 +171,7 @@ struct ChatsView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "archivebox.fill")
                                 .font(.title3).foregroundStyle(.white)
-                                .frame(width: 52, height: 52)
+                                .frame(width: 56, height: 56)
                                 .background(Color(hex: 0x636366), in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Архив").font(.headline).foregroundStyle(.primary)
@@ -173,17 +182,28 @@ struct ChatsView: View {
                             let n = store.archived.reduce(0) { $0 + ($1.unread ?? 0) }
                             if n > 0 { UnreadBadge(n: n, muted: true) }
                         }
-                        .padding(.vertical, 4)
                     }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 14))
                     .selectionDisabled()
                 }
                 ForEach(filtered) { c in
                     ChatListRow(c: c, editing: editing) { path.append(.chat(ChatRef(id: c.id, name: c.peer.name ?? "Чат"))) }
                         .reassemblesRow()
+                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 14))
+                        .listSectionSeparator(.hidden, edges: .top)
                         .tag(c.id)
                 }
             }
             .listStyle(.plain)
+            .coordinateSpace(.named("chatList"))
+            // как в Telegram: при прокрутке вверх истории сворачиваются в заголовок, при оттягивании — раскрываются
+            .onScrollGeometryChange(for: CGFloat.self) { g in
+                g.contentOffset.y + g.contentInsets.top
+            } action: { _, y in
+                let p = min(1, max(0, y / 84))
+                let q = (p * 40).rounded() / 40
+                if q != stories.collapse { stories.collapse = q }
+            }
             .environment(\.editMode, .constant(editing ? .active : .inactive))
             .oxIntro(.sensitive,
                      onContinue: { UserDefaults.standard.set(true, forKey: SensitiveGuard.enabledKey) },
@@ -200,6 +220,9 @@ struct ChatsView: View {
             .navigationTitle("Чаты")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    StoriesNavTitle(title: String(localized: "Чаты"))
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button(editing ? "Готово" : "Изм.") {
                         withAnimation(.snappy) { editing.toggle(); selection = [] }
@@ -245,10 +268,17 @@ struct ChatsView: View {
                     }
                 }
             }
+            .fullScreenCover(item: $stories.viewer) { st in
+                StoryViewer(start: st)
+            }
+            .fullScreenCover(isPresented: $stories.composer) {
+                StoryComposer()
+            }
             .searchable(text: $query, prompt: "Поиск по чатам")
-            .oxRefreshable { await store.load() }
-            .onOxionRefresh { await store.load() }
+            .oxRefreshable { async let a: () = store.load(); async let b: () = stories.load(); _ = await (a, b) }
+            .onOxionRefresh { async let a: () = store.load(); async let b: () = stories.load(); _ = await (a, b) }
             .task {
+                Task { await stories.load() }
                 await store.load()
                 if let r: ProtectAll = try? await API.call("/chats/protect-all") { protectAll = r.enabled }
             }
@@ -313,9 +343,22 @@ struct ChatListRow: View {
 
     private var unreadish: Bool { (c.unread ?? 0) > 0 || c.marked == true }
 
+    @State private var swiped = false
+
     var body: some View {
         Button(action: { if !editing { open() } }) {
             ChatRow(c: c)
+                // как в Telegram: смахнутая строка подсвечивается серым со скруглением справа
+                .background {
+                    UnevenRoundedRectangle(bottomTrailingRadius: 18, topTrailingRadius: 18, style: .continuous)
+                        .fill(Color(.systemGray5))
+                        .padding(.leading, -12).padding(.trailing, -10).padding(.vertical, -6)
+                        .opacity(swiped ? 1 : 0)
+                }
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("chatList")).minX } action: { x in
+                    let s = x < 4
+                    if s != swiped { withAnimation(.easeOut(duration: 0.15)) { swiped = s } }
+                }
         }
         .buttonStyle(.plain)
         .listRowBackground(c.pinned == true ? Color.primary.opacity(0.04) : Color.clear)
@@ -379,9 +422,9 @@ struct ChatRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if c.peer.group != nil {
-                GroupAvatar(photo: c.peer.photo, title: c.peer.name ?? "?", kind: c.peer.group, size: 52)
+                GroupAvatar(photo: c.peer.photo, title: c.peer.name ?? "?", kind: c.peer.group, size: 56)
             } else {
-                Avatar(url: API.media(c.peer.photo), name: c.peer.name ?? "?", size: 52)
+                Avatar(url: API.media(c.peer.photo), name: c.peer.name ?? "?", size: 56)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
@@ -420,7 +463,6 @@ struct ChatRow: View {
                 }
             }
         }
-        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 }
@@ -1571,7 +1613,7 @@ struct AIChatRow: View {
     @AppStorage("ox.ai.last") private var last = ""
     var body: some View {
         HStack(spacing: 12) {
-            AIAvatar(size: 52)
+            AIAvatar(size: 56)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text("OXION AI").font(.headline).foregroundStyle(.primary)
@@ -1583,7 +1625,6 @@ struct AIChatRow: View {
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
             }
         }
-        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 }
