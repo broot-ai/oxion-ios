@@ -727,17 +727,21 @@ struct StoryComposer: View {
                 if let media {
                     editor(media)
                 } else {
-                    chooser
+                    StoryCameraScreen(onMedia: { m in
+                        if case .video(let u) = m { previewPlayer = AVPlayer(url: u) }
+                        withAnimation(.snappy) { media = m }
+                    }, onClose: { dismiss() })
                 }
                 if loading { ProgressView().tint(.white).controlSize(.large) }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { if media != nil { reset() } else { dismiss() } } label: {
-                        Image(systemName: media != nil ? "chevron.left" : "xmark")
+                if media != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { reset() } label: { Image(systemName: "chevron.left") }
                     }
                 }
             }
+            .toolbar(media == nil ? .hidden : .visible, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
             .preferredColorScheme(.dark)
         }
