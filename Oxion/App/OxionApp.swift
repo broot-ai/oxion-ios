@@ -471,7 +471,18 @@ struct MainTabView: View {
                 TabHoldOverlay(press: hold, actions: holdActions(tabOrder[hold.index])) { self.hold = nil }
             }
         }
-        .onAppear { TabHold.install { p in hold = p } }
+        .onAppear {
+            TabHold.install { p in hold = p }
+            // свайп от края экрана — соседняя вкладка
+            TabEdgeSwipe.install { dir in
+                let order = tabOrder
+                guard let i = order.firstIndex(of: model.selectedTab) else { return }
+                let j = i + dir
+                guard order.indices.contains(j) else { Haptic.tap(.soft); return }
+                Haptic.tap(.light)
+                withAnimation(.snappy) { model.selectedTab = order[j] }
+            }
+        }
         .fullScreenCover(isPresented: $welcome) {
             WelcomeFlow { Welcome.seen = true; WhatsNew.markSeen(); welcome = false }
         }

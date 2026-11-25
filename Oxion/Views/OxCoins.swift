@@ -39,18 +39,20 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
         rebuildWalls()
     }
 
-    /// Пол и стенки; сверху открыто — подброшенные жетоны улетают за край и падают обратно
+    /// Закрытая коробка: пол, стенки и потолок. Перевернул телефон — жетоны падают «вверх» и лежат на потолке
     private func rebuildWalls() {
         guard size.width > 0 else { return }
-        let p = CGMutablePath()
-        p.move(to: CGPoint(x: 0, y: size.height * 4))
-        p.addLine(to: .zero)
-        p.addLine(to: CGPoint(x: size.width, y: 0))
-        p.addLine(to: CGPoint(x: size.width, y: size.height * 4))
-        let b = SKPhysicsBody(edgeChainFrom: p)
+        let b = SKPhysicsBody(edgeLoopFrom: CGRect(origin: .zero, size: size))
         b.categoryBitMask = Self.wallCat
         b.friction = 0.7
+        b.restitution = 0.2
         physicsBody = b
+        // жетоны, оказавшиеся за краем после смены размера, возвращаем внутрь
+        for c in coins where !CGRect(origin: .zero, size: size).insetBy(dx: -4, dy: -4).contains(c.position) {
+            c.position = CGPoint(x: min(max(c.size.width, c.position.x), size.width - c.size.width),
+                                 y: min(max(c.size.height, c.position.y), size.height - c.size.height))
+            c.physicsBody?.velocity = .zero
+        }
     }
 
     /// Жетоны высыпаются сверху по одному
@@ -69,14 +71,18 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
             node.zPosition = z * 10
             node.color = .black
             node.colorBlendFactor = (1 - z) * 0.9
-            node.position = CGPoint(x: CGFloat.random(in: s...(w - s)), y: size.height + s + CGFloat(i) * 16)
+            // высыпаются из-под потолка короткой «очередью»
+            node.position = CGPoint(x: CGFloat.random(in: s...(w - s)), y: max(s, size.height - s - CGFloat(i % 6) * s * 0.6))
+            node.alpha = 0
+            node.run(.sequence([.wait(forDuration: Double(i) * 0.035), .fadeIn(withDuration: 0.12)]))
             node.zRotation = CGFloat.random(in: -0.6...0.6)
             let body = SKPhysicsBody(texture: tex, alphaThreshold: 0.5, size: node.size)
-            body.restitution = 0.28
+            body.restitution = 0.32
             body.friction = 0.55
-            body.linearDamping = 0.15
-            body.angularDamping = 0.6
+            body.linearDamping = 0.12
+            body.angularDamping = 0.5
             body.density = 1.2
+            body.usesPreciseCollisionDetection = true   // быстрые жетоны не проскакивают сквозь стенки
             body.categoryBitMask = Self.coinCat
             body.collisionBitMask = Self.coinCat | Self.wallCat
             body.contactTestBitMask = Self.wallCat | Self.coinCat
@@ -158,13 +164,25 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
     // Гравитация следует за наклоном телефона
     private func startMotion() {
         guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive, PowerSaver.allowsNow(.liveBackgrounds) else { return }
-        motion.deviceMotionUpdateInterval = 1 / 30
+        motion.deviceMotionUpdateInterval = 1 / 60
         motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
             guard let self, let m else { return }
             let g = m.gravity, ua = m.userAcceleration
-            let dx = CGFloat(g.x) * 9.8
-            let dy = min(-3, CGFloat(g.y) * 9.8)   // всегда немного вниз, чтобы горка не «взлетала»
+            // настоящая сила тяжести в плоскости экрана: вверх ногами — жетоны падают к верху экрана,
+            // на боку — в сторону, плашмя на столе — почти не двигаются
+            let dx = CGFloat(g.x) * 9.8 * 1.25
+            let dy = CGFloat(g.y) * 9.8 * 1.25
             self.physicsWorld.gravity = CGVector(dx: dx, dy: dy)
+            // телефон лежит плашмя — «трение о стол»: жетоны быстро останавливаются, а не плывут
+            let flat = 1 - min(1, hypot(g.x, g.y))
+            let damping = 0.12 + CGFloat(flat) * 2.5
+            for c in self.coins { c.physicsBody?.linearDamping = damping }
+            // встряхнули телефон — жетоны разлетаются в разные стороны
+            let shake = sqrt(ua.x * ua.x + ua.y * ua.y + ua.z * ua.z)
+            if shake > 1.8, Date().timeIntervalSince(self.lastShake) > 0.25 {
+                self.lastShake = Date()
+                self.shakeAll(strength: CGFloat(min(1, (shake - 1.8) / 2)), ax: CGFloat(ua.x), ay: CGFloat(ua.y))
+            }
             // рывок телефона вверх (против силы тяжести) — жетоны подпрыгивают
             let up = -(ua.x * g.x + ua.y * g.y + ua.z * g.z)
             if up > 0.75, Date().timeIntervalSince(self.lastToss) > 0.4 {
@@ -177,6 +195,19 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
     // Лёгкая вибрация при сильных ударах (не чаще 12 раз в секунду)
     private var lastHaptic = Date.distantPast
     private var lastToss = Date.distantPast
+    private var lastShake = Date.distantPast
+
+    /// Встряска: жетоны получают импульс против движения телефона (инерция), с разбросом
+    func shakeAll(strength: CGFloat, ax: CGFloat, ay: CGFloat) {
+        for c in coins {
+            guard let b = c.physicsBody else { continue }
+            let k = (500 + 900 * strength) * CGFloat.random(in: 0.6...1.2)
+            b.velocity = CGVector(dx: b.velocity.dx - ax * k + CGFloat.random(in: -200...200),
+                                  dy: b.velocity.dy - ay * k + CGFloat.random(in: -200...200))
+            b.angularVelocity += CGFloat.random(in: -16...16)
+        }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred(intensity: min(1, 0.4 + strength))
+    }
     private let tick = UIImpactFeedbackGenerator(style: .light)
 
     func didBegin(_ contact: SKPhysicsContact) {

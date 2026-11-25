@@ -130,3 +130,79 @@ private struct TabHoldRowStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
+
+// MARK: - Переключение вкладок свайпом от края экрана
+// Свайп от правого края — следующая вкладка, от левого — предыдущая.
+// Работает только на корневом экране вкладки: если открыт вложенный экран, левый край
+// по-прежнему возвращает назад (системный жест), а листы и модальные окна не трогаются.
+
+enum TabEdgeSwipe {
+    private final class EdgeRecognizer: UIScreenEdgePanGestureRecognizer {}
+
+    private final class Target: NSObject, UIGestureRecognizerDelegate {
+        static let shared = Target()
+        var handler: ((Int) -> Void)?
+        weak var tabs: UITabBarController?
+
+        @objc func fire(_ g: UIScreenEdgePanGestureRecognizer) {
+            guard g.state == .ended, let v = g.view else { return }
+            let t = g.translation(in: v).x, vel = g.velocity(in: v).x
+            if g.edges == .left, t > 60 || vel > 500 { handler?(-1) }
+            if g.edges == .right, t < -60 || vel < -500 { handler?(1) }
+        }
+
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard let tabs, tabs.presentedViewController == nil, let sel = tabs.selectedViewController else { return false }
+            // вложенный экран открыт — оставляем системный жест «назад»
+            if let nav = Self.nav(in: sel), nav.viewControllers.count > 1 { return false }
+            return true
+        }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+            other is UIScreenEdgePanGestureRecognizer && !(other is EdgeRecognizer)
+        }
+
+        static func nav(in vc: UIViewController) -> UINavigationController? {
+            if let n = vc as? UINavigationController { return n }
+            for c in vc.children { if let n = nav(in: c) { return n } }
+            return nil
+        }
+    }
+
+    static func install(_ handler: @escaping (Int) -> Void) {
+        Target.shared.handler = handler
+        Task { @MainActor in
+            for _ in 0..<10 {
+                if let tabs = findTabs() {
+                    Target.shared.tabs = tabs
+                    if !(tabs.view.gestureRecognizers ?? []).contains(where: { $0 is EdgeRecognizer }) {
+                        for edge in [UIRectEdge.left, .right] {
+                            let g = EdgeRecognizer(target: Target.shared, action: #selector(Target.fire(_:)))
+                            g.edges = edge
+                            g.delegate = Target.shared
+                            tabs.view.addGestureRecognizer(g)
+                        }
+                    }
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+        }
+    }
+
+    @MainActor private static func findTabs() -> UITabBarController? {
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for w in scene.windows {
+                if let t = find(in: w.rootViewController) { return t }
+            }
+        }
+        return nil
+    }
+
+    @MainActor private static func find(in vc: UIViewController?) -> UITabBarController? {
+        guard let vc else { return nil }
+        if let t = vc as? UITabBarController { return t }
+        for c in vc.children { if let t = find(in: c) { return t } }
+        return nil
+    }
+}

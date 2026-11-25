@@ -37,6 +37,7 @@ struct HomeView: View {
                     .reassembles(3)
                     todaySquares
                     if model.me?.mode != "trainer" { featuredBlock.reassembles(5) }
+                    FitnessPlusBanner { push = .fitnessPlus }.reassembles(6)
                     quickCards.reassembles(7)
                     todayBlock.reassembles(8)
                 }
@@ -66,6 +67,7 @@ struct HomeView: View {
                 case .challenges: ChallengesView()
                 case .records: RecordsView()
                 case .ecosystem: EcosystemView()
+                case .fitnessPlus: FitnessPlusView()
                 }
             }
             .reassemblyRefreshable { await load() }
@@ -451,7 +453,7 @@ struct HomeView: View {
     }
 }
 
-enum HomeRoute: Hashable { case pro, coach, health, challenges, records, ecosystem }
+enum HomeRoute: Hashable { case pro, coach, health, challenges, records, ecosystem, fitnessPlus }
 
 // MARK: - Элементы главной
 
@@ -661,5 +663,38 @@ struct RingsDetailSheet: View {
         .fitSheet()
         .presentationCornerRadius(34)
         .presentationDragIndicator(.visible)
+    }
+}
+
+/// Баннер OXION+ на главной
+struct FitnessPlusBanner: View {
+    var action: () -> Void
+    var body: some View {
+        Button(action: { Haptic.tap(); action() }) {
+            ZStack(alignment: .bottomLeading) {
+                HStack(spacing: 3) {
+                    Image("fplus-2").resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
+                    Image("fplus-4").resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
+                }
+                .frame(height: 170)
+                LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "flame.fill").foregroundStyle(Color.lime)
+                            Text(verbatim: "OXION+").font(.title2.weight(.heavy))
+                        }
+                        Text("Тренировки с видео, программы, тренеры и музыка").font(.subheadline).foregroundStyle(.white.opacity(0.8))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right.circle.fill").font(.title).foregroundStyle(Color.lime)
+                }
+                .foregroundStyle(.white)
+                .padding(16)
+            }
+            .frame(height: 170)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
