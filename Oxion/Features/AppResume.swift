@@ -311,7 +311,10 @@ final class OverlayWindows {
             w.windowLevel = .statusBar + 1
             w.backgroundColor = .clear
             let vc = UIHostingController(rootView: IslandBrandView(kind: rect.kind))
+            // окно лежит в зоне выреза: без этого SwiftUI сдвигает содержимое вниз на высоту «безопасной зоны»
+            vc.safeAreaRegions = []
             vc.view.backgroundColor = .clear
+            vc.view.insetsLayoutMarginsFromSafeArea = false
             w.rootViewController = vc
             islandWindow = w
         }
@@ -344,8 +347,9 @@ enum IslandGeometry {
         if top >= 58 {
             // Dynamic Island: 126×37 pt, ~11 pt от верха (14 Pro … 17 Pro Max, Air — ±1 pt).
             // Капсулу делаем чуть меньше острова, чтобы её края гарантированно прятались под вырезом.
-            let w: CGFloat = 122, h: CGFloat = 34
-            let y: CGFloat = top >= 62 ? 13 : 12.5
+            // остров ≈126×37 pt, верх ≈11 pt; берём чуть меньше, чтобы края прятались под вырезом
+            let w: CGFloat = 124, h: CGFloat = 36
+            let y: CGFloat = 11.5
             return (CGRect(x: (size.width - w) / 2, y: y, width: w, height: h), .island)
         }
         if top >= 44 {
@@ -363,26 +367,33 @@ struct IslandBrandView: View {
 
     var body: some View {
         GeometryReader { g in
+            let h = g.size.height
             ZStack {
-                if kind == .island {
-                    Capsule().fill(.black)
-                } else {
-                    UnevenRoundedRectangle(bottomLeadingRadius: 18, bottomTrailingRadius: 18).fill(.black)
+                // фирменная капсула, как у 2ГИС: на экране её целиком закрывает остров
+                Group {
+                    if kind == .island {
+                        Capsule().fill(Color.lime)
+                    } else {
+                        UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16).fill(Color.lime)
+                    }
                 }
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
+                    // мятный огонёк в тёмном кружке
                     Image(systemName: "flame.fill")
-                        .font(.system(size: g.size.height * 0.48, weight: .bold))
-                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.6, green: 1, blue: 0.75), Color.lime],
+                        .font(.system(size: h * 0.42, weight: .bold))
+                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.62, green: 1, blue: 0.78), Color.lime],
                                                         startPoint: .top, endPoint: .bottom))
+                        .frame(width: h * 0.74, height: h * 0.74)
+                        .background(Circle().fill(Color.black))
                     Text(verbatim: "OXION")
-                        .font(.system(size: g.size.height * 0.42, weight: .heavy, design: .rounded))
-                        .tracking(1.6)
-                        .foregroundStyle(.white)
+                        .font(.system(size: h * 0.42, weight: .black, design: .rounded))
+                        .tracking(1.2)
+                        .foregroundStyle(Color.black)
                 }
                 .offset(y: kind == .notch ? -1 : 0)
             }
+            .frame(width: g.size.width, height: h)
         }
-        .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
