@@ -274,6 +274,7 @@ struct AnimationSettingsView: View {
     @AppStorage("anim_messages") private var messages = true
     @AppStorage("anim_send_haptic") private var sendHaptic = true
     @AppStorage("island.brand") private var islandBrand = true
+    @AppStorage("launch.haptics") private var launchHaptics = true
 
     var body: some View {
         List {
@@ -288,6 +289,7 @@ struct AnimationSettingsView: View {
                 Toggle("Вибрация при отправке", isOn: $sendHaptic)
             }
             Section {
+                Toggle("Вибрация при запуске", isOn: $launchHaptics)
                 Toggle("Логотип под Dynamic Island", isOn: $islandBrand)
                     .onChange(of: islandBrand) { OverlayWindows.shared.updateIsland() }
             } footer: {

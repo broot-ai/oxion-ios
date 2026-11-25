@@ -338,27 +338,60 @@ final class OxPassWindow: UIWindow {
 enum IslandGeometry {
     enum Kind { case island, notch }
 
+    /// Код модели: "iPhone17,2" и т.п. (в симуляторе — модель, которую он изображает)
+    static let model: String = {
+        if let sim = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return sim }
+        var info = utsname()
+        uname(&info)
+        return withUnsafeBytes(of: &info.machine) { raw in
+            String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
+        }
+    }()
+
+    /// Верх Dynamic Island от края экрана (pt) по модели. nil — у модели «чёлка» или выреза нет.
+    /// 14 Pro, 15, 15 Plus, 15 Pro (Max), 16, 16 Plus — 11 pt; 16 Pro (Max), 17, 17 Pro (Max), Air — 14 pt.
+    static func islandTop(for m: String) -> CGFloat?? {
+        switch m {
+        case "iPhone15,2", "iPhone15,3",                       // 14 Pro, 14 Pro Max
+             "iPhone15,4", "iPhone15,5",                       // 15, 15 Plus
+             "iPhone16,1", "iPhone16,2",                       // 15 Pro, 15 Pro Max
+             "iPhone17,3", "iPhone17,4":                       // 16, 16 Plus
+            return .some(11)
+        case "iPhone17,1", "iPhone17,2",                       // 16 Pro, 16 Pro Max
+             "iPhone18,1", "iPhone18,2", "iPhone18,3", "iPhone18,4":   // 17 Pro, 17 Pro Max, 17, Air
+            return .some(14)
+        case "iPhone17,5":                                     // 16e — «чёлка»
+            return .some(nil)
+        default:
+            if m.hasPrefix("iPhone10") || m.hasPrefix("iPhone11") || m.hasPrefix("iPhone12")
+                || m.hasPrefix("iPhone13") || m.hasPrefix("iPhone14") { return .some(nil) }   // X … 14 — «чёлка» или без выреза
+            return nil                                          // неизвестная (новая) модель — решаем по безопасной зоне
+        }
+    }
+
     static func rect(in scene: UIWindowScene) -> (frame: CGRect, kind: Kind)? {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return nil }
         guard let win = scene.windows.first(where: { !($0 is OxPassWindow) && $0.windowLevel == .normal }) ?? scene.windows.first else { return nil }
         let size = win.bounds.size
         guard size.height > size.width else { return nil }               // только портрет
-        guard UIDevice.current.userInterfaceIdiom == .phone else { return nil }
-        let top = win.safeAreaInsets.top
-        if top >= 58 {
-            // Dynamic Island: 126×37 pt, ~11 pt от верха (14 Pro … 17 Pro Max, Air — ±1 pt).
-            // Капсулу делаем чуть меньше острова, чтобы её края гарантированно прятались под вырезом.
-            // остров ≈126×37 pt, верх ≈11 pt; берём чуть меньше, чтобы края прятались под вырезом
-            let w: CGFloat = 124, h: CGFloat = 36
-            let y: CGFloat = 11.5
-            return (CGRect(x: (size.width - w) / 2, y: y, width: w, height: h), .island)
+        let top: CGFloat
+        switch islandTop(for: model) {
+        case .some(.some(let t)): top = t
+        case .some(.none): return nil                                     // «чёлка» — не показываем
+        case .none:
+            // новая модель: есть Dynamic Island, если безопасная зона сверху ≥ 59 pt
+            let inset = win.safeAreaInsets.top
+            guard inset >= 59 else { return nil }
+            top = inset >= 62 ? 14 : 11
         }
-        if top >= 44 {
-            // классическая «чёлка»: 12–14 — уже, X–11 Pro — шире
-            let w: CGFloat = (top >= 47 && top < 48) || top >= 50 ? 150 : 200
-            let h: CGFloat = 28
-            return (CGRect(x: (size.width - w) / 2, y: 0, width: w, height: h), .notch)
-        }
-        return nil   // SE и iPhone с рамками — выреза нет, ничего не рисуем
+        // сам остров ≈126×37 pt; капсула заметно меньше и по центру острова —
+        // со всех сторон ~3 pt запаса, чтобы ни один пиксель не выглядывал из-под выреза
+        let islandW: CGFloat = 126, islandH: CGFloat = 37
+        let w: CGFloat = 118, h: CGFloat = 31
+        let x = (size.width - w) / 2
+        let y = top + (islandH - h) / 2
+        _ = islandW
+        return (CGRect(x: x, y: y, width: w, height: h), .island)
     }
 }
 
