@@ -167,40 +167,29 @@ struct PhotoCarousel: View {
 struct SparkleDust: UIViewRepresentable {
     final class V: UIView {
         let e = CAEmitterLayer()
+        private var lastSize: CGSize = .zero
         override init(frame: CGRect) {
             super.init(frame: frame)
             isUserInteractionEnabled = false
             backgroundColor = .clear
             e.emitterShape = .rectangle
             e.emitterMode = .surface
-            e.renderMode = .additive
-            let c = CAEmitterCell()
-            c.contents = SpoilerDust.dot
-            c.contentsScale = UIScreen.main.scale
-            c.color = UIColor.white.cgColor
-            c.lifetime = 1.6
-            c.lifetimeRange = 0.8
-            c.velocity = 3
-            c.velocityRange = 4
-            c.emissionRange = .pi * 2
-            c.scale = 0.9
-            c.scaleRange = 0.5
-            c.alphaRange = 0.6
-            c.alphaSpeed = -0.45
-            e.emitterCells = [c]
+            e.renderMode = .unordered
             layer.addSublayer(e)
         }
         required init?(coder: NSCoder) { fatalError() }
         override func layoutSubviews() {
             super.layoutSubviews()
-            guard bounds.width > 0 else { return }
+            guard bounds.width > 0, bounds.size != lastSize else { return }
+            lastSize = bounds.size
             CATransaction.begin(); CATransaction.setDisableActions(true)
             e.frame = bounds
             e.emitterPosition = CGPoint(x: bounds.midX, y: bounds.midY)
             e.emitterSize = bounds.size
-            e.setValue(Float(max(40, bounds.width * bounds.height / 260)), forKeyPath: "emitterCells.0.birthRate")
+            // ВАЖНО: частота задаётся при создании ячеек (через keyPath по индексу она не менялась — частиц не было)
+            e.emitterCells = SpoilerDust.cells(area: bounds.width * bounds.height, color: .white, density: 0.55)
+            e.beginTime = CACurrentMediaTime() - 1.5
             CATransaction.commit()
-            if e.beginTime == 0 { e.beginTime = CACurrentMediaTime() - 1.5 }
         }
     }
     func makeUIView(context: Context) -> V { V() }
@@ -216,11 +205,11 @@ struct SpoilerMedia<Content: View>: View {
     var body: some View {
         let hidden = on && !revealed
         content
-            .blur(radius: hidden ? 34 : 0, opaque: true)
+            .blur(radius: hidden ? 40 : 0, opaque: true)
             .overlay {
                 if hidden {
                     ZStack {
-                        Color.black.opacity(0.18)
+                        Color.black.opacity(0.35)
                         SparkleDust()
                     }
                     .transition(.opacity)
@@ -232,5 +221,70 @@ struct SpoilerMedia<Content: View>: View {
                 Haptic.tap(.soft)
             }, including: hidden ? .all : .subviews)
             .accessibilityLabel(hidden ? "Скрытое фото. Нажмите, чтобы показать" : "")
+    }
+}
+
+// MARK: - Исчезающая публикация (как в Threads)
+
+/// Переключатель «курсор | призрак»: включено — белая капсула и чёрный кружок с призраком справа
+struct EphemeralToggle: View {
+    @Binding var on: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(duration: 0.32, bounce: 0.25)) { on.toggle() }
+            Haptic.tap(.soft)
+        } label: {
+            ZStack(alignment: on ? .trailing : .leading) {
+                Capsule()
+                    .fill(on ? Color.white : Color.white.opacity(0.12))
+                    .overlay(Capsule().stroke(.white.opacity(on ? 0 : 0.15), lineWidth: 1))
+                // подсказка на свободной половине
+                Image(systemName: on ? "character.cursor.ibeam" : "face.dashed")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(on ? Color.black.opacity(0.7) : Color.oxHint)
+                    .frame(width: 44, height: 44)
+                    .frame(maxWidth: .infinity, alignment: on ? .leading : .trailing)
+                    .padding(.horizontal, 6)
+                Circle()
+                    .fill(on ? Color.black : Color.white.opacity(0.22))
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        Image(systemName: on ? "face.dashed" : "character.cursor.ibeam")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(4)
+            }
+            .frame(width: 104, height: 52)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(on ? "Исчезающая публикация включена" : "Сделать публикацию исчезающей")
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// Пунктирное «облачко» с хвостиком слева-сверху — для исчезающих публикаций
+struct GhostBubble: View {
+    var dashed = true
+    var body: some View {
+        GhostBubbleShape()
+            .fill(Color.white.opacity(0.06))
+            .overlay(GhostBubbleShape().stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: dashed ? [5, 4] : [])))
+    }
+}
+
+struct GhostBubbleShape: Shape {
+    func path(in r: CGRect) -> Path {
+        let rad = min(26, r.height / 2)
+        var p = Path(roundedRect: r, cornerRadius: rad, style: .continuous)
+        // хвостик
+        var t = Path()
+        t.move(to: CGPoint(x: r.minX + 14, y: r.minY + 2))
+        t.addQuadCurve(to: CGPoint(x: r.minX - 2, y: r.minY - 8), control: CGPoint(x: r.minX + 2, y: r.minY - 1))
+        t.addQuadCurve(to: CGPoint(x: r.minX + 26, y: r.minY), control: CGPoint(x: r.minX + 10, y: r.minY - 6))
+        p.addPath(t)
+        return p
     }
 }

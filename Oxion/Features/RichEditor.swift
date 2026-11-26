@@ -103,8 +103,7 @@ final class RichTextView: UITextView {
         if f.contains(.strike) { a[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         if f.contains(.spoiler) {
             a[.oxSpoiler] = true
-            a[.backgroundColor] = UIColor.systemGray.withAlphaComponent(0.22)
-            a[.foregroundColor] = UIColor.label.withAlphaComponent(0.45)
+            a[.foregroundColor] = UIColor.label.withAlphaComponent(0.18)
         }
         return a
     }

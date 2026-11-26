@@ -208,6 +208,10 @@ struct ComposerView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(parts.count >= 10)
+                    .opacity(ephemeral ? 0 : 1)
+                    .frame(height: ephemeral ? 0 : nil)
+                    .clipped()
+                    .allowsHitTesting(!ephemeral)
 
                     if let q = request.quote {
                         QuoteCard(q: .object([
@@ -325,7 +329,8 @@ struct ComposerView: View {
                 }
                 // поле с форматированием: жирный/курсив/спойлер видны сразу, без значков ** и ||
                 let pid = part.wrappedValue.id
-                RichComposeField(placeholder: isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…",
+                let ghost = ephemeral && isFirst && !isReply
+                RichComposeField(placeholder: ghost ? "Поделитесь мыслями…" : (isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…"),
                                  // привязка по id части, а не по индексу: удаление части во время ввода не «роняет» приложение
                                  text: Binding(get: { parts.first(where: { $0.id == pid })?.text ?? "" },
                                                set: { v in if let i = parts.firstIndex(where: { $0.id == pid }) { parts[i].text = v } }),
@@ -334,6 +339,12 @@ struct ComposerView: View {
                                      if on { focused = pid } else if focused == pid { focused = nil }
                                  },
                                  onMention: { q in mention.update(q) })
+                    // в исчезающем режиме текст — в пунктирном «облачке»
+                    .padding(.horizontal, ghost ? 16 : 0)
+                    .padding(.vertical, ghost ? 13 : 0)
+                    .background { if ghost { GhostBubble() } }
+                    .padding(.top, ghost ? 4 : 0)
+                    .animation(.smooth(duration: 0.25), value: ghost)
                 // подсказки при вводе «@им…»
                 if focused == part.wrappedValue.id, mention.query != nil, !mention.users.isEmpty {
                     MentionList(users: mention.users) { pickMention($0) }
@@ -509,24 +520,8 @@ struct ComposerView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer(minLength: 4)
-                // исчезающая ветка: видна 24 часа — переключатель из «жидкого стекла»
-                Button {
-                    withAnimation(.snappy(duration: 0.3)) { ephemeral.toggle() }
-                    Haptic.tap(.soft)
-                } label: {
-                    ZStack(alignment: ephemeral ? .trailing : .leading) {
-                        Color.clear.frame(width: 68, height: 40)
-                        Image(systemName: "timer")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(ephemeral ? Color.limeInk : Color.oxHint)
-                            .frame(width: 34, height: 34)
-                            .glassEffect(.regular.interactive(), in: .circle)
-                            .padding(3)
-                    }
-                    .glassEffect(ephemeral ? .regular.tint(Color.lime.opacity(0.55)).interactive() : .regular.interactive(), in: .capsule)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ephemeral ? "Исчезающая ветка включена" : "Сделать исчезающей на 24 часа")
+                // исчезающая публикация (как в Threads): «курсор | призрак»
+                EphemeralToggle(on: $ephemeral)
             } else {
                 Spacer()
             }

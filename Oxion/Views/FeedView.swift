@@ -379,7 +379,16 @@ struct ThreadPost: View {
                     }
                     if let t = p.text, !t.isEmpty {
                         // разметка (**жирный**, ||спойлер|| …), ссылки и @упоминания
-                        RichPostText(text: t, font: big ? .title3 : .body, uiStyle: big ? .title3 : .body, onTap: { onOpen?() })
+                        if p.expiresAt != nil {
+                            // исчезающая публикация — текст в пунктирном облачке, как в Threads
+                            RichPostText(text: t, font: .body, uiStyle: .body, onTap: { onOpen?() })
+                                .padding(.horizontal, 14).padding(.vertical, 10)
+                                .background(GhostBubble())
+                                .padding(.top, 6)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            RichPostText(text: t, font: big ? .title3 : .body, uiStyle: big ? .title3 : .body, onTap: { onOpen?() })
+                        }
                     }
                     if AppSettings.autoloadPhotos, let photos = p.photos, !photos.isEmpty {
                         Group {
@@ -458,8 +467,8 @@ struct ThreadPost: View {
             }
             Spacer(minLength: 4)
             if p.expiresAt != nil {
-                Image(systemName: "timer").font(.caption2).foregroundStyle(Color.oxHint)
-                    .accessibilityLabel("Исчезающая ветка")
+                Image(systemName: "face.dashed").font(.caption).foregroundStyle(Color.oxHint)
+                    .accessibilityLabel("Исчезающая публикация")
             }
             if let at = p.at {
                 Text(FeedTime.ago(at)).font(.caption).foregroundStyle(Color.oxHint)

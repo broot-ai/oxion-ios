@@ -360,37 +360,53 @@ extension RichText {
 /// Облако частиц для спойлера (общая настройка для ленты и поля ввода)
 enum SpoilerDust {
     static let dot: CGImage? = {
-        let r = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
+        let r = UIGraphicsImageRenderer(size: CGSize(width: 6, height: 6))
         return r.image { ctx in
             UIColor.white.setFill()
-            ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 4, height: 4))
+            ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 6, height: 6))
         }.cgImage
     }()
 
+    /// Частицы как в Threads/Telegram: без фона, плотное «облако» мелких точек разного размера и яркости,
+    /// которые мерцают и чуть расползаются за края — края облака «живые», не прямоугольник.
+    static func cells(area: CGFloat, color: UIColor, density: CGFloat = 1) -> [CAEmitterCell] {
+        func cell(_ name: String, scale: CGFloat, alpha: CGFloat, rate: CGFloat) -> CAEmitterCell {
+            let c = CAEmitterCell()
+            c.name = name
+            c.contents = dot
+            c.contentsScale = UIScreen.main.scale
+            c.color = color.withAlphaComponent(alpha).cgColor
+            c.birthRate = Float(max(20, area * rate * density))
+            c.lifetime = 1.0
+            c.lifetimeRange = 0.6
+            c.velocity = 7
+            c.velocityRange = 7
+            c.emissionRange = .pi * 2
+            c.scale = scale
+            c.scaleRange = scale * 0.45
+            c.scaleSpeed = -scale * 0.25
+            c.alphaRange = 0.35
+            c.alphaSpeed = -0.75
+            return c
+        }
+        return [
+            cell("fine", scale: 0.30, alpha: 1.0, rate: 1 / 5.0),     // мелкая яркая пыль
+            cell("mid", scale: 0.48, alpha: 0.85, rate: 1 / 16.0),    // точки покрупнее
+            cell("dim", scale: 0.36, alpha: 0.45, rate: 1 / 9.0)      // тусклый фон облака
+        ]
+    }
+
     static func layer(frame rect: CGRect, color: UIColor) -> CAEmitterLayer {
         let e = CAEmitterLayer()
-        e.frame = rect
-        e.emitterPosition = CGPoint(x: rect.width / 2, y: rect.height / 2)
-        e.emitterSize = rect.size
+        // слой шире строки — частицы выходят за края
+        e.frame = rect.insetBy(dx: -4, dy: -3)
+        e.emitterPosition = CGPoint(x: e.bounds.midX, y: e.bounds.midY)
+        e.emitterSize = rect.insetBy(dx: 1, dy: 1).size
         e.emitterShape = .rectangle
         e.emitterMode = .surface
         e.renderMode = .unordered
-        e.masksToBounds = true
-        let c = CAEmitterCell()
-        c.contents = dot
-        c.contentsScale = UIScreen.main.scale
-        c.color = color.cgColor
-        c.birthRate = Float(max(60, rect.width * rect.height / 3.5))
-        c.lifetime = 1.2
-        c.lifetimeRange = 0.6
-        c.velocity = 6
-        c.velocityRange = 8
-        c.emissionRange = .pi * 2
-        c.scale = 1
-        c.scaleRange = 0.4
-        c.alphaSpeed = -0.5
-        c.alphaRange = 0.3
-        e.emitterCells = [c]
+        e.masksToBounds = false
+        e.emitterCells = cells(area: rect.width * rect.height, color: color)
         e.beginTime = CACurrentMediaTime() - 1.5    // сразу «облако», без пустого старта
         return e
     }
