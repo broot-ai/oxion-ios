@@ -84,6 +84,8 @@ struct Author: Decodable {
     let photo: String?
     let trainer: Bool?
     let me: Bool?
+    /// официальная отметка OXION (огонёк)
+    var official: OxOfficial? = nil
 }
 
 struct Post: Decodable, Identifiable {
@@ -172,6 +174,7 @@ struct FUser: Decodable {
     var todo: [FTodo]? = nil
     var channel: MyChannel? = nil
     var username: String? = nil
+    var official: OxOfficial? = nil
     var usernames: [String]? = nil
 }
 

@@ -440,11 +440,14 @@ struct ThreadPost: View {
 
     private func header(_ p: Post) -> some View {
         HStack(spacing: 5) {
+            if let o = p.author.official {
+                OxionSealButton(official: o, userId: p.author.id, name: p.author.name ?? "", photo: p.author.photo, size: 16, animated: false)
+            }
             Button { onUser(p.author.id) } label: {
                 Text(p.author.name ?? "Без имени").font(.subheadline.weight(.semibold)).lineLimit(1)
             }
             .buttonStyle(.plain)
-            if p.author.trainer == true {
+            if p.author.trainer == true && p.author.official == nil {
                 Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
             }
             if let tp = p.topic, let t = model.meta?.feedTopics?.first(where: { $0.key == tp }) {

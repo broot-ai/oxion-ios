@@ -80,6 +80,13 @@ struct UserProfileView: View {
         .photosPicker(isPresented: $showPhotoPick, selection: $photoPick, matching: .images)
         .onChange(of: photoPick) { Task { await uploadPhoto() } }
         .toolbar {
+            if let u, model.me?.admin == true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    OfficialAdminMenu(userId: u.id, current: u.official) { o in
+                        withAnimation(.spring(duration: 0.4, bounce: 0.3)) { self.u?.official = o }
+                    }
+                }
+            }
             if let u, u.me != true {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -119,8 +126,12 @@ struct UserProfileView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
+                        // огонёк OXION слева от имени, как галочка Telegram
+                        if let o = u.official {
+                            OxionSealButton(official: o, userId: u.id, name: u.name ?? "", photo: u.photo, username: u.username, size: 26)
+                        }
                         Text(u.name ?? "").font(.title.bold())
-                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk) }
+                        if u.trainer == true && u.official == nil { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk) }
                     }
                     if let un = u.username {
                         Menu {
@@ -160,6 +171,7 @@ struct UserProfileView: View {
             }
             if let b = u.bio, !b.isEmpty { Text(b) }
             if let c = u.channel { ProfileChannelRow(channel: c) }
+            if let o = u.official { OfficialFootnote(official: o) }
             HStack(spacing: 16) {
                 Text("\(u.followers ?? 0)").bold() + Text(" подписчиков").foregroundColor(Color.oxHint)
                 Text("\(u.following ?? 0)").bold() + Text(" подписок").foregroundColor(Color.oxHint)
