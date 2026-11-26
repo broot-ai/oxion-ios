@@ -997,9 +997,6 @@ struct StoryTextEditor: View {
     private func cancel() { close() }
 }
 
-extension Array {
-    subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
-}
 
 // MARK: - Толщина кисти (вертикальный ползунок слева)
 
