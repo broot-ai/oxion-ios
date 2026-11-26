@@ -146,25 +146,23 @@ struct ResumeLoadingView: View {
 
     var body: some View {
         ZStack {
-            // тёмный фон с мягким мятным свечением
-            Color(red: 0.02, green: 0.03, blue: 0.03).ignoresSafeArea()
-            RadialGradient(colors: [Color.lime.opacity(glow ? 0.28 : 0.14), .clear],
-                           center: .center, startRadius: 10, endRadius: glow ? 420 : 300)
-                .ignoresSafeArea()
-                .blur(radius: 30)
-            LinearGradient(colors: [.clear, Color.lime.opacity(0.06)], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+            // фон — зацикленное видео (Resources/loading-bg.mp4)
+            Color.black.ignoresSafeArea()
+            LoadingVideoBackground()
 
             VStack(spacing: 26) {
-                Spacer()
-                FlameMark(size: 96)
-                    .scaleEffect(r.finished ? 1.08 : (appear ? 1 : 0.8))
-                    .shadow(color: Color.lime.opacity(0.45), radius: glow ? 40 : 22)
-                Text(verbatim: "OXION")
-                    .font(.system(size: 30, weight: .black, design: .rounded))
-                    .tracking(8)
-                    .foregroundStyle(LinearGradient(colors: [.white, Color.lime], startPoint: .leading, endPoint: .trailing))
-                    .opacity(appear ? 1 : 0)
+                // логотип сверху строкой — центр экрана занимает фигура из видео
+                HStack(spacing: 4) {
+                    FlameMark(size: 40)
+                        .scaleEffect(r.finished ? 1.08 : (appear ? 1 : 0.8))
+                        .shadow(color: Color.lime.opacity(0.45), radius: glow ? 24 : 12)
+                    Text(verbatim: "OXION")
+                        .font(.system(size: 26, weight: .black, design: .rounded))
+                        .tracking(6)
+                        .foregroundStyle(LinearGradient(colors: [.white, Color.lime], startPoint: .leading, endPoint: .trailing))
+                        .opacity(appear ? 1 : 0)
+                }
+                .padding(.top, 12)
                 Spacer()
                 card
                     .padding(.horizontal, 28)

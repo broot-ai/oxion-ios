@@ -1,14 +1,92 @@
 import SwiftUI
+import AVFoundation
 
 struct SplashView: View {
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LoadingVideoBackground()
             VStack(spacing: 20) {
+                Spacer()
                 FlameMark(size: 90)
-                ProgressView()
+                ProgressView().tint(.white)
+                Spacer().frame(height: 80)
             }
         }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// Фон загрузки: зацикленное видео без звука (Resources/loading-bg.mp4) + затемнение снизу и сверху.
+/// Пока видео не стартовало — первый кадр картинкой, чтобы не мигал чёрный экран.
+/// В режиме энергосбережения/«уменьшить движение» — только картинка.
+struct LoadingVideoBackground: View {
+    var dim: Double = 0.35
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { g in
+            ZStack {
+                Image("loading-poster")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: g.size.width, height: g.size.height)
+                    .clipped()
+                if !reduceMotion && PowerSaver.allowsNow(.liveBackgrounds) {
+                    LoopVideoView(name: "loading-bg", ext: "mp4")
+                        .frame(width: g.size.width, height: g.size.height)
+                }
+                // затемнение: текст и карточка читаются поверх видео
+                Color.black.opacity(dim)
+                LinearGradient(colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.85)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Бесшумное бесконечное видео на весь размер (aspect fill), не трогает чужую музыку
+struct LoopVideoView: UIViewRepresentable {
+    let name: String
+    let ext: String
+
+    final class V: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var pl: AVPlayerLayer { layer as! AVPlayerLayer }
+        var looper: AVPlayerLooper?
+    }
+
+    func makeUIView(context: Context) -> V {
+        let v = V()
+        v.backgroundColor = .clear
+        v.pl.videoGravity = .resizeAspectFill
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else { return v }
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer()
+        player.isMuted = true
+        player.preventsDisplaySleepDuringVideoPlayback = false
+        player.allowsExternalPlayback = false
+        v.looper = AVPlayerLooper(player: player, templateItem: item)
+        v.pl.player = player
+        // показываем слой только когда пошли кадры — под ним картинка-постер
+        v.pl.opacity = 0
+        player.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            CATransaction.begin(); CATransaction.setAnimationDuration(0.3)
+            v.pl.opacity = 1
+            CATransaction.commit()
+        }
+        return v
+    }
+
+    func updateUIView(_ v: V, context: Context) {}
+
+    static func dismantleUIView(_ v: V, coordinator: ()) {
+        v.pl.player?.pause()
+        v.looper = nil
+        v.pl.player = nil
     }
 }
 
