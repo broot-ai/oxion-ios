@@ -175,15 +175,16 @@ final class VideoNoteRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
     }
 
     nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo url: URL, from connections: [AVCaptureConnection], error: Error?) {
-        MainActor.assumeIsolated {
-            recording = false
-            let ok = (error == nil) || ((error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true)
-            if let f = finish {
-                started = nil
+        // делегат может прийти не в главном потоке — assumeIsolated тогда «роняет» приложение
+        let ok = (error == nil) || ((error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true)
+        Task { @MainActor in
+            self.recording = false
+            if let f = self.finish {
+                self.started = nil
                 f(ok ? url : nil)
-                finish = nil
+                self.finish = nil
             } else {
-                earlyURL = ok ? url : nil
+                self.earlyURL = ok ? url : nil
                 if ok { Haptic.tap(.rigid) }
             }
         }

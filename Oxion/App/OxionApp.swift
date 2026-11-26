@@ -490,7 +490,7 @@ struct MainTabView: View {
                 TabHoldOverlay(press: hold, actions: holdActions(tabOrder[hold.index])) { self.hold = nil }
             }
         }
-        .onChange(of: model.selectedTab) { TabHold.install { p in hold = p } }
+        .onChange(of: model.selectedTab) { TabHold.install { p in hold = p }; CrashReporter.mark("tab:\(model.selectedTab)") }
         .onAppear {
             TabHold.install { p in hold = p }
             // свайп от края экрана — соседняя вкладка

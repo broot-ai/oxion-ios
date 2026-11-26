@@ -85,9 +85,13 @@ enum RichText {
     static func render(_ s: String, linkColor: Color?, revealed: Set<Int>) -> (AttributedString, hasSpoilers: Bool) {
         var (a, sp) = parse(s)
         linkify(&a, color: linkColor)
+        let total = a.characters.count
         for x in sp where !revealed.contains(x.id) {
-            let lo = a.characters.index(a.startIndex, offsetBy: x.range.lowerBound)
-            let hi = a.characters.index(a.startIndex, offsetBy: x.range.upperBound)
+            // защита от выхода за границы (составные символы/эмодзи на стыке разметки)
+            let l = min(max(0, x.range.lowerBound), total), u = min(max(l, x.range.upperBound), total)
+            guard u > l else { continue }
+            let lo = a.characters.index(a.startIndex, offsetBy: l)
+            let hi = a.characters.index(a.startIndex, offsetBy: u)
             a[lo..<hi].foregroundColor = .clear
             a[lo..<hi].backgroundColor = Color.gray.opacity(0.45)
             a[lo..<hi].strikethroughStyle = nil
@@ -326,9 +330,10 @@ extension RichText {
         let base = UIFont.preferredFont(forTextStyle: style)
         let out = NSMutableAttributedString(string: plain, attributes: [.font: base, .foregroundColor: UIColor.label])
         for run in a.runs {
-            let lo = a.characters.distance(from: a.startIndex, to: run.range.lowerBound)
-            let hi = a.characters.distance(from: a.startIndex, to: run.range.upperBound)
+            let lo = min(a.characters.distance(from: a.startIndex, to: run.range.lowerBound), u16.count - 1)
+            let hi = min(max(lo, a.characters.distance(from: a.startIndex, to: run.range.upperBound)), u16.count - 1)
             let r = NSRange(location: u16[lo], length: u16[hi] - u16[lo])
+            guard r.length > 0, NSMaxRange(r) <= out.length else { continue }
             if let i = run.inlinePresentationIntent {
                 if i.contains(.code) {
                     out.addAttribute(.font, value: UIFont.monospacedSystemFont(ofSize: base.pointSize * 0.94, weight: .regular), range: r)
@@ -343,7 +348,11 @@ extension RichText {
             if run.strikethroughStyle != nil { out.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: r) }
             if let l = run.link { out.addAttribute(.link, value: l, range: r) }
         }
-        let ranges = sp.map { x in (x.id, NSRange(location: u16[x.range.lowerBound], length: u16[x.range.upperBound] - u16[x.range.lowerBound])) }
+        let ranges: [(Int, NSRange)] = sp.compactMap { x in
+            let l = min(max(0, x.range.lowerBound), u16.count - 1), u = min(max(l, x.range.upperBound), u16.count - 1)
+            let r = NSRange(location: u16[l], length: u16[u] - u16[l])
+            return r.length > 0 && NSMaxRange(r) <= out.length ? (x.id, r) : nil
+        }
         return (out, ranges)
     }
 }
@@ -460,6 +469,7 @@ final class SpoilerTextView: UITextView, UITextViewDelegate {
     }()
 
     private func rects(for r: NSRange) -> [CGRect] {
+        guard r.length > 0, NSMaxRange(r) <= textStorage.length else { return [] }
         let g = layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
         var out: [CGRect] = []
         layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
@@ -514,11 +524,13 @@ final class SpoilerTextView: UITextView, UITextViewDelegate {
             e.opacity = 0
             e.add(a, forKey: "fade")
         }
+        // текст проявляется плавно, частицы гаснут сами (они уже в слое)
+        let fading = emitters.filter { $0.name == "\(id)" }
+        emitters.removeAll { $0.name == "\(id)" }
         UIView.transition(with: self, duration: 0.4, options: [.transitionCrossDissolve, .allowUserInteraction]) {
-            let keep = self.emitters
             self.apply()
-            self.emitters = keep
-        } completion: { _ in self.rebuildParticles() }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { fading.forEach { $0.removeFromSuperlayer() } }
     }
 
     func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {

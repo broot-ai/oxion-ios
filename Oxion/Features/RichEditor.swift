@@ -130,6 +130,25 @@ final class RichTextView: UITextView {
         changed()
     }
 
+    /// приводит все атрибуты к нашим стилям (вставка из других приложений приносит свои шрифты и цвета)
+    func normalize() {
+        let len = textStorage.length
+        guard len > 0 else { return }
+        var bad = false
+        textStorage.enumerateAttributes(in: NSRange(location: 0, length: len)) { a, _, stop in
+            let want = attrs(for: Self.flags(a))
+            if (a[.font] as? UIFont) != (want[.font] as? UIFont) || a[.link] != nil || a.count != want.count { bad = true; stop.pointee = true }
+        }
+        guard bad else { return }
+        let sel = selectedRange
+        textStorage.beginEditing()
+        textStorage.enumerateAttributes(in: NSRange(location: 0, length: len)) { a, r, _ in
+            textStorage.setAttributes(attrs(for: Self.flags(a)), range: r)
+        }
+        textStorage.endEditing()
+        if NSMaxRange(sel) <= textStorage.length { selectedRange = sel }
+    }
+
     func clearFormat() {
         let r = selectedRange
         guard r.length > 0 else { typingAttributes = baseAttrs; return }
@@ -207,13 +226,16 @@ final class RichTextView: UITextView {
     func rebuildDust() {
         dustLayers.forEach { $0.removeFromSuperlayer() }
         dustLayers.removeAll()
-        guard let at = attributedText, at.length > 0, bounds.width > 0 else { return }
+        guard let at = attributedText, at.length > 0, bounds.width > 0, at.length == textStorage.length else { return }
+        var any = false
+        at.enumerateAttribute(.oxSpoiler, in: NSRange(location: 0, length: at.length)) { v, _, stop in if v != nil { any = true; stop.pointee = true } }
+        guard any else { return }
         layoutManager.ensureLayout(for: textContainer)
         let color = UIColor.label.resolvedColor(with: traitCollection)
         at.enumerateAttribute(.oxSpoiler, in: NSRange(location: 0, length: at.length)) { v, r, _ in
-            guard v != nil else { return }
-            let g = layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
-            layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
+            guard v != nil, r.length > 0, NSMaxRange(r) <= self.textStorage.length else { return }
+            let g = self.layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+            self.layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
                 let fr = rect.offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top)
                 guard fr.width > 1 else { return }
                 let e = SpoilerDust.layer(frame: fr, color: color)
@@ -223,26 +245,14 @@ final class RichTextView: UITextView {
         }
     }
 
+    private var lastWidth: CGFloat = 0
     override func layoutSubviews() {
         super.layoutSubviews()
-        if !dustLayers.isEmpty || attributedText?.length ?? 0 > 0 {
-            // частицы следуют за переносом строк
-            let had = dustLayers.map(\.frame)
-            rebuildDustIfMoved(had)
+        // ширина поменялась (поворот, первая раскладка) — пересобираем частицы вне цикла раскладки
+        if bounds.width != lastWidth {
+            lastWidth = bounds.width
+            DispatchQueue.main.async { [weak self] in self?.rebuildDust() }
         }
-    }
-    private func rebuildDustIfMoved(_ had: [CGRect]) {
-        guard let at = attributedText, at.length > 0 else { return }
-        var now: [CGRect] = []
-        at.enumerateAttribute(.oxSpoiler, in: NSRange(location: 0, length: at.length)) { v, r, _ in
-            guard v != nil else { return }
-            let g = layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
-            layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
-                let fr = rect.offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top)
-                if fr.width > 1 { now.append(fr) }
-            }
-        }
-        if now != had { rebuildDust() }
     }
 
     // MARK: @упоминания
@@ -400,7 +410,11 @@ struct RichComposeField: UIViewRepresentable {
         var parent: RichComposeField
         init(_ p: RichComposeField) { parent = p }
 
-        func textViewDidChange(_ tv: UITextView) { (tv as? RichTextView)?.changed() }
+        func textViewDidChange(_ tv: UITextView) {
+            guard let r = tv as? RichTextView else { return }
+            if tv.markedTextRange == nil { r.normalize() }   // чужие шрифты/цвета после вставки → наши стили
+            r.changed()
+        }
         func textViewDidChangeSelection(_ tv: UITextView) {
             (tv as? RichTextView)?.reportMention()
             (tv as? RichTextView)?.refreshButtons()
@@ -408,15 +422,6 @@ struct RichComposeField: UIViewRepresentable {
         func textViewDidBeginEditing(_ tv: UITextView) { parent.onFocus(true); (tv as? RichTextView)?.reportMention() }
         func textViewDidEndEditing(_ tv: UITextView) { parent.onFocus(false); parent.onMention(nil) }
 
-        // вставка: чужое форматирование не тащим, только текст
-        func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText t: String) -> Bool {
-            guard t.count > 1, let r = tv as? RichTextView else { return true }
-            let ins = NSAttributedString(string: t, attributes: r.typingAttributes)
-            r.textStorage.replaceCharacters(in: range, with: ins)
-            r.selectedRange = NSRange(location: range.location + ins.length, length: 0)
-            r.changed()
-            return false
-        }
 
         // меню выделения: «Форматирование ›», как в Telegram
         func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {

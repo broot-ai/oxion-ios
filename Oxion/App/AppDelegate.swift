@@ -9,6 +9,7 @@ final class OxAppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        CrashReporter.install()
         OxSound.preload()
         BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshId, using: nil) { task in
             guard let t = task as? BGAppRefreshTask else { task.setTaskCompleted(success: false); return }

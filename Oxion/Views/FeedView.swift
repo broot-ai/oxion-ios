@@ -151,6 +151,7 @@ struct FeedView: View {
             }
             .background(Color.oxBg)
             .navigationTitle("Лента")
+            .onAppear { CrashReporter.mark("feed") }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }

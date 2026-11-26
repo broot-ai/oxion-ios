@@ -51,6 +51,7 @@ struct PostDetailView: View {
         }
         .background(Color.oxBg)
         .navigationTitle("Ветка")
+            .onAppear { CrashReporter.mark("post") }
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $route) { FeedDestination(route: $0) }
         .safeAreaInset(edge: .bottom) {
@@ -262,6 +263,7 @@ struct ComposerView: View {
                 .ignoresSafeArea()
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
+            .onAppear { CrashReporter.mark("composer") }
             .photosPicker(isPresented: $showPicker, selection: $picks, maxSelectionCount: 4, matching: .images)
             .onChange(of: picks) { Task { await loadPicks() } }
             .sheet(isPresented: $choosingWorkout) {
@@ -322,7 +324,9 @@ struct ComposerView: View {
                 // поле с форматированием: жирный/курсив/спойлер видны сразу, без значков ** и ||
                 let pid = part.wrappedValue.id
                 RichComposeField(placeholder: isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…",
-                                 text: part.text,
+                                 // привязка по id части, а не по индексу: удаление части во время ввода не «роняет» приложение
+                                 text: Binding(get: { parts.first(where: { $0.id == pid })?.text ?? "" },
+                                               set: { v in if let i = parts.firstIndex(where: { $0.id == pid }) { parts[i].text = v } }),
                                  controller: editors.of(pid),
                                  onFocus: { on in
                                      if on { focused = pid } else if focused == pid { focused = nil }
