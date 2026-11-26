@@ -285,7 +285,7 @@ struct ChatMicButton: View {
     @State private var pressStart: Date?
     @State private var holdTask: Task<Void, Never>?
 
-    private let big: CGFloat = 78
+    private let big: CGFloat = 100
 
     var body: some View {
         ZStack {
@@ -293,9 +293,9 @@ struct ChatMicButton: View {
                 Button { rec.send() } label: {
                     Image(systemName: "paperplane.fill")
                         .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(Color.onLime)
+                        .foregroundStyle(Color.white)
                         .frame(width: 44, height: 44)
-                        .background(Color.lime, in: Circle())
+                        .background(RecStyle.accent, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .transition(.scale.combined(with: .opacity))
@@ -360,21 +360,21 @@ struct ChatMicButton: View {
         let lvl = CGFloat(rec.level)
         return ZStack {
             // «дыхание» от громкости, как у Telegram
-            Circle().fill(Color.lime.opacity(0.22))
+            Circle().fill(RecStyle.accent.opacity(0.16))
                 .frame(width: big, height: big)
-                .scaleEffect(1.08 + lvl * 0.55)
-                .animation(.spring(response: 0.18, dampingFraction: 0.6), value: lvl)
-            Circle().fill(Color.lime.opacity(0.35))
-                .frame(width: big, height: big)
-                .scaleEffect(1.02 + lvl * 0.28)
-                .animation(.spring(response: 0.14, dampingFraction: 0.7), value: lvl)
-            Circle().fill(Color.lime).frame(width: big, height: big)
-                .shadow(color: Color.lime.opacity(0.35), radius: 12)
+                .scaleEffect(1.1 + lvl * 0.45)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: lvl)
+            Color.clear
+                .frame(width: big + 12, height: big + 12)
+                .glassEffect(.regular.tint(RecStyle.accent.opacity(0.25)), in: .circle)
+                .scaleEffect(1 + lvl * 0.12)
+                .animation(.spring(response: 0.16, dampingFraction: 0.7), value: lvl)
+            Circle().fill(RecStyle.accent).frame(width: big - 8, height: big - 8)
             if rec.phase == .locked {
                 Button { rec.send() } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(Color.onLime)
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(Color.white)
                         .frame(width: big, height: big)
                         .contentShape(Circle())
                 }
@@ -383,12 +383,11 @@ struct ChatMicButton: View {
             } else {
                 Image(systemName: rec.mode == .voice ? "mic.fill" : "video.fill")
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(Color.onLime)
+                    .foregroundStyle(Color.white)
                     .allowsHitTesting(false)
             }
         }
         .frame(width: big, height: big)
-        .offset(x: -12)
     }
 
     @ViewBuilder private var topPill: some View {
@@ -406,7 +405,7 @@ struct ChatMicButton: View {
                 .foregroundStyle(.primary)
                 .frame(width: 40, height: 66 - rec.lockProgress * 22)
                 .glassEffect(.regular, in: .capsule)
-                .offset(y: -(big / 2 + 34) - rec.lockProgress * 26)
+                .offset(y: -(big / 2 + 26) - rec.lockProgress * 26)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .allowsHitTesting(false)
             } else if rec.phase == .locked && rec.mode == .voice {
@@ -419,7 +418,7 @@ struct ChatMicButton: View {
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.interactive(), in: .circle)
-                .offset(y: -(big / 2 + 30))
+                .offset(y: -(big / 2 + 22))
                 .transition(.scale.combined(with: .opacity))
             } else if rec.phase == .preview {
                 Button { Task { await rec.resume() } } label: {
@@ -473,7 +472,7 @@ struct ChatRecordPanel: View {
                 .onAppear { withAnimation(.easeInOut(duration: 0.55).repeatForever()) { blink = true } }
             TimelineView(.periodic(from: .now, by: 0.03)) { _ in
                 Text(timeText(rec.duration))
-                    .font(.system(size: 16, weight: .regular).monospacedDigit())
+                    .font(.system(size: 15, weight: .regular).monospacedDigit())
                     .foregroundStyle(.primary)
             }
             .frame(width: 74, alignment: .leading)
@@ -482,7 +481,7 @@ struct ChatRecordPanel: View {
                     Button { rec.cancel() } label: {
                         Text("Отмена")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.limeInk)
+                            .foregroundStyle(RecStyle.accent)
                             .padding(.horizontal, 10).frame(height: 40)
                             .contentShape(Rectangle())
                     }
@@ -505,7 +504,7 @@ struct ChatRecordPanel: View {
             .clipped()
         }
         .padding(.leading, 16)
-        .padding(.trailing, 8)
+        .padding(.trailing, 58)   // правая часть плашки уходит под большой круг
         .frame(height: 44)
         .background(panelBG)
         .animation(.spring(duration: 0.3), value: rec.phase)
@@ -530,7 +529,7 @@ struct ChatRecordPanel: View {
                     HStack(alignment: .center, spacing: 2) {
                         ForEach(Array(bars.enumerated()), id: \.offset) { i, l in
                             Capsule()
-                                .fill(Double(i) / Double(max(1, bars.count)) <= rec.playProgress && rec.playProgress > 0 ? Color.onLime : Color.onLime.opacity(0.4))
+                                .fill(Double(i) / Double(max(1, bars.count)) <= rec.playProgress && rec.playProgress > 0 ? Color.white : Color.white.opacity(0.4))
                                 .frame(width: 3, height: max(3, CGFloat(l) * 22))
                         }
                     }
@@ -539,9 +538,9 @@ struct ChatRecordPanel: View {
                 .padding(.horizontal, 14)
                 // ручки обрезки, как у Telegram
                 HStack {
-                    Capsule().fill(Color.onLime).frame(width: 3, height: 18)
+                    Capsule().fill(Color.white).frame(width: 3, height: 18)
                     Spacer()
-                    Capsule().fill(Color.onLime).frame(width: 3, height: 18)
+                    Capsule().fill(Color.white).frame(width: 3, height: 18)
                 }
                 .padding(.horizontal, 7)
                 Button { rec.togglePlay() } label: {
@@ -550,14 +549,14 @@ struct ChatRecordPanel: View {
                         Text(String(format: "%d:%02d", Int(rec.voice.duration) / 60, Int(rec.voice.duration.rounded()) % 60))
                             .font(.system(size: 13, weight: .semibold).monospacedDigit())
                     }
-                    .foregroundStyle(Color.lime)
+                    .foregroundStyle(RecStyle.accent)
                     .padding(.horizontal, 9).frame(height: 24)
-                    .background(Color.onLime.opacity(0.85), in: Capsule())
+                    .background(Color.white.opacity(0.85), in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
             .frame(height: 40)
-            .background(Color.lime, in: Capsule())
+            .background(RecStyle.accent, in: Capsule())
         }
         .transition(.move(edge: .trailing).combined(with: .opacity))
     }
@@ -610,7 +609,7 @@ struct ChatVideoNoteLive: View {
                     .clipShape(Circle())
                 Circle()
                     .trim(from: 0, to: min(1, rec.video.duration / 60))
-                    .stroke(Color.lime, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .stroke(RecStyle.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .frame(width: 292, height: 292)
             }
@@ -619,4 +618,10 @@ struct ChatVideoNoteLive: View {
         .transition(.scale.combined(with: .opacity))
         .allowsHitTesting(false)
     }
+}
+
+
+/// Цвета записи — как в Telegram
+enum RecStyle {
+    static let accent = Color(hex: 0x3478F6)
 }

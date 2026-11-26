@@ -425,7 +425,8 @@ struct MainTabView: View {
         case .feed:
             return [
                 .init(title: "Новая публикация", icon: "square.and.pencil") { model.handle(route: "compose") },
-                .init(title: "Открыть ленту", icon: "flame.fill") { model.selectedTab = .feed },
+                .init(title: "Мой профиль в ленте", icon: "person.crop.circle") { if let id = model.me?.id { model.profileBox = AppModel.IdBox(id: id) } },
+                .init(title: "Моя визитка и QR", icon: "qrcode") { showCard = true },
             ]
         case .diary:
             return [

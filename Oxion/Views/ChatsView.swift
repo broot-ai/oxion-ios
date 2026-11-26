@@ -1028,7 +1028,7 @@ struct ChatView: View {
                 if rec.active {
                     // плашка заканчивается перед большим кругом — круг не перекрывается (как в Telegram)
                     ChatRecordPanel(rec: rec)
-                        .padding(.trailing, rec.phase == .preview ? 52 : 82)
+                        .padding(.trailing, rec.phase == .preview ? 52 : 22)
                 }
             }
             .overlay(alignment: .topTrailing) {
