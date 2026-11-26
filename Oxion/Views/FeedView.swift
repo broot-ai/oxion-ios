@@ -447,7 +447,7 @@ struct ThreadPost: View {
                 Text(p.author.name ?? "Без имени").font(.subheadline.weight(.semibold)).lineLimit(1)
             }
             .buttonStyle(.plain)
-            if p.author.trainer == true && p.author.official == nil {
+            if p.author.trainer == true {
                 Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
             }
             if let tp = p.topic, let t = model.meta?.feedTopics?.first(where: { $0.key == tp }) {

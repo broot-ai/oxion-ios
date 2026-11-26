@@ -131,7 +131,7 @@ struct UserProfileView: View {
                             OxionSealButton(official: o, userId: u.id, name: u.name ?? "", photo: u.photo, username: u.username, size: 26)
                         }
                         Text(u.name ?? "").font(.title.bold())
-                        if u.trainer == true && u.official == nil { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk) }
+                        if u.trainer == true { Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.limeInk) }
                     }
                     if let un = u.username {
                         Menu {
