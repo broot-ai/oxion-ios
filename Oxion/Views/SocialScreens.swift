@@ -248,7 +248,7 @@ struct ActivityView: View {
                             (Text(a.actor.name ?? "").bold() + Text(" " + title(a.kind)).foregroundColor(Color.oxHint))
                                 .font(.subheadline)
                             if let t = a.post?.text, !t.isEmpty {
-                                Text(t).font(.subheadline).lineLimit(2)
+                                Text(RichText.plain(t)).font(.subheadline).lineLimit(2)
                             }
                             if let at = a.at { Text(FeedTime.ago(at)).font(.caption).foregroundStyle(Color.oxHint) }
                         }
@@ -288,6 +288,7 @@ struct ActivityView: View {
         case "repost": return "arrow.2.squarepath"
         case "quote": return "quote.opening"
         case "vote": return "chart.bar.fill"
+        case "mention": return "at"
         default: return "bell.fill"
         }
     }

@@ -89,14 +89,28 @@ final class VideoNoteRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
     private let output = AVCaptureMovieFileOutput()
     private var finish: ((URL?) -> Void)?
 
+    @ObservationIgnored private var prepTask: Task<Bool, Never>?
+    @ObservationIgnored private var earlyURL: URL?
+
+    /// Готовит камеру один раз: повторные вызовы ждут ту же задачу (прогрев при касании + старт записи)
     func prepare() async -> Bool {
+        if let t = prepTask { return await t.value }
+        let t = Task { await self.prepareNow() }
+        prepTask = t
+        let ok = await t.value
+        prepTask = nil
+        return ok
+    }
+
+    private func prepareNow() async -> Bool {
         guard await AVCaptureDevice.requestAccess(for: .video), await AVAudioApplication.requestRecordPermission() else {
             OxAlert.show(icon: "video.slash.fill", tint: .orange, title: "Нет доступа к камере или микрофону", message: "Настройки → Oxion")
             return false
         }
         if !ready {
             session.beginConfiguration()
-            session.sessionPreset = .high
+            // 720p хватает для кружка: файл меньше, камера включается быстрее
+            session.sessionPreset = session.canSetSessionPreset(.hd1280x720) ? .hd1280x720 : .high
             if let cam = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
                let i = try? AVCaptureDeviceInput(device: cam), session.canAddInput(i) { session.addInput(i) }
             if let mic = AVCaptureDevice.default(for: .audio), let i = try? AVCaptureDeviceInput(device: mic), session.canAddInput(i) { session.addInput(i) }
@@ -114,23 +128,48 @@ final class VideoNoteRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
         return true
     }
 
-    func start() {
-        guard ready, !output.isRecording else { return }
+    /// Старт записи. Ждём, пока камера реально отдаёт кадры: иначе запись падает с ошибкой
+    /// «нет активных соединений» и при отправке кружок молча пропадает.
+    func start() async -> Bool {
+        guard ready, !output.isRecording else { return output.isRecording }
+        let s = session
+        if !s.isRunning { await Task.detached { s.startRunning() }.value }
+        for _ in 0..<30 {
+            if output.connection(with: .video)?.isActive == true { break }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        guard output.connection(with: .video)?.isActive == true else { return false }
+        if let c = output.connection(with: .video) {
+            if c.isVideoMirroringSupported { c.automaticallyAdjustsVideoMirroring = false; c.isVideoMirrored = true }
+            if c.isVideoRotationAngleSupported(90) { c.videoRotationAngle = 90 }
+        }
+        earlyURL = nil
         let u = FileManager.default.temporaryDirectory.appending(path: "note-\(UUID().uuidString).mov")
         output.startRecording(to: u, recordingDelegate: self)
         started = Date()
         recording = true
         Haptic.tap(.medium)
+        return true
     }
 
     var duration: Double { started.map { Date().timeIntervalSince($0) } ?? 0 }
 
     func stop(_ done: @escaping (URL?) -> Void) {
-        finish = done
-        if output.isRecording { output.stopRecording() } else { done(nil) }
+        if output.isRecording {
+            finish = done
+            output.stopRecording()
+        } else {
+            // запись уже закончилась сама (лимит 60 с) — отдаём готовый файл
+            let u = earlyURL
+            earlyURL = nil
+            started = nil
+            recording = false
+            done(u)
+        }
     }
 
     func shutdown() {
+        prepTask?.cancel()
         let s = session
         Task.detached { if s.isRunning { s.stopRunning() } }
     }
@@ -139,8 +178,14 @@ final class VideoNoteRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
         MainActor.assumeIsolated {
             recording = false
             let ok = (error == nil) || ((error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true)
-            finish?(ok ? url : nil)
-            finish = nil
+            if let f = finish {
+                started = nil
+                f(ok ? url : nil)
+                finish = nil
+            } else {
+                earlyURL = ok ? url : nil
+                if ok { Haptic.tap(.rigid) }
+            }
         }
     }
 }
@@ -232,8 +277,7 @@ struct RecordButton: View {
         if mode == .voice {
             guard await voice.start() else { return }
         } else {
-            guard await video.prepare() else { return }
-            video.start()
+            guard await video.prepare(), await video.start() else { return }
         }
         withAnimation { active = true }
     }

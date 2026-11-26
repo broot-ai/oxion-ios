@@ -170,9 +170,18 @@ final class ChatRecorder {
 
     /// касание: заранее готовим микрофон, пока палец ещё не «удержал»
     @ObservationIgnored var pressing = false
-    func touchDown() { pressing = true; if mode == .voice { voice.warmUp() } }
+    func touchDown() {
+        pressing = true
+        if mode == .voice { voice.warmUp() }
+        else { Task { _ = await video.prepare() } }   // камера включается, пока палец ещё «решает»
+    }
     func touchUp() { pressing = false }
-    func touchCancelled() { if mode == .voice && phase == .idle { voice.coolDown() } }
+    func touchCancelled() {
+        guard phase == .idle else { return }
+        if mode == .voice { voice.coolDown() } else { video.shutdown() }
+    }
+    /// идёт запись кружка — показываем окно из Dynamic Island
+    var videoLive: Bool { mode == .video && (phase == .holding || phase == .locked) }
 
     func begin() async {
         tip = nil
@@ -180,7 +189,21 @@ final class ChatRecorder {
             guard await voice.begin(fresh: true) else { return }
         } else {
             guard await video.prepare() else { return }
-            video.start()
+            guard pressing else { video.shutdown(); return }
+            guard await video.start() else {
+                video.shutdown()
+                OxAlert.show(icon: "video.slash.fill", tint: .orange, title: String(localized: "Камера не запустилась"), message: String(localized: "Попробуйте ещё раз"))
+                return
+            }
+        }
+        if mode == .video {
+            // лимит 60 с — отправляем сами, как Telegram
+            let token = video.started
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(60.3))
+                guard let self, self.videoLive, self.video.started == token else { return }
+                self.send()
+            }
         }
         // палец отпустили, пока микрофон включался, — тихо отменяем
         guard pressing else {
@@ -220,10 +243,11 @@ final class ChatRecorder {
                 else { OxAlert.show(icon: "mic.fill", title: String(localized: "Удерживайте, чтобы записать")) }
             }
         } else {
-            let d = Int(video.duration.rounded())
+            let d = Int(min(60, video.duration).rounded())
             video.stop { [weak self] url in
                 self?.video.shutdown()
                 if let url, d >= 1 { self?.onVideo?(url, d) }
+                else { OxAlert.show(icon: "video.fill", title: String(localized: "Слишком короткий кружок")) }
             }
         }
     }

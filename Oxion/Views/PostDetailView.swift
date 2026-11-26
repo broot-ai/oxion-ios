@@ -122,6 +122,7 @@ struct ComposeRequest: Identifiable {
 struct ComposePart: Identifiable {
     let id = UUID()
     var text = ""
+    var sel: TextSelection?
     var images: [PickedImage] = []
 }
 
@@ -151,6 +152,7 @@ struct ComposerView: View {
     @State private var showLocation = false
     @State private var showCamera = false
     @FocusState private var focused: UUID?
+    @State private var mention = MentionSuggest()
 
     private var isReply: Bool { request.parent != nil }
 
@@ -248,7 +250,17 @@ struct ComposerView: View {
                 }
                 .ignoresSafeArea()
             }
-            .safeAreaInset(edge: .bottom) { bottomBar }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 6) {
+                    if focused != nil {
+                        FormatBar(onWrap: { applyFormat($0) }, onMention: { insertAt() })
+                            .padding(.horizontal, 16)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                    bottomBar
+                }
+                .animation(.smooth(duration: 0.2), value: focused != nil)
+            }
             .photosPicker(isPresented: $showPicker, selection: $picks, maxSelectionCount: 4, matching: .images)
             .onChange(of: picks) { Task { await loadPicks() } }
             .sheet(isPresented: $choosingWorkout) {
@@ -304,9 +316,15 @@ struct ComposerView: View {
                         }
                     }
                 }
-                TextField(isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…", text: part.text, axis: .vertical)
+                TextField(isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…", text: part.text, selection: part.sel, axis: .vertical)
                     .lineLimit(1...30)
                     .focused($focused, equals: part.wrappedValue.id)
+                    .onChange(of: part.wrappedValue.text) { refreshMention() }
+                    .onChange(of: part.wrappedValue.sel) { refreshMention() }
+                // подсказки при вводе «@им…»
+                if focused == part.wrappedValue.id, mention.query != nil, !mention.users.isEmpty {
+                    MentionList(users: mention.users) { pickMention($0) }
+                }
                 if !part.wrappedValue.images.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -434,6 +452,43 @@ struct ComposerView: View {
                 .foregroundStyle(Color.oxHint)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    // MARK: форматирование и упоминания
+    private var focusedIndex: Int? { parts.firstIndex(where: { $0.id == focused }) }
+
+    private func applyFormat(_ mk: String) {
+        guard let i = focusedIndex else { return }
+        RichText.wrap(&parts[i].text, &parts[i].sel, mk)
+    }
+
+    private func refreshMention() {
+        guard let i = focusedIndex, let tok = RichText.mentionToken(parts[i].text, parts[i].sel) else { mention.update(nil); return }
+        mention.update(tok.query)
+    }
+
+    private func pickMention(_ u: MentionUser) {
+        guard let i = focusedIndex, let tok = RichText.mentionToken(parts[i].text, parts[i].sel) else { return }
+        let lo = parts[i].text.distance(from: parts[i].text.startIndex, to: tok.range.lowerBound)
+        parts[i].text.replaceSubrange(tok.range, with: "@\(u.username) ")
+        let c = parts[i].text.index(parts[i].text.startIndex, offsetBy: min(parts[i].text.count, lo + u.username.count + 2))
+        parts[i].sel = TextSelection(insertionPoint: c)
+        mention.update(nil)
+        Haptic.tap(.soft)
+    }
+
+    /// кнопка «@»: ставим собачку в место курсора и сразу показываем подсказки
+    private func insertAt() {
+        guard let i = focusedIndex else { return }
+        var t = parts[i].text
+        var at = t.endIndex
+        if let s = parts[i].sel, case .selection(let r) = s.indices, r.upperBound <= t.endIndex { at = r.upperBound }
+        let lo = t.distance(from: t.startIndex, to: at)
+        let needSpace = at > t.startIndex && !t[t.index(before: at)].isWhitespace
+        let ins = (needSpace ? " " : "") + "@"
+        t.insert(contentsOf: ins, at: at)
+        parts[i].text = t
+        parts[i].sel = TextSelection(insertionPoint: t.index(t.startIndex, offsetBy: lo + ins.count))
     }
 
     private var bottomBar: some View {

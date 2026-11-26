@@ -1041,11 +1041,13 @@ struct ChatView: View {
             .padding(.bottom, 6)
         }
         .padding(.top, 6)
-        .overlay(alignment: .bottomTrailing) {
-            if rec.mode == .video && (rec.phase == .holding || rec.phase == .locked) {
-                ChatVideoNoteLive(rec: rec).offset(x: -40, y: -200)
-            }
+        // кружок: окно с камерой «вытекает» из Dynamic Island, строка состояния прячется
+        .onChange(of: rec.videoLive) { _, live in
+            if live { IslandRecorder.show(rec: rec) } else { IslandRecorder.hide() }
         }
+        .statusBarHidden(rec.videoLive)
+        .animation(.easeInOut(duration: 0.25), value: rec.videoLive)
+        .onDisappear { if rec.videoLive { rec.cancel() }; IslandRecorder.hide() }
         .onAppear {
             rec.onVoice = { url, dur, wave in Task { await sendVoice(url, dur: dur, wave: wave) } }
             rec.onVideo = { url, dur in Task { await sendVideoNote(url, dur: dur) } }
