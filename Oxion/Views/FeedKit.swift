@@ -124,6 +124,7 @@ struct PostWorkoutSheet: View {
 
 struct PhotoCarousel: View {
     let urls: [URL]
+    var spoiler = false
     var height: CGFloat = 280
     var onTap: () -> Void = {}
     var onDoubleTap: () -> Void = {}
@@ -139,7 +140,7 @@ struct PhotoCarousel: View {
                     let first = i == 0, last = i == urls.count - 1
                     // во время листания внутренние углы прямые — фото сливаются в одну панораму
                     let inner: CGFloat = dragging ? 0 : r
-                    RemoteImage(url: u)
+                    SpoilerMedia(on: spoiler) { RemoteImage(url: u) }
                         .frame(width: 230, height: height)
                         .clipShape(UnevenRoundedRectangle(topLeadingRadius: first ? r : inner, bottomLeadingRadius: first ? r : inner,
                                                           bottomTrailingRadius: last ? r : inner, topTrailingRadius: last ? r : inner,
@@ -155,5 +156,79 @@ struct PhotoCarousel: View {
         }
         .onTapGesture(count: 2) { onDoubleTap() }
         .onTapGesture { onTap() }
+    }
+}
+
+// MARK: - Спойлер для фото (как в Threads): сильное размытие + мерцающие искры, нажатие — открыть
+
+/// Мерцающие точки на всю площадь (для фото-спойлера)
+struct SparkleDust: UIViewRepresentable {
+    final class V: UIView {
+        let e = CAEmitterLayer()
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            backgroundColor = .clear
+            e.emitterShape = .rectangle
+            e.emitterMode = .surface
+            e.renderMode = .additive
+            let c = CAEmitterCell()
+            c.contents = SpoilerDust.dot
+            c.contentsScale = UIScreen.main.scale
+            c.color = UIColor.white.cgColor
+            c.lifetime = 1.6
+            c.lifetimeRange = 0.8
+            c.velocity = 3
+            c.velocityRange = 4
+            c.emissionRange = .pi * 2
+            c.scale = 0.9
+            c.scaleRange = 0.5
+            c.alphaRange = 0.6
+            c.alphaSpeed = -0.45
+            e.emitterCells = [c]
+            layer.addSublayer(e)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds.width > 0 else { return }
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            e.frame = bounds
+            e.emitterPosition = CGPoint(x: bounds.midX, y: bounds.midY)
+            e.emitterSize = bounds.size
+            e.setValue(Float(max(40, bounds.width * bounds.height / 260)), forKeyPath: "emitterCells.0.birthRate")
+            CATransaction.commit()
+            if e.beginTime == 0 { e.beginTime = CACurrentMediaTime() - 1.5 }
+        }
+    }
+    func makeUIView(context: Context) -> V { V() }
+    func updateUIView(_ uiView: V, context: Context) {}
+}
+
+/// Фото под спойлером: открывается своим нажатием, не открывая ветку
+struct SpoilerMedia<Content: View>: View {
+    let on: Bool
+    @ViewBuilder var content: Content
+    @State private var revealed = false
+
+    var body: some View {
+        let hidden = on && !revealed
+        content
+            .blur(radius: hidden ? 34 : 0, opaque: true)
+            .overlay {
+                if hidden {
+                    ZStack {
+                        Color.black.opacity(0.18)
+                        SparkleDust()
+                    }
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+                }
+            }
+            .highPriorityGesture(TapGesture().onEnded {
+                withAnimation(.easeOut(duration: 0.45)) { revealed = true }
+                Haptic.tap(.soft)
+            }, including: hidden ? .all : .subviews)
+            .accessibilityLabel(hidden ? "Скрытое фото. Нажмите, чтобы показать" : "")
     }
 }

@@ -384,10 +384,10 @@ struct ThreadPost: View {
                     if AppSettings.autoloadPhotos, let photos = p.photos, !photos.isEmpty {
                         Group {
                             if photos.count > 1 {
-                                PhotoCarousel(urls: photos.compactMap { API.media($0) }, onTap: { onOpen?() }, onDoubleTap: { doubleLike() })
+                                PhotoCarousel(urls: photos.compactMap { API.media($0) }, spoiler: p.mediaSpoiler == true, onTap: { onOpen?() }, onDoubleTap: { doubleLike() })
                                     .padding(.trailing, -16)   // карусель уходит за правый край, как в Threads
                             } else {
-                                PhotoStrip(urls: photos.compactMap { API.media($0) })
+                                PhotoStrip(urls: photos.compactMap { API.media($0) }, spoiler: p.mediaSpoiler == true)
                                     .onTapGesture(count: 2) { doubleLike() }
                                     .onTapGesture { onOpen?() }
                             }
@@ -775,10 +775,11 @@ enum FeedTime {
 
 struct PhotoStrip: View {
     let urls: [URL]
+    var spoiler = false
 
     var body: some View {
         if urls.count == 1 {
-            RemoteImage(url: urls[0])
+            SpoilerMedia(on: spoiler) { RemoteImage(url: urls[0]) }
                 .frame(maxWidth: .infinity)
                 .frame(height: 300)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -787,7 +788,7 @@ struct PhotoStrip: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(urls, id: \.self) { u in
-                        RemoteImage(url: u)
+                        SpoilerMedia(on: spoiler) { RemoteImage(url: u) }
                             .frame(width: 220, height: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }

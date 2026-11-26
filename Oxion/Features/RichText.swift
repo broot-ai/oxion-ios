@@ -485,8 +485,11 @@ final class SpoilerTextView: UITextView, UITextViewDelegate {
         layoutManager.ensureLayout(for: textContainer)
         let color = UIColor.label.resolvedColor(with: traitCollection)
         for (id, r) in spoilers where !revealed.contains(id) {
+            // цвет частиц = цвет текста под спойлером (ссылка — цветом ссылки, как в Threads)
+            let isLink = r.location < source.length && source.attribute(.link, at: r.location, effectiveRange: nil) != nil
+            let c = isLink ? linkColor.resolvedColor(with: traitCollection) : color
             for rect in rects(for: r) where rect.width > 1 {
-                let e = SpoilerDust.layer(frame: rect, color: color)
+                let e = SpoilerDust.layer(frame: rect, color: c)
                 e.name = "\(id)"
                 layer.addSublayer(e)
                 emitters.append(e)

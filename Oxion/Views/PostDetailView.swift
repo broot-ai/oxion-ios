@@ -135,6 +135,8 @@ struct ComposePart: Identifiable {
     let id = UUID()
     var text = ""
     var images: [PickedImage] = []
+    /// фото этой части — под спойлером
+    var mediaSpoiler = false
 }
 
 struct ComposerView: View {
@@ -337,6 +339,7 @@ struct ComposerView: View {
                     MentionList(users: mention.users) { pickMention($0) }
                 }
                 if !part.wrappedValue.images.isEmpty {
+                    let sp = part.wrappedValue.mediaSpoiler
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(part.wrappedValue.images) { pick in
@@ -344,7 +347,10 @@ struct ComposerView: View {
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: 130, height: 170)
+                                    .blur(radius: sp ? 18 : 0, opaque: true)
+                                    .overlay { if sp { SparkleDust().allowsHitTesting(false) } }
                                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                     .overlay(alignment: .topTrailing) {
                                         Button {
                                             part.wrappedValue.images.removeAll { $0.id == pick.id }
@@ -359,6 +365,19 @@ struct ComposerView: View {
                             }
                         }
                     }
+                    // спойлер для фото: размытие + искры, у читателя открывается нажатием
+                    Button {
+                        withAnimation(.smooth(duration: 0.25)) { part.wrappedValue.mediaSpoiler.toggle() }
+                        Haptic.tap(.soft)
+                    } label: {
+                        Label(sp ? "Фото скрыты спойлером" : "Скрыть фото спойлером", systemImage: sp ? "eye.slash.fill" : "eye.slash")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(sp ? Color.onLime : Color.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(sp ? Color.lime : Color.primary.opacity(0.08), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
                 if isFirst && (location != nil || aiLabel) {
                     HStack(spacing: 8) {
@@ -565,6 +584,7 @@ struct ComposerView: View {
             let first = parts[0]
             let keys = try await upload(first.images)
             var body: [String: Any] = ["text": first.text, "photos": keys, "reply_to": replyTo]
+            if first.mediaSpoiler && !keys.isEmpty { body["media_spoiler"] = true }
             if let p = request.parent { body["parent_id"] = p.id }
             if let q = request.quote { body["quote_id"] = q.id }
             if let topic, !isReply { body["topic"] = topic }
@@ -586,7 +606,7 @@ struct ComposerView: View {
                 let t = part.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if t.isEmpty && part.images.isEmpty { continue }
                 let k = try await upload(part.images)
-                chain.append(["text": t, "photos": k])
+                chain.append(["text": t, "photos": k, "media_spoiler": part.mediaSpoiler && !k.isEmpty])
             }
             if !chain.isEmpty { body["chain"] = chain }
             var created: Post?

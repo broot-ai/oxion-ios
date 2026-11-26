@@ -118,6 +118,8 @@ struct Post: Decodable, Identifiable {
     var location: String? = nil
     var aiLabel: Bool? = nil
     var expiresAt: Double? = nil
+    /// фото под спойлером (размыты, открываются нажатием)
+    var mediaSpoiler: Bool? = nil
 }
 
 /// Трек, прикреплённый к ветке (из поиска iTunes)
