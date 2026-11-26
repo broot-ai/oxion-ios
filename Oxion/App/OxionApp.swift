@@ -175,6 +175,8 @@ final class AppModel {
     var profileBox: IdBox?
     /// ветка, открытая по ссылке …/t/123
     var postBox: IdBox?
+    /// экран «Кольцевая лампа»
+    var ringLight = false
 
     struct IdBox: Identifiable { let id: Int }
 
@@ -226,6 +228,7 @@ final class AppModel {
         case "whatsnew": sheet = .whatsNew
         case "exercises", "catalog": showCatalog = true
         case "run": sheet = .run
+        case "ringlight", "light": ringLight = true
         case "devices": sheet = .devices
         case "book":
             Task {
@@ -574,6 +577,7 @@ struct MainTabView: View {
                     .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.profileBox = nil } } }
             }
         }
+        .fullScreenCover(isPresented: $model.ringLight) { RingLightScreen() }
         .fullScreenCover(item: $storiesStore.shareDraft) { pr in
             StoryComposer(preset: pr)
         }

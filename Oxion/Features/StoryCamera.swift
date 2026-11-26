@@ -8,7 +8,7 @@ import PhotosUI
 // справа — смена камеры. В режиме ФОТО: нажатие — снимок, удержание — видео. В режиме ВИДЕО: нажатие — старт/стоп.
 
 @MainActor @Observable
-final class StoryCameraModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate {
+final class StoryCameraModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate, AVCaptureMetadataOutputObjectsDelegate {
     let session = AVCaptureSession()
     var ready = false
     var denied = false
@@ -19,20 +19,32 @@ final class StoryCameraModel: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
     private let photo = AVCapturePhotoOutput()
     private let movie = AVCaptureMovieFileOutput()
     private var videoInput: AVCaptureDeviceInput?
+    private let faces = AVCaptureMetadataOutput()
+    /// слой превью — чтобы перевести лицо в координаты экрана (для подсветки)
+    @ObservationIgnored weak var previewLayer: AVCaptureVideoPreviewLayer?
+    var device: AVCaptureDevice? { videoInput?.device }
     private var onPhoto: ((UIImage?) -> Void)?
     private var onMovie: ((URL?) -> Void)?
 
-    func prepare() async {
+    func prepare(front startFront: Bool = false) async {
         guard await AVCaptureDevice.requestAccess(for: .video) else { denied = true; return }
         _ = await AVAudioApplication.requestRecordPermission()
         if !ready {
             session.beginConfiguration()
             session.sessionPreset = .high
-            setCamera(front: false)
+            setCamera(front: startFront)
             if let mic = AVCaptureDevice.default(for: .audio), let i = try? AVCaptureDeviceInput(device: mic), session.canAddInput(i) { session.addInput(i) }
             if session.canAddOutput(photo) { session.addOutput(photo) }
             if session.canAddOutput(movie) { session.addOutput(movie) }
             movie.maxRecordedDuration = CMTime(seconds: 60, preferredTimescale: 600)
+            // лица — аппаратное распознавание камеры (дёшево по батарее), для «подсветки к лицу»
+            if session.canAddOutput(faces) {
+                session.addOutput(faces)
+                if faces.availableMetadataObjectTypes.contains(.face) {
+                    faces.metadataObjectTypes = [.face]
+                    faces.setMetadataObjectsDelegate(self, queue: .main)
+                }
+            }
             session.commitConfiguration()
             orient()
             ready = true
@@ -123,6 +135,22 @@ final class StoryCameraModel: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
         }
     }
 
+    nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        MainActor.assumeIsolated {
+            let light = EdgeLight.shared
+            guard light.on, light.followFace else { return }
+            guard let f = objects.first(where: { $0.type == .face }), let pl = previewLayer,
+                  let t = pl.transformedMetadataObject(for: f) else {
+                light.face = nil
+                return
+            }
+            let r = pl.convert(t.bounds, to: nil)
+            let sb = UIScreen.main.bounds
+            guard sb.width > 0 else { return }
+            light.face = CGRect(x: r.minX / sb.width, y: r.minY / sb.height, width: r.width / sb.width, height: r.height / sb.height)
+        }
+    }
+
     nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo url: URL, from connections: [AVCaptureConnection], error: Error?) {
         let ok = (error == nil) || ((error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true)
         Task { @MainActor in
@@ -163,12 +191,14 @@ struct StoryCameraScreen: View {
     @State private var flashFX = false
     @State private var zoomBase: CGFloat = 1
     @State private var loading = false
+    @State private var light = EdgeLight.shared
+    @State private var lightSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Color(white: 0.06)
-                if cam.ready { StoryPreviewLayer(session: cam.session) }
+                if cam.ready { CameraPreview(cam: cam) }
                 if cam.denied {
                     VStack(spacing: 12) {
                         Image(systemName: "camera.fill").font(.largeTitle)
@@ -217,7 +247,27 @@ struct StoryCameraScreen: View {
             await cam.prepare()
             thumb = await Self.lastPhoto()
         }
-        .onDisappear { cam.shutdown() }
+        .onDisappear {
+            cam.shutdown()
+            if light.on { light.forceOff() }
+        }
+        .overlay { if light.on { EdgeLightOverlay() } }
+        .sheet(isPresented: $lightSettings) {
+            EdgeLightControls()
+                .padding(12)
+                .presentationDetents([.height(470)])
+                .presentationBackground(.clear)
+        }
+        .onChange(of: cam.front) { _, f in
+            if f && light.autoFront && !light.on { withAnimation { light.acquire() } }
+            if !f && light.autoFront && light.on { withAnimation { light.forceOff() } }
+        }
+        .task(id: light.on) {
+            while light.on && !Task.isCancelled {
+                light.updateAmbient(from: cam.device)
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
         .photosPicker(isPresented: $gallery, selection: $pick, matching: .any(of: [.images, .videos]), preferredItemEncoding: .compatible)
         .onChange(of: pick) { _, it in if let it { Task { await load(it) } } }
     }
@@ -225,6 +275,17 @@ struct StoryCameraScreen: View {
     // MARK: верх
     private var topBar: some View {
         HStack(spacing: 22) {
+            // кольцевая подсветка экрана: нажатие — вкл/выкл, удержание — настройки
+            Image(systemName: light.on ? "lightbulb.max.fill" : "lightbulb")
+                .foregroundStyle(light.on ? EdgeLight.color(kelvin: light.effectiveKelvin) : .white)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.smooth(duration: 0.35)) { light.on ? light.forceOff() : light.acquire() }
+                    Haptic.tap(.light)
+                }
+                .onLongPressGesture { lightSettings = true; Haptic.tap(.medium) }
+                .accessibilityLabel("Кольцевая подсветка")
             Spacer()
             Button {
                 cam.flash.toggle(); Haptic.tap(.light)

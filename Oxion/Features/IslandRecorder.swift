@@ -16,6 +16,7 @@ enum IslandRecorder {
     private static var window: UIWindow?
     private static let state = IslandRecState()
     private static var hideTask: Task<Void, Never>?
+    private static var lightOn = false
 
     static func show(rec: ChatRecorder) {
         hideTask?.cancel()
@@ -36,6 +37,7 @@ enum IslandRecorder {
         }
         window?.isHidden = false
         state.expanded = false
+        if EdgeLight.shared.forNotes && !lightOn { EdgeLight.shared.acquire(); lightOn = true }
         Task {
             try? await Task.sleep(for: .milliseconds(16))
             withAnimation(.spring(duration: 0.5, bounce: 0.28)) { state.expanded = true }
@@ -44,6 +46,7 @@ enum IslandRecorder {
 
     static func hide() {
         guard window != nil else { return }
+        if lightOn { EdgeLight.shared.release(); lightOn = false }
         withAnimation(.spring(duration: 0.38, bounce: 0.1)) { state.expanded = false }
         hideTask?.cancel()
         hideTask = Task {
@@ -86,6 +89,10 @@ struct IslandRecView: View {
             let r = open ? 46 : islandH / 2
 
             ZStack(alignment: .top) {
+                // кольцевая подсветка лица во время записи кружка (если включена в настройках)
+                if EdgeLight.shared.forNotes && EdgeLight.shared.on {
+                    EdgeLightOverlay().frame(width: W, height: g.size.height).offset(y: -y0)
+                }
                 RoundedRectangle(cornerRadius: r, style: .continuous)
                     .fill(Color.black)
                     .frame(width: w, height: h)
