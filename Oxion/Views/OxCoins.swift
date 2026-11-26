@@ -27,7 +27,8 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
         physicsWorld.gravity = CGVector(dx: 0, dy: -9.8)
         physicsWorld.contactDelegate = self
         rebuildWalls()
-        if !spawned { spawned = true; drop() }
+        // высыпаем, только когда у сцены уже есть настоящий размер (иначе жетоны «появлялись» сразу лежащими)
+        if !spawned && size.height > 60 { spawned = true; drop() }
         startMotion()
     }
 
@@ -37,6 +38,7 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
 
     override func didChangeSize(_ oldSize: CGSize) {
         rebuildWalls()
+        if !spawned && view != nil && size.height > 60 { spawned = true; drop() }
     }
 
     /// Закрытая коробка: пол, стенки и потолок. Перевернул телефон — жетоны падают «вверх» и лежат на потолке
@@ -59,9 +61,20 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
     func drop() {
         coins.forEach { $0.removeFromParent() }
         coins = []
+        removeAction(forKey: "drop")
+        // по одному, как из мешка: каждый следующий через 0,06 с
+        var seq: [SKAction] = []
+        for i in 0..<count {
+            seq.append(.run { [weak self] in self?.addCoin(i) })
+            seq.append(.wait(forDuration: 0.06))
+        }
+        run(.sequence(seq), withKey: "drop")
+    }
+
+    private func addCoin(_ i: Int) {
         let w = max(size.width, 300)
         let d = w / 6.2
-        for i in 0..<count {
+        do {
             let tex = Self.textures.randomElement()!
             let node = SKSpriteNode(texture: tex)
             // глубина: дальние жетоны меньше и темнее, лежат «за» ближними
@@ -72,9 +85,11 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
             node.color = .black
             node.colorBlendFactor = (1 - z) * 0.9
             // высыпаются из-под потолка короткой «очередью»
-            node.position = CGPoint(x: CGFloat.random(in: s...(w - s)), y: max(s, size.height - s - CGFloat(i % 6) * s * 0.6))
+            // из-под самого верха, с толчком вниз и вращением
+            node.position = CGPoint(x: CGFloat.random(in: s...(w - s)), y: size.height - s * 0.6)
             node.alpha = 0
-            node.run(.sequence([.wait(forDuration: Double(i) * 0.035), .fadeIn(withDuration: 0.12)]))
+            node.setScale(0.6)
+            node.run(.group([.fadeIn(withDuration: 0.1), .scale(to: 1, duration: 0.18)]))
             node.zRotation = CGFloat.random(in: -0.6...0.6)
             let body = SKPhysicsBody(texture: tex, alphaThreshold: 0.5, size: node.size)
             body.restitution = 0.32
@@ -88,6 +103,8 @@ final class CoinScene: SKScene, SKPhysicsContactDelegate {
             body.contactTestBitMask = Self.wallCat | Self.coinCat
             node.physicsBody = body
             addChild(node)
+            body.velocity = CGVector(dx: CGFloat.random(in: -140...140), dy: -CGFloat.random(in: 120...320))
+            body.angularVelocity = CGFloat.random(in: -8...8)
             coins.append(node)
         }
     }

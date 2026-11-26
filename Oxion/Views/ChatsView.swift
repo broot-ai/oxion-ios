@@ -996,6 +996,7 @@ struct ChatView: View {
                 }
                 .glassEffect(.regular.interactive(), in: .circle)
                 .opacity(rec.active ? 0 : 1)
+                .allowsHitTesting(!rec.active)
 
                 // обычное системное поле ввода — лёгкое и быстрое
                 PlainComposer(text: $text, focused: $focused)
@@ -1003,6 +1004,7 @@ struct ChatView: View {
                     .padding(.vertical, 11)
                     .glassEffect(.regular, in: .rect(cornerRadius: 22))
                     .opacity(rec.active ? 0 : 1)
+                    .allowsHitTesting(!rec.active)
 
                 if (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending) || rec.active {
                     ChatMicButton(rec: rec)
@@ -1021,11 +1023,12 @@ struct ChatView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            // запись как в Telegram: плашка встаёт на место скрепки и поля
-            .overlay(alignment: .bottom) {
+            // запись как в Telegram: плашка встаёт на место скрепки и поля, под кнопкой (круг всегда сверху)
+            .background(alignment: .bottom) {
                 if rec.active {
+                    // плашка заканчивается перед большим кругом — круг не перекрывается (как в Telegram)
                     ChatRecordPanel(rec: rec)
-                        .padding(.trailing, rec.phase == .preview ? 52 : 22)
+                        .padding(.trailing, rec.phase == .preview ? 52 : 82)
                 }
             }
             .overlay(alignment: .topTrailing) {

@@ -388,6 +388,7 @@ struct ChatMicButton: View {
             }
         }
         .frame(width: big, height: big)
+        .offset(x: -12)
     }
 
     @ViewBuilder private var topPill: some View {
@@ -462,8 +463,7 @@ struct ChatRecordPanel: View {
     }
 
     private var panelBG: some View {
-        Capsule().fill(Color(.secondarySystemBackground))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
+        Color.clear.glassEffect(.regular, in: .capsule)
     }
 
     private var recordingRow: some View {
@@ -503,9 +503,9 @@ struct ChatRecordPanel: View {
             }
             .frame(maxWidth: .infinity)
             .clipped()
-            Color.clear.frame(width: 36)   // место под большой круг
         }
         .padding(.leading, 16)
+        .padding(.trailing, 8)
         .frame(height: 44)
         .background(panelBG)
         .animation(.spring(duration: 0.3), value: rec.phase)
