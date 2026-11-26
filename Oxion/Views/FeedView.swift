@@ -582,6 +582,10 @@ struct PostMenu: View {
         Menu {
             Section {
                 Button { shareChats = true } label: { Label("Отправить в чат Oxion", systemImage: "paperplane") }
+                Button {
+                    // поделиться веткой в истории: карточка ветки + кнопка «Посмотреть ветку»
+                    Task { StoriesStore.shared.shareDraft = await StoryPreset.share(post) }
+                } label: { Label("Поделиться в истории", systemImage: "plus.circle.dashed") }
                 Button { shareOut = true } label: { Label("Поделиться ссылкой…", systemImage: "square.and.arrow.up") }
                 Button {
                     UIPasteboard.general.url = PostLink.url(post.id)

@@ -28,6 +28,7 @@ struct StoryItem: Decodable, Identifiable, Hashable {
     var views: Int?
     var likes: Int?
     let privacy: String?
+    var link: StoryLink? = nil
     var isVideo: Bool { kind == "video" }
 }
 
@@ -60,6 +61,8 @@ final class StoriesStore {
     var viewer: StoryViewerStart?
     var composer = false
     var uploading = false
+    /// черновик истории с готовым содержимым (например, «поделиться веткой»)
+    var shareDraft: StoryPreset?
 
     var all: [StoryGroup] {
         var r: [StoryGroup] = []
@@ -235,6 +238,7 @@ struct StoriesNavTitle: View {
 
 struct StoryViewer: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var appModel
     @State private var store = StoriesStore.shared
     @State var groups: [StoryGroup]
     @State var gi: Int
@@ -369,7 +373,50 @@ struct StoryViewer: View {
                         .onTapGesture { next() }
                 }
                 .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 30, perform: {}, onPressingChanged: { p in paused = p })
+                // ветка, которой поделились: карточка и кнопка «Посмотреть ветку»
+                if let l = s.link, l.type == "post", ready {
+                    linkLayer(l, size: geo.size)
+                }
             }
+        }
+    }
+
+    @ViewBuilder private func linkLayer(_ l: StoryLink, size: CGSize) -> some View {
+        // история — 9:16, показана «заполнением»: переводим доли кадра в точки экрана
+        let k = max(size.width / 9, size.height / 16)
+        let dw = 9 * k, dh = 16 * k
+        let ox = (size.width - dw) / 2, oy = (size.height - dh) / 2
+        let r = l.rect ?? [0.25, 0.3, 0.5, 0.35]
+        let frame = CGRect(x: ox + r[0] * dw, y: oy + r[1] * dh, width: r[2] * dw, height: r[3] * dh)
+        ZStack {
+            Color.clear
+                .contentShape(RoundedRectangle(cornerRadius: 20))
+                .frame(width: frame.width, height: frame.height)
+                .position(x: frame.midX, y: frame.midY)
+                .onTapGesture { openLinked(l.id) }
+            Button { openLinked(l.id) } label: {
+                HStack(spacing: 8) {
+                    FlameMark(size: 18)
+                    Text("ПОСМОТРЕТЬ ВЕТКУ").font(.system(size: 15, weight: .bold))
+                }
+                .foregroundStyle(.black)
+                .padding(.horizontal, 18).frame(height: 42)
+                .background(.white, in: Capsule())
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+            }
+            .buttonStyle(.plain)
+            .position(x: frame.midX, y: min(size.height - 40, frame.maxY + 34))
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func openLinked(_ id: Int) {
+        Haptic.tap(.soft)
+        player?.pause()
+        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            appModel.postBox = AppModel.IdBox(id: id)
         }
     }
 
@@ -598,7 +645,7 @@ private extension Double {
     var nonNaN: Double? { isNaN || isInfinite || self <= 0 ? nil : self }
 }
 
-private struct StoryVideoLayer: UIViewRepresentable {
+struct StoryVideoLayer: UIViewRepresentable {
     let player: AVPlayer
     final class V: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
@@ -710,9 +757,33 @@ enum StoryMedia: Equatable {
     case video(URL)
 }
 
+/// Готовая заготовка истории: фон + наклейки (например, карточка ветки)
+struct StoryPreset: Identifiable {
+    let id = UUID()
+    let media: StoryMedia
+    var overlays: [StoryOverlay] = []
+
+    /// «Поделиться веткой в истории»: фон OXION + карточка ветки по центру
+    @MainActor static func share(_ p: Post) async -> StoryPreset {
+        let card = await StoryPostCard.make(from: p)
+        var o = StoryOverlay(kind: .post)
+        o.post = card
+        o.center = CGPoint(x: 0.5, y: 0.46)
+        return StoryPreset(media: .photo(StoryPostCard.background()), overlays: [o])
+    }
+}
+
+struct StoryLink: Decodable, Hashable {
+    let type: String
+    let id: Int
+    let rect: [Double]?
+}
+
 struct StoryComposer: View {
+    var preset: StoryPreset? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var media: StoryMedia?
+    @State private var exported: StoryExport?
     @State private var pick: PhotosPickerItem?
     @State private var camera = false
     @State private var caption = ""
@@ -734,14 +805,7 @@ struct StoryComposer: View {
                 }
                 if loading { ProgressView().tint(.white).controlSize(.large) }
             }
-            .toolbar {
-                if media != nil {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { reset() } label: { Image(systemName: "chevron.left") }
-                    }
-                }
-            }
-            .toolbar(media == nil ? .hidden : .visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
             .preferredColorScheme(.dark)
         }
@@ -751,9 +815,12 @@ struct StoryComposer: View {
                 .ignoresSafeArea()
         }
         .sheet(isPresented: $share) {
-            if let media {
-                StoryShareSheet(media: media, caption: caption) { dismiss() }
+            if let e = exported {
+                StoryShareSheet(media: e.media, caption: caption, linkPost: e.linkPost, linkRect: e.linkRect) { dismiss() }
             }
+        }
+        .onAppear {
+            if let preset, media == nil { media = preset.media }
         }
     }
 
@@ -793,43 +860,16 @@ struct StoryComposer: View {
     }
 
     private func editor(_ m: StoryMedia) -> some View {
-        VStack(spacing: 12) {
-            ZStack(alignment: .bottom) {
-                Group {
-                    switch m {
-                    case .photo(let i):
-                        Color.clear.overlay { Image(uiImage: i).resizable().scaledToFill() }
-                    case .video:
-                        if let previewPlayer {
-                            StoryVideoLayer(player: previewPlayer)
-                                .onAppear { previewPlayer.play(); loopVideo() }
-                                .onDisappear { previewPlayer.pause() }
-                        }
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                TextField("Добавить подпись…", text: $caption, axis: .vertical)
-                    .lineLimit(1...4)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
-                    .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .padding(12)
-            }
-            HStack {
-                Spacer()
-                Button { share = true } label: {
-                    HStack(spacing: 6) {
-                        Text("ДАЛЕЕ").font(.subheadline.weight(.heavy))
-                        Image(systemName: "chevron.right").font(.caption.weight(.heavy))
-                    }
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 22).frame(height: 44)
-                    .background(Color.lime, in: Capsule())
-                }
-            }
-            .padding(.horizontal, 14)
-        }
-        .padding(.top, 4)
+        // редактор: рисунок, текст, стикеры, настройки
+        StoryEditorView(media: m, player: previewPlayer, caption: $caption,
+                        initialOverlays: preset?.overlays ?? [],
+                        onBack: { if preset != nil { dismiss() } else { reset() } },
+                        onNext: { e in
+                            exported = e
+                            share = true
+                        })
+            .onAppear { previewPlayer?.play(); loopVideo() }
+            .onDisappear { previewPlayer?.pause() }
     }
 
     private func loopVideo() {
@@ -905,6 +945,8 @@ struct StoryCameraPicker: UIViewControllerRepresentable {
 struct StoryShareSheet: View {
     let media: StoryMedia
     let caption: String
+    var linkPost: Int? = nil
+    var linkRect: CGRect? = nil
     var done: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -1021,6 +1063,10 @@ struct StoryShareSheet: View {
             "allow_shots": allowShots ? "1" : "0"
         ]
         if privacy == .selected { fields["selected"] = selected.map(String.init).joined(separator: ",") }
+        if let linkPost {
+            fields["link_post"] = String(linkPost)
+            if let r = linkRect { fields["link_rect"] = [r.minX, r.minY, r.width, r.height].map { String(format: "%.4f", $0) }.joined(separator: ",") }
+        }
         let data: Data, name: String, mime: String
         switch media {
         case .photo(let i):

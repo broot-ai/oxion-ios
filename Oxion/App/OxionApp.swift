@@ -405,6 +405,7 @@ struct MainTabView: View {
     @State private var scanning = false
     @State private var welcome = false
     @State private var scanUser: AppModel.IdBox?
+    @State private var storiesStore = StoriesStore.shared
     @Environment(\.openURL) private var openURL
 
     private var tabOrder: [AppTab] {
@@ -572,6 +573,9 @@ struct MainTabView: View {
                 UserProfileView(userId: b.id)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.profileBox = nil } } }
             }
+        }
+        .fullScreenCover(item: $storiesStore.shareDraft) { pr in
+            StoryComposer(preset: pr)
         }
         .sheet(item: $model.postBox) { b in
             NavigationStack {
