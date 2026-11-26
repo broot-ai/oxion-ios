@@ -348,6 +348,45 @@ extension RichText {
     }
 }
 
+/// Облако частиц для спойлера (общая настройка для ленты и поля ввода)
+enum SpoilerDust {
+    static let dot: CGImage? = {
+        let r = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
+        return r.image { ctx in
+            UIColor.white.setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 4, height: 4))
+        }.cgImage
+    }()
+
+    static func layer(frame rect: CGRect, color: UIColor) -> CAEmitterLayer {
+        let e = CAEmitterLayer()
+        e.frame = rect
+        e.emitterPosition = CGPoint(x: rect.width / 2, y: rect.height / 2)
+        e.emitterSize = rect.size
+        e.emitterShape = .rectangle
+        e.emitterMode = .surface
+        e.renderMode = .unordered
+        e.masksToBounds = true
+        let c = CAEmitterCell()
+        c.contents = dot
+        c.contentsScale = UIScreen.main.scale
+        c.color = color.cgColor
+        c.birthRate = Float(max(60, rect.width * rect.height / 3.5))
+        c.lifetime = 1.2
+        c.lifetimeRange = 0.6
+        c.velocity = 6
+        c.velocityRange = 8
+        c.emissionRange = .pi * 2
+        c.scale = 1
+        c.scaleRange = 0.4
+        c.alphaSpeed = -0.5
+        c.alphaRange = 0.3
+        e.emitterCells = [c]
+        e.beginTime = CACurrentMediaTime() - 1.5    // сразу «облако», без пустого старта
+        return e
+    }
+}
+
 final class SpoilerTextView: UITextView, UITextViewDelegate {
     var raw = ""
     var source = NSMutableAttributedString()
@@ -360,8 +399,14 @@ final class SpoilerTextView: UITextView, UITextViewDelegate {
     private var lastSize: CGSize = .zero
 
     init() {
-        super.init(frame: .zero, textContainer: nil)
-        _ = layoutManager       // TextKit 1: нужны прямоугольники строк
+        // TextKit 1: нужны прямоугольники строк для частиц
+        let storage = NSTextStorage()
+        let lm = NSLayoutManager()
+        storage.addLayoutManager(lm)
+        let tc = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        tc.widthTracksTextView = true
+        lm.addTextContainer(tc)
+        super.init(frame: .zero, textContainer: tc)
         isEditable = false
         isSelectable = true
         isScrollEnabled = false
@@ -396,6 +441,11 @@ final class SpoilerTextView: UITextView, UITextViewDelegate {
         if bounds.size != lastSize { lastSize = bounds.size; rebuildParticles() }
     }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil { lastSize = .zero; setNeedsLayout() }
+    }
+
     override func traitCollectionDidChange(_ previous: UITraitCollection?) {
         super.traitCollectionDidChange(previous)
         rebuildParticles()
@@ -426,29 +476,8 @@ final class SpoilerTextView: UITextView, UITextViewDelegate {
         let color = UIColor.label.resolvedColor(with: traitCollection)
         for (id, r) in spoilers where !revealed.contains(id) {
             for rect in rects(for: r) where rect.width > 1 {
-                let e = CAEmitterLayer()
+                let e = SpoilerDust.layer(frame: rect, color: color)
                 e.name = "\(id)"
-                e.frame = rect
-                e.emitterPosition = CGPoint(x: rect.width / 2, y: rect.height / 2)
-                e.emitterSize = rect.size
-                e.emitterShape = .rectangle
-                e.emitterMode = .surface
-                e.masksToBounds = true
-                let c = CAEmitterCell()
-                c.contents = Self.dot
-                c.color = color.cgColor
-                c.birthRate = Float(max(30, rect.width * rect.height / 7))
-                c.lifetime = 1.1
-                c.lifetimeRange = 0.6
-                c.velocity = 5
-                c.velocityRange = 6
-                c.emissionRange = .pi * 2
-                c.scale = 0.22
-                c.scaleRange = 0.12
-                c.alphaSpeed = -0.55
-                c.alphaRange = 0.4
-                e.emitterCells = [c]
-                e.beginTime = CACurrentMediaTime() - 1.2    // сразу «облако», без пустого старта
                 layer.addSublayer(e)
                 emitters.append(e)
             }

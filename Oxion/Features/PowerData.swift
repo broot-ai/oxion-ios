@@ -347,6 +347,9 @@ struct OxRemoteImage<Placeholder: View>: View {
         }
         }
         .clipped()
+        // ВАЖНО: .clipped() режет только картинку, а касания «заполняющее» фото ловит и за краями.
+        // Высокое фото в посте перекрывало меню «…», «Что нового?» и темы — любое нажатие открывало эту ветку.
+        .contentShape(Rectangle())
         .task(id: url) { await fetch(force: false) }
     }
 

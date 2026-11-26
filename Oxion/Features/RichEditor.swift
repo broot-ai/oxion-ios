@@ -48,6 +48,9 @@ final class RichTextView: UITextView {
     var onMention: ((String?) -> Void)?
     var onFocus: ((Bool) -> Void)?
     let placeholderLabel = UILabel()
+    /// кнопки панели: подсвечиваем активный стиль
+    private var fmtButtons: [(RichFlags, UIButton)] = []
+    private var dustLayers: [CAEmitterLayer] = []
 
     var baseAttrs: [NSAttributedString.Key: Any] {
         [.font: baseFont, .foregroundColor: UIColor.label]
@@ -86,7 +89,8 @@ final class RichTextView: UITextView {
         if f.contains(.strike) { a[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         if f.contains(.spoiler) {
             a[.oxSpoiler] = true
-            a[.backgroundColor] = UIColor.systemGray.withAlphaComponent(0.35)
+            a[.backgroundColor] = UIColor.systemGray.withAlphaComponent(0.22)
+            a[.foregroundColor] = UIColor.label.withAlphaComponent(0.45)
         }
         return a
     }
@@ -104,6 +108,7 @@ final class RichTextView: UITextView {
             }
             typingAttributes = attrs(for: f)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            refreshButtons()
             return
         }
         // если весь фрагмент уже с этим стилем — снимаем, иначе ставим
@@ -169,6 +174,75 @@ final class RichTextView: UITextView {
         onChange?(markup)
         invalidateIntrinsicContentSize()
         reportMention()
+        refreshButtons()
+        setNeedsLayout()
+        DispatchQueue.main.async { [weak self] in self?.rebuildDust() }
+    }
+
+    /// активные стили: у выделения — если стиль на всём фрагменте, без выделения — «текущий» стиль
+    var activeFlags: RichFlags {
+        let r = selectedRange
+        if r.length == 0 { return Self.flags(typingAttributes) }
+        var common: RichFlags? = nil
+        textStorage.enumerateAttributes(in: r) { a, _, _ in
+            let f = Self.flags(a)
+            common = common.map { $0.intersection(f) } ?? f
+        }
+        return common ?? []
+    }
+
+    func refreshButtons() {
+        let on = activeFlags
+        for (flag, b) in fmtButtons {
+            let active = on.contains(flag)
+            var cfg = b.configuration ?? .plain()
+            cfg.baseForegroundColor = active ? UIColor(Color.onLime) : .label
+            cfg.background.backgroundColor = active ? UIColor(Color.lime) : .clear
+            cfg.background.cornerRadius = 12
+            b.configuration = cfg
+        }
+    }
+
+    // MARK: «атомы» поверх спойлера и в поле ввода
+    func rebuildDust() {
+        dustLayers.forEach { $0.removeFromSuperlayer() }
+        dustLayers.removeAll()
+        guard let at = attributedText, at.length > 0, bounds.width > 0 else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        let color = UIColor.label.resolvedColor(with: traitCollection)
+        at.enumerateAttribute(.oxSpoiler, in: NSRange(location: 0, length: at.length)) { v, r, _ in
+            guard v != nil else { return }
+            let g = layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+            layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
+                let fr = rect.offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top)
+                guard fr.width > 1 else { return }
+                let e = SpoilerDust.layer(frame: fr, color: color)
+                self.layer.addSublayer(e)
+                self.dustLayers.append(e)
+            }
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if !dustLayers.isEmpty || attributedText?.length ?? 0 > 0 {
+            // частицы следуют за переносом строк
+            let had = dustLayers.map(\.frame)
+            rebuildDustIfMoved(had)
+        }
+    }
+    private func rebuildDustIfMoved(_ had: [CGRect]) {
+        guard let at = attributedText, at.length > 0 else { return }
+        var now: [CGRect] = []
+        at.enumerateAttribute(.oxSpoiler, in: NSRange(location: 0, length: at.length)) { v, r, _ in
+            guard v != nil else { return }
+            let g = layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+            layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
+                let fr = rect.offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top)
+                if fr.width > 1 { now.append(fr) }
+            }
+        }
+        if now != had { rebuildDust() }
     }
 
     // MARK: @упоминания
@@ -245,22 +319,24 @@ final class RichTextView: UITextView {
             stack.trailingAnchor.constraint(equalTo: blur.contentView.trailingAnchor, constant: -8),
             stack.centerYAnchor.constraint(equalTo: blur.contentView.centerYAnchor)
         ])
-        func btn(_ icon: String, _ label: String, _ act: @escaping () -> Void) -> UIButton {
+        func btn(_ icon: String, _ label: String, _ flag: RichFlags? = nil, _ act: @escaping () -> Void) -> UIButton {
             var cfg = UIButton.Configuration.plain()
             cfg.image = UIImage(systemName: icon, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
             cfg.baseForegroundColor = .label
             cfg.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
             let b = UIButton(configuration: cfg, primaryAction: UIAction { _ in act() })
             b.accessibilityLabel = label
+            if let flag { fmtButtons.append((flag, b)) }
             return b
         }
-        stack.addArrangedSubview(btn("bold", "Жирный") { [weak self] in self?.toggle(.bold) })
-        stack.addArrangedSubview(btn("italic", "Курсив") { [weak self] in self?.toggle(.italic) })
-        stack.addArrangedSubview(btn("strikethrough", "Зачёркнутый") { [weak self] in self?.toggle(.strike) })
-        stack.addArrangedSubview(btn("chevron.left.forwardslash.chevron.right", "Моноширинный") { [weak self] in self?.toggle(.code) })
-        stack.addArrangedSubview(btn("eye.slash", "Спойлер") { [weak self] in self?.toggle(.spoiler) })
+        stack.addArrangedSubview(btn("bold", "Жирный", .bold) { [weak self] in self?.toggle(.bold) })
+        stack.addArrangedSubview(btn("italic", "Курсив", .italic) { [weak self] in self?.toggle(.italic) })
+        stack.addArrangedSubview(btn("strikethrough", "Зачёркнутый", .strike) { [weak self] in self?.toggle(.strike) })
+        stack.addArrangedSubview(btn("chevron.left.forwardslash.chevron.right", "Моноширинный", .code) { [weak self] in self?.toggle(.code) })
+        stack.addArrangedSubview(btn("eye.slash", "Спойлер", .spoiler) { [weak self] in self?.toggle(.spoiler) })
         stack.addArrangedSubview(btn("at", "Упомянуть") { [weak self] in self?.insertAtSign() })
         stack.addArrangedSubview(btn("keyboard.chevron.compact.down", "Скрыть клавиатуру") { [weak self] in self?.resignFirstResponder() })
+        refreshButtons()
         return bar
     }
 }
@@ -275,7 +351,7 @@ struct RichComposeField: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> RichTextView {
-        let tv = RichTextView()
+        let tv = RichTextView(usingTextLayoutManager: false)
         tv.backgroundColor = .clear
         tv.isScrollEnabled = false
         tv.textContainerInset = .zero
@@ -325,7 +401,10 @@ struct RichComposeField: UIViewRepresentable {
         init(_ p: RichComposeField) { parent = p }
 
         func textViewDidChange(_ tv: UITextView) { (tv as? RichTextView)?.changed() }
-        func textViewDidChangeSelection(_ tv: UITextView) { (tv as? RichTextView)?.reportMention() }
+        func textViewDidChangeSelection(_ tv: UITextView) {
+            (tv as? RichTextView)?.reportMention()
+            (tv as? RichTextView)?.refreshButtons()
+        }
         func textViewDidBeginEditing(_ tv: UITextView) { parent.onFocus(true); (tv as? RichTextView)?.reportMention() }
         func textViewDidEndEditing(_ tv: UITextView) { parent.onFocus(false); parent.onMention(nil) }
 

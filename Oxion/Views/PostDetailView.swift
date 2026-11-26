@@ -470,34 +470,37 @@ struct ComposerView: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             if !isReply {
                 Button { showParams = true } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "slider.horizontal.3").font(.subheadline)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Параметры").font(.caption.weight(.semibold))
-                            Text(PublishParamsSheet.title(replyTo)).font(.caption2).lineLimit(1)
+                    HStack(spacing: 10) {
+                        Image(systemName: "slider.horizontal.3").font(.title3)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Параметры").font(.subheadline.weight(.semibold))
+                            Text(PublishParamsSheet.title(replyTo)).font(.caption).lineLimit(1)
                         }
                     }
                     .foregroundStyle(Color.oxHint)
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 Spacer(minLength: 4)
-                // исчезающая ветка: видна 24 часа
+                // исчезающая ветка: видна 24 часа — переключатель из «жидкого стекла»
                 Button {
-                    withAnimation(.snappy(duration: 0.28)) { ephemeral.toggle() }
+                    withAnimation(.snappy(duration: 0.3)) { ephemeral.toggle() }
                     Haptic.tap(.soft)
                 } label: {
                     ZStack(alignment: ephemeral ? .trailing : .leading) {
-                        Capsule().fill(ephemeral ? Color.lime.opacity(0.9) : Color.primary.opacity(0.1)).frame(width: 58, height: 32)
+                        Color.clear.frame(width: 68, height: 40)
                         Image(systemName: "timer")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(ephemeral ? Color.onLime : Color.oxHint)
-                            .frame(width: 28, height: 28)
-                            .background(.background, in: Circle())
-                            .padding(2)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(ephemeral ? Color.limeInk : Color.oxHint)
+                            .frame(width: 34, height: 34)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                            .padding(3)
                     }
+                    .glassEffect(ephemeral ? .regular.tint(Color.lime.opacity(0.55)).interactive() : .regular.interactive(), in: .capsule)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(ephemeral ? "Исчезающая ветка включена" : "Сделать исчезающей на 24 часа")
@@ -511,10 +514,11 @@ struct ComposerView: View {
                     if sending { ProgressView() }
                     Text(isReply ? "Ответить" : "Опубликовать").font(.headline)
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 8)
+                .frame(minHeight: 34)
             }
             .buttonStyle(.glassProminent)
-            .controlSize(.regular).lineLimit(1).minimumScaleFactor(0.75)
+            .controlSize(.large).lineLimit(1).minimumScaleFactor(0.75)
             .disabled(sending)
         }
         .padding(.horizontal, 16)
