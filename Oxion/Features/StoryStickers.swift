@@ -266,6 +266,7 @@ struct StoryStickerSheet: View {
     var onLink: () -> Void
     var onGeo: () -> Void
     var onSound: () -> Void
+    var onResults: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var tab = 1
     @State private var query = ""
@@ -288,6 +289,7 @@ struct StoryStickerSheet: View {
                     if query.isEmpty {
                         // интерактивные наклейки
                         FlowLayoutSimple(spacing: 10) {
+                            chip("chart.bar.xaxis", "РЕЗУЛЬТАТЫ") { dismiss(); after { onResults() } }
                             chip("link", "ССЫЛКА") { dismiss(); after { onLink() } }
                             chip("mappin.and.ellipse", "ГЕОПОЗИЦИЯ") { dismiss(); after { onGeo() } }
                             Button {

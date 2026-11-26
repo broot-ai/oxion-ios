@@ -26,6 +26,8 @@ struct PostWorkoutSheet: View {
     let postId: Int
     let w: JSONValue
     var author: String?
+    /// куда сохранять (по умолчанию — копия из ветки)
+    var saveURL: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
@@ -105,7 +107,7 @@ struct PostWorkoutSheet: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         do {
-            let r: R = try await API.call("/feed/posts/\(postId)/copy", method: "POST", body: ["date": f.string(from: Date())])
+            let r: R = try await API.call(saveURL ?? "/feed/posts/\(postId)/copy", method: "POST", body: ["date": f.string(from: Date())])
             Haptic.success()
             let skipped = r.skipped ?? []
             let wid = r.workoutId

@@ -74,7 +74,7 @@ struct StoryPostCardData: Equatable {
 }
 
 struct StoryOverlay: Identifiable, Equatable {
-    enum Kind: Equatable { case text, emoji, image, shape, post, link, geo, weather, reaction }
+    enum Kind: Equatable { case text, emoji, image, shape, post, link, geo, weather, reaction, widget }
     let id = UUID()
     var kind: Kind
     var center = CGPoint(x: 0.5, y: 0.45)     // доли холста
@@ -97,11 +97,13 @@ struct StoryOverlay: Identifiable, Equatable {
     var wcode = 0
     var day = true
     var variant = 0            // стиль наклейки (по нажатию меняется)
+    var widget: StoryWidgetKind = .weekRing
+    var wdata: StoryWidgetData?
 
     static func == (a: StoryOverlay, b: StoryOverlay) -> Bool {
         a.id == b.id && a.center == b.center && a.scale == b.scale && a.angle == b.angle && a.text == b.text
             && a.color == b.color && a.style == b.style && a.font == b.font && a.emoji == b.emoji && a.shape == b.shape
-            && a.variant == b.variant && a.url == b.url
+            && a.variant == b.variant && a.url == b.url && a.widget == b.widget
     }
 
     /// интерактивная наклейка → «зона» для зрителя (ссылка, карта, реакция, ветка)
@@ -112,6 +114,14 @@ struct StoryOverlay: Identifiable, Equatable {
         case .geo: return ["type": "geo", "rect": r, "lat": lat, "lon": lon, "title": text]
         case .reaction: return ["type": "reaction", "rect": r, "emoji": emoji]
         case .post: return post.map { ["type": "post", "rect": r, "id": $0.postId] }
+        case .widget:
+            guard let d = wdata else { return nil }
+            switch widget {
+            case .lastWorkout: return d.last.map { ["type": "workout", "rect": r, "id": $0.id] }
+            case .book, .trainerCard: return d.trainer.map { ["type": "trainer", "rect": r, "id": $0.id] }
+            case .profile: return d.userId.map { ["type": "profile", "rect": r, "id": $0, "title": d.name ?? ""] }
+            default: return nil
+            }
         default: return nil
         }
     }
@@ -258,6 +268,7 @@ struct StoryEditorView: View {
     @State private var linkSheet = false
     @State private var geoSheet = false
     @State private var soundSheet = false
+    @State private var widgetsSheet = false
     @State private var exporting = false
     @State private var drawBackup: PKDrawing?
     @State private var adjustBackup: StoryAdjust?
@@ -291,7 +302,8 @@ struct StoryEditorView: View {
             StoryStickerSheet(onPick: { o in st.add(o) },
                               onLink: { linkSheet = true },
                               onGeo: { geoSheet = true },
-                              onSound: { soundSheet = true })
+                              onSound: { soundSheet = true },
+                              onResults: { widgetsSheet = true })
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
@@ -307,6 +319,9 @@ struct StoryEditorView: View {
                 var o = StoryOverlay(kind: .geo); o.text = title; o.lat = lat; o.lon = lon
                 st.add(o)
             }
+        }
+        .sheet(isPresented: $widgetsSheet) {
+            StoryWidgetsSheet { o in st.add(o) }
         }
         .sheet(isPresented: $soundSheet) {
             StorySoundSheet { a in
@@ -474,6 +489,7 @@ struct StoryEditorView: View {
                     toolButton("pencil.tip.crop.circle", "Рисунок") { startDraw() }
                     toolButton("character.textbox", "Текст") { addText() }
                     toolButton("face.smiling", "Стикеры") { stickers = true }
+                    toolButton("chart.bar.xaxis", "Результаты") { widgetsSheet = true }
                     toolButton("slider.horizontal.3", "Настройки") { adjustBackup = st.adjust; withAnimation(.smooth) { st.mode = .adjust } }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 3)
@@ -855,6 +871,7 @@ struct StoryOverlayContent: View {
         case .geo: StoryChip(icon: "mappin.and.ellipse", text: o.text, variant: o.variant)
         case .weather: StoryWeatherChip(temp: o.temp, code: o.wcode, day: o.day, variant: o.variant)
         case .reaction: StoryReactionBubble(emoji: o.emoji)
+        case .widget: if let d = o.wdata { StoryWidgetView(kind: o.widget, d: d, variant: o.variant) }
         }
     }
 
@@ -1087,7 +1104,7 @@ struct StoryOverlayItem: View {
             .onTapGesture {
                 switch o.kind {
                 case .text: state.editing = o.id
-                case .link, .geo, .weather:
+                case .link, .geo, .weather, .widget:
                     withAnimation(.spring(duration: 0.25)) { o.variant = (o.variant + 1) % 3 }
                     Haptic.tap(.soft)
                 case .reaction:

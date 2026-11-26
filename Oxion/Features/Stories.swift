@@ -241,6 +241,7 @@ struct StoryViewer: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var appModel
     @Environment(\.openURL) private var openURL
+    @State private var workoutStory: Int?
     @State private var store = StoriesStore.shared
     @State var groups: [StoryGroup]
     @State var gi: Int
@@ -345,6 +346,10 @@ struct StoryViewer: View {
         .task { await tick() }
         .onChange(of: replyFocus) { _, f in paused = f }
         .onChange(of: viewers) { _, v in paused = v }
+        .sheet(item: Binding(get: { workoutStory.map { AppModel.IdBox(id: $0) } }, set: { workoutStory = $0?.id })) { b in
+            StoryWorkoutSheet(storyId: b.id)
+                .onDisappear { paused = false }
+        }
         .sheet(isPresented: $viewers) {
             if let s = story { StoryViewersSheet(story: s) }
         }
@@ -412,6 +417,13 @@ struct StoryViewer: View {
                         }
                     case "reaction":
                         if !isMine && s.liked != true { like(s) } else { Haptic.tap(.soft) }
+                    case "workout":
+                        paused = true
+                        workoutStory = s.id
+                    case "trainer":
+                        if let id = a.id { openRoute("trainer/\(id)") }
+                    case "profile":
+                        if let id = a.id { openRoute("user/\(id)") }
                     default: break
                     }
                 }
@@ -445,6 +457,16 @@ struct StoryViewer: View {
             .position(x: frame.midX, y: min(size.height - 40, frame.maxY + 34))
         }
         .frame(width: size.width, height: size.height)
+    }
+
+    private func openRoute(_ r: String) {
+        Haptic.tap(.soft)
+        player?.pause()
+        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            appModel.handle(route: r)
+        }
     }
 
     private func openLinked(_ id: Int) {
