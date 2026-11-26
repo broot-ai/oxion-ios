@@ -277,7 +277,7 @@ struct RingLightScreen: View {
                 light.color.opacity(light.intensity).ignoresSafeArea()
                     .onTapGesture { withAnimation { showPanel.toggle() } }
             } else if cam.ready {
-                CameraPreview(cam: cam)
+                LitCameraPreview(cam: cam)
                     .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     .padding(.horizontal, mode == .stories ? 0 : 0)
                     .aspectRatio(mode == .stories ? 9.0 / 16.0 : nil, contentMode: .fit)
@@ -418,7 +418,7 @@ struct RingLightScreen: View {
 }
 
 /// Превью камеры, которое сообщает модели положение лица (через публичный AVCaptureVideoPreviewLayer)
-struct CameraPreview: UIViewRepresentable {
+struct LitCameraPreview: UIViewRepresentable {
     let cam: StoryCameraModel
     final class V: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }

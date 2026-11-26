@@ -198,7 +198,7 @@ struct StoryCameraScreen: View {
         VStack(spacing: 0) {
             ZStack {
                 Color(white: 0.06)
-                if cam.ready { CameraPreview(cam: cam) }
+                if cam.ready { LitCameraPreview(cam: cam) }
                 if cam.denied {
                     VStack(spacing: 12) {
                         Image(systemName: "camera.fill").font(.largeTitle)
