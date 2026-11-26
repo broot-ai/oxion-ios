@@ -10,6 +10,9 @@ struct PostDetailView: View {
     @State private var errorText: String?
     @State private var compose: ComposeRequest?
     @State private var route: FeedRoute?
+    @Environment(\.feedPush) private var feedPush
+    /// внутри вкладки «Лента» — пушим в общий стек, иначе — в свой
+    private func go(_ r: FeedRoute) { if let feedPush { feedPush(r) } else { route = r } }
 
     var body: some View {
         ScrollView {
@@ -72,16 +75,24 @@ struct PostDetailView: View {
             }
         }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await load() } } }
+        .onReceive(NotificationCenter.default.publisher(for: .oxPostDeleted)) { n in
+            guard let id = n.object as? Int, let t = thread else { return }
+            if id == postId || t.post.id == id { dismiss(); return }
+            withAnimation(.smooth(duration: 0.3)) {
+                thread = PostThread(post: t.post, chain: (t.chain ?? []).filter { $0.id != id },
+                                    ancestors: t.ancestors, replies: (t.replies ?? []).filter { $0.id != id })
+            }
+        }
         .oxRefreshable { await load() }
         .task { await load() }
     }
 
     private func row(_ p: Post, big: Bool = false, line: Bool = false) -> some View {
         ThreadPost(post: p, big: big, showLine: line,
-                   onOpen: { if p.id != postId { route = .post(p.id) } },
-                   onUser: { route = .user($0) },
+                   onOpen: { if p.id != postId { go(.post(p.id)) } },
+                   onUser: { go(.user($0)) },
                    onChange: { change in apply(p.id, change) },
-                   onRemove: { if p.id == postId { dismiss() } else { Task { await load() } } },
+                   onRemove: { if p.id == postId { dismiss() } },
                    onCompose: { compose = $0 })
     }
 
@@ -122,7 +133,6 @@ struct ComposeRequest: Identifiable {
 struct ComposePart: Identifiable {
     let id = UUID()
     var text = ""
-    var sel: TextSelection?
     var images: [PickedImage] = []
 }
 
@@ -151,7 +161,8 @@ struct ComposerView: View {
     @State private var showMusic = false
     @State private var showLocation = false
     @State private var showCamera = false
-    @FocusState private var focused: UUID?
+    @State private var focused: UUID?
+    @State private var editors = RichEditors()
     @State private var mention = MentionSuggest()
 
     private var isReply: Bool { request.parent != nil }
@@ -178,8 +189,8 @@ struct ComposerView: View {
                     Button {
                         let p = ComposePart()
                         parts.append(p)
-                        focused = p.id
                         Haptic.tap(.soft)
+                        Task { try? await Task.sleep(for: .milliseconds(80)); editors.of(p.id).focus() }
                     } label: {
                         HStack(spacing: 12) {
                             Avatar(url: API.media(model.me?.photoUrl), name: model.me?.displayName ?? "?", size: 22)
@@ -250,24 +261,16 @@ struct ComposerView: View {
                 }
                 .ignoresSafeArea()
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 6) {
-                    if focused != nil {
-                        FormatBar(onWrap: { applyFormat($0) }, onMention: { insertAt() })
-                            .padding(.horizontal, 16)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
-                    bottomBar
-                }
-                .animation(.smooth(duration: 0.2), value: focused != nil)
-            }
+            .safeAreaInset(edge: .bottom) { bottomBar }
             .photosPicker(isPresented: $showPicker, selection: $picks, maxSelectionCount: 4, matching: .images)
             .onChange(of: picks) { Task { await loadPicks() } }
             .sheet(isPresented: $choosingWorkout) {
                 WorkoutChooser { w in workout = w }
             }
             .onAppear {
-                focused = parts.first?.id
+                if let id = parts.first?.id, request.preset == .none {
+                    Task { try? await Task.sleep(for: .milliseconds(350)); editors.of(id).focus() }
+                }
                 switch request.preset {
                 case .photo:
                     pickFor = parts.first?.id
@@ -316,11 +319,15 @@ struct ComposerView: View {
                         }
                     }
                 }
-                TextField(isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…", text: part.text, selection: part.sel, axis: .vertical)
-                    .lineLimit(1...30)
-                    .focused($focused, equals: part.wrappedValue.id)
-                    .onChange(of: part.wrappedValue.text) { refreshMention() }
-                    .onChange(of: part.wrappedValue.sel) { refreshMention() }
+                // поле с форматированием: жирный/курсив/спойлер видны сразу, без значков ** и ||
+                let pid = part.wrappedValue.id
+                RichComposeField(placeholder: isFirst ? (isReply ? "Ваш ответ…" : "Что нового?") : "Продолжение ветки…",
+                                 text: part.text,
+                                 controller: editors.of(pid),
+                                 onFocus: { on in
+                                     if on { focused = pid } else if focused == pid { focused = nil }
+                                 },
+                                 onMention: { q in mention.update(q) })
                 // подсказки при вводе «@им…»
                 if focused == part.wrappedValue.id, mention.query != nil, !mention.users.isEmpty {
                     MentionList(users: mention.users) { pickMention($0) }
@@ -454,44 +461,12 @@ struct ComposerView: View {
         }
     }
 
-    // MARK: форматирование и упоминания
-    private var focusedIndex: Int? { parts.firstIndex(where: { $0.id == focused }) }
-
-    private func applyFormat(_ mk: String) {
-        guard let i = focusedIndex else { return }
-        var t = parts[i].text, sel = parts[i].sel
-        RichText.wrap(&t, &sel, mk)
-        parts[i].text = t
-        parts[i].sel = sel
-    }
-
-    private func refreshMention() {
-        guard let i = focusedIndex, let tok = RichText.mentionToken(parts[i].text, parts[i].sel) else { mention.update(nil); return }
-        mention.update(tok.query)
-    }
-
+    // MARK: упоминания
     private func pickMention(_ u: MentionUser) {
-        guard let i = focusedIndex, let tok = RichText.mentionToken(parts[i].text, parts[i].sel) else { return }
-        let lo = parts[i].text.distance(from: parts[i].text.startIndex, to: tok.range.lowerBound)
-        parts[i].text.replaceSubrange(tok.range, with: "@\(u.username) ")
-        let c = parts[i].text.index(parts[i].text.startIndex, offsetBy: min(parts[i].text.count, lo + u.username.count + 2))
-        parts[i].sel = TextSelection(insertionPoint: c)
+        guard let id = focused else { return }
+        editors.of(id).insertMention(u.username)
         mention.update(nil)
         Haptic.tap(.soft)
-    }
-
-    /// кнопка «@»: ставим собачку в место курсора и сразу показываем подсказки
-    private func insertAt() {
-        guard let i = focusedIndex else { return }
-        var t = parts[i].text
-        var at = t.endIndex
-        if let s = parts[i].sel, case .selection(let r) = s.indices, r.upperBound <= t.endIndex { at = r.upperBound }
-        let lo = t.distance(from: t.startIndex, to: at)
-        let needSpace = at > t.startIndex && !t[t.index(before: at)].isWhitespace
-        let ins = (needSpace ? " " : "") + "@"
-        t.insert(contentsOf: ins, at: at)
-        parts[i].text = t
-        parts[i].sel = TextSelection(insertionPoint: t.index(t.startIndex, offsetBy: lo + ins.count))
     }
 
     private var bottomBar: some View {
@@ -575,7 +550,7 @@ struct ComposerView: View {
             OxAlert.show(icon: "square.and.pencil", title: "Ветка пустая", message: "Напишите текст, добавьте фото, опрос или тренировку.")
             return
         }
-        focused = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         sending = true
         defer { sending = false }
         do {
@@ -586,7 +561,11 @@ struct ComposerView: View {
             if let q = request.quote { body["quote_id"] = q.id }
             if let topic, !isReply { body["topic"] = topic }
             if let workout { body["workout_id"] = workout.id }
-            if let music { body["music"] = music.dict }
+            if let music {
+                body["music"] = music.dict
+                // запасной вариант строкой — сервер примет любой
+                if let d = try? JSONSerialization.data(withJSONObject: music.dict), let js = String(data: d, encoding: .utf8) { body["music_json"] = js }
+            }
             if let location { body["location"] = location }
             if aiLabel { body["ai_label"] = true }
             if ephemeral && !isReply { body["ephemeral"] = true }
@@ -602,15 +581,21 @@ struct ComposerView: View {
                 chain.append(["text": t, "photos": k])
             }
             if !chain.isEmpty { body["chain"] = chain }
-            var created: IdResponse?
+            var created: Post?
             var failure: Error?
             let payload = body
+            let hadMusic = music != nil
             await IslandHUD.shared.run(title: "Отправка публикации", doneText: "Опубликовано") {
                 do { created = try await API.call("/feed/posts", method: "POST", body: payload); return true } catch { failure = error; return false }
             }
             if let failure { throw failure }
             guard let r = created else { return }
             Haptic.success()
+            NotificationCenter.default.post(name: .oxPostCreated, object: r)
+            if hadMusic && r.music == nil {
+                OxAlert.show(icon: "music.note", tint: .orange, title: "Трек не сохранился",
+                             message: "Ветка опубликована без музыки. Обновите сервер (worker.js) — старая версия не принимает музыку.")
+            }
             onPosted(r.id)
             dismiss()
         } catch {

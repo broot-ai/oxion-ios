@@ -150,7 +150,12 @@ final class OxNotifDelegate: NSObject, UNUserNotificationCenterDelegate {
         var route = info["route"] as? String
         if route == nil, let url = info["url"] as? String {
             if url.contains("#chat") { route = "chats" }
-            else if url.contains("#post") || url.contains("#feed") { route = "feed" }
+            else if let r = url.range(of: "#post/") {
+                // пуш об ответе/упоминании — сразу открываем ветку
+                let id = url[r.upperBound...].prefix(while: { $0.isNumber })
+                route = id.isEmpty ? "feed" : "post/" + id
+            }
+            else if url.contains("#feed") { route = "feed" }
             else if url.contains("#diary") { route = "diary" }
             else { route = "home" }
         }

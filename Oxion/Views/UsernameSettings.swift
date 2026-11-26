@@ -323,6 +323,7 @@ enum ProfileLink {
             let host = url.host ?? ""
             let rest = url.pathComponents.filter { $0 != "/" }
             if (host == "u" || host == "user"), let first = rest.first { return host + "/" + first }
+            if host == "post", let first = rest.first, Int(first) != nil { return "post/" + first }
             if host.hasPrefix("@") { return "u/" + host.dropFirst() }
             return nil
         }
@@ -331,6 +332,9 @@ enum ProfileLink {
         let p = url.pathComponents.filter { $0 != "/" }
         if p.count == 1, p[0].hasPrefix("@"), p[0].count > 1 { return "u/" + p[0].dropFirst() }
         if p.count == 2, p[0] == "u" { return "u/" + p[1] }
+        // ссылка на ветку: …/t/123 и старая …/#post/123
+        if p.count == 2, p[0] == "t", Int(p[1]) != nil { return "post/" + p[1] }
+        if let f = url.fragment, f.hasPrefix("post/"), Int(f.dropFirst(5)) != nil { return f }
         return nil
     }
 }

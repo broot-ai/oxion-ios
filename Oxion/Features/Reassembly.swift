@@ -93,6 +93,9 @@ struct ReassembleEffect: GeometryEffect {
     }
 
     func effectValue(size: CGSize) -> ProjectionTransform {
+        // в покое — строго единичное преобразование. Перспектива (m34) даже без поворота делает слой «3D»,
+        // и у кнопок-меню, ссылок и полей ввода внутри ломается попадание касаний.
+        if t == 0 && lift == 0 { return ProjectionTransform() }
         let w = size.width, h = size.height
         let angle = CGFloat(path.angle * Double(t)) * .pi / 180
         let s = 1 + (path.scale - 1) * t + 0.015 * lift

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Форматирование текста публикаций (как в Telegram)
 // Разметка хранится прямо в тексте:
@@ -169,6 +170,7 @@ enum RichText {
 struct RichPostText: View {
     let text: String
     var font: Font = .body
+    var uiStyle: UIFont.TextStyle = .body
     var linkColor: Color? = Color.limeInk
     var onTap: (() -> Void)?
 
@@ -176,6 +178,15 @@ struct RichPostText: View {
     @Environment(\.openURL) private var outer
 
     var body: some View {
+        if text.contains("||") && !RichText.parse(text).1.isEmpty {
+            // есть спойлер — UIKit-текст с «атомами»
+            SpoilerText(text: text, style: uiStyle, linkColor: linkColor ?? Color.limeInk, onTap: onTap)
+        } else {
+            plain
+        }
+    }
+
+    @ViewBuilder private var plain: some View {
         let (attr, spoilers) = RichText.render(text, linkColor: linkColor, revealed: revealed)
         let tappable = spoilers || attr.runs.contains(where: { $0.link != nil })
         Text(attr)
@@ -295,5 +306,236 @@ struct MentionList: View {
         .padding(.vertical, 4)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+}
+
+// MARK: - Спойлер «из атомов», как в Telegram
+// Скрытый текст закрыт облаком мерцающих частиц (CAEmitterLayer). Нажатие — частицы рассыпаются, текст проявляется.
+
+extension RichText {
+    /// Разметка → NSAttributedString для UIKit + диапазоны спойлеров (UTF-16)
+    static func ns(_ s: String, style: UIFont.TextStyle, linkColor: UIColor) -> (NSMutableAttributedString, [(Int, NSRange)]) {
+        var (a, sp) = parse(s)
+        linkify(&a, color: nil)
+        let plain = String(a.characters)
+        // смещение символа → смещение UTF-16
+        var u16: [Int] = [0]
+        u16.reserveCapacity(plain.count + 1)
+        var acc = 0
+        for ch in plain { acc += ch.utf16.count; u16.append(acc) }
+        let base = UIFont.preferredFont(forTextStyle: style)
+        let out = NSMutableAttributedString(string: plain, attributes: [.font: base, .foregroundColor: UIColor.label])
+        for run in a.runs {
+            let lo = a.characters.distance(from: a.startIndex, to: run.range.lowerBound)
+            let hi = a.characters.distance(from: a.startIndex, to: run.range.upperBound)
+            let r = NSRange(location: u16[lo], length: u16[hi] - u16[lo])
+            if let i = run.inlinePresentationIntent {
+                if i.contains(.code) {
+                    out.addAttribute(.font, value: UIFont.monospacedSystemFont(ofSize: base.pointSize * 0.94, weight: .regular), range: r)
+                    out.addAttribute(.backgroundColor, value: UIColor.label.withAlphaComponent(0.08), range: r)
+                } else {
+                    var t: UIFontDescriptor.SymbolicTraits = []
+                    if i.contains(.stronglyEmphasized) { t.insert(.traitBold) }
+                    if i.contains(.emphasized) { t.insert(.traitItalic) }
+                    if !t.isEmpty, let d = base.fontDescriptor.withSymbolicTraits(t) { out.addAttribute(.font, value: UIFont(descriptor: d, size: base.pointSize), range: r) }
+                }
+            }
+            if run.strikethroughStyle != nil { out.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: r) }
+            if let l = run.link { out.addAttribute(.link, value: l, range: r) }
+        }
+        let ranges = sp.map { x in (x.id, NSRange(location: u16[x.range.lowerBound], length: u16[x.range.upperBound] - u16[x.range.lowerBound])) }
+        return (out, ranges)
+    }
+}
+
+final class SpoilerTextView: UITextView, UITextViewDelegate {
+    var raw = ""
+    var source = NSMutableAttributedString()
+    var spoilers: [(Int, NSRange)] = []
+    var revealed: Set<Int> = []
+    var linkColor: UIColor = .systemBlue
+    var onTap: (() -> Void)?
+    var onOpen: ((URL) -> Void)?
+    private var emitters: [CAEmitterLayer] = []
+    private var lastSize: CGSize = .zero
+
+    init() {
+        super.init(frame: .zero, textContainer: nil)
+        _ = layoutManager       // TextKit 1: нужны прямоугольники строк
+        isEditable = false
+        isSelectable = true
+        isScrollEnabled = false
+        backgroundColor = .clear
+        textContainerInset = .zero
+        textContainer.lineFragmentPadding = 0
+        delegate = self
+        linkTextAttributes = [:]
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        addGestureRecognizer(tap)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func apply() {
+        let m = NSMutableAttributedString(attributedString: source)
+        m.enumerateAttribute(.link, in: NSRange(location: 0, length: m.length)) { v, r, _ in
+            if v != nil { m.addAttribute(.foregroundColor, value: linkColor, range: r) }
+        }
+        for (id, r) in spoilers where !revealed.contains(id) && NSMaxRange(r) <= m.length {
+            m.addAttribute(.foregroundColor, value: UIColor.clear, range: r)
+            m.removeAttribute(.link, range: r)
+            m.removeAttribute(.backgroundColor, range: r)
+            m.removeAttribute(.strikethroughStyle, range: r)
+        }
+        attributedText = m
+        setNeedsLayout()
+        lastSize = .zero
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != lastSize { lastSize = bounds.size; rebuildParticles() }
+    }
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        rebuildParticles()
+    }
+
+    private static let dot: CGImage? = {
+        let r = UIGraphicsImageRenderer(size: CGSize(width: 6, height: 6))
+        return r.image { ctx in
+            UIColor.white.setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 6, height: 6))
+        }.cgImage
+    }()
+
+    private func rects(for r: NSRange) -> [CGRect] {
+        let g = layoutManager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+        var out: [CGRect] = []
+        layoutManager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
+            out.append(rect.offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top).insetBy(dx: -1, dy: 0))
+        }
+        return out
+    }
+
+    func rebuildParticles() {
+        emitters.forEach { $0.removeFromSuperlayer() }
+        emitters.removeAll()
+        guard bounds.width > 0 else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        let color = UIColor.label.resolvedColor(with: traitCollection)
+        for (id, r) in spoilers where !revealed.contains(id) {
+            for rect in rects(for: r) where rect.width > 1 {
+                let e = CAEmitterLayer()
+                e.name = "\(id)"
+                e.frame = rect
+                e.emitterPosition = CGPoint(x: rect.width / 2, y: rect.height / 2)
+                e.emitterSize = rect.size
+                e.emitterShape = .rectangle
+                e.emitterMode = .surface
+                e.masksToBounds = true
+                let c = CAEmitterCell()
+                c.contents = Self.dot
+                c.color = color.cgColor
+                c.birthRate = Float(max(30, rect.width * rect.height / 7))
+                c.lifetime = 1.1
+                c.lifetimeRange = 0.6
+                c.velocity = 5
+                c.velocityRange = 6
+                c.emissionRange = .pi * 2
+                c.scale = 0.22
+                c.scaleRange = 0.12
+                c.alphaSpeed = -0.55
+                c.alphaRange = 0.4
+                e.emitterCells = [c]
+                e.beginTime = CACurrentMediaTime() - 1.2    // сразу «облако», без пустого старта
+                layer.addSublayer(e)
+                emitters.append(e)
+            }
+        }
+    }
+
+    private func spoilerAt(_ p: CGPoint) -> Int? {
+        for e in emitters where e.frame.insetBy(dx: -4, dy: -4).contains(p) { return Int(e.name ?? "") }
+        return nil
+    }
+
+    @objc private func tapped(_ g: UITapGestureRecognizer) {
+        let p = g.location(in: self)
+        if let id = spoilerAt(p) {
+            reveal(id)
+            return
+        }
+        // по ссылке — сработает сама ссылка
+        let i = layoutManager.characterIndex(for: CGPoint(x: p.x - textContainerInset.left, y: p.y - textContainerInset.top), in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+        if i < attributedText.length, attributedText.attribute(.link, at: i, effectiveRange: nil) != nil { return }
+        onTap?()
+    }
+
+    func reveal(_ id: Int) {
+        guard !revealed.contains(id) else { return }
+        revealed.insert(id)
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        // частицы разлетаются и гаснут, текст проявляется
+        for e in emitters where e.name == "\(id)" {
+            e.birthRate = 0
+            e.emitterCells?.forEach { $0.velocity = 40 }
+            let a = CABasicAnimation(keyPath: "opacity")
+            a.fromValue = 1; a.toValue = 0; a.duration = 0.45
+            e.opacity = 0
+            e.add(a, forKey: "fade")
+        }
+        UIView.transition(with: self, duration: 0.4, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+            let keep = self.emitters
+            self.apply()
+            self.emitters = keep
+        } completion: { _ in self.rebuildParticles() }
+    }
+
+    func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+        if case .link(let url) = textItem.content {
+            return UIAction { [weak self] _ in self?.onOpen?(url) }
+        }
+        return defaultAction
+    }
+    func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? { nil }
+}
+
+struct SpoilerText: UIViewRepresentable {
+    let text: String
+    var style: UIFont.TextStyle = .body
+    var linkColor: Color = Color.limeInk
+    var onTap: (() -> Void)?
+    @Environment(\.openURL) private var openURL
+
+    func makeUIView(context: Context) -> SpoilerTextView {
+        let v = SpoilerTextView()
+        v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        fill(v)
+        return v
+    }
+
+    func updateUIView(_ v: SpoilerTextView, context: Context) {
+        v.onTap = onTap
+        v.onOpen = { u in openURL(u) }
+        if v.raw != text { fill(v) }
+    }
+
+    private func fill(_ v: SpoilerTextView) {
+        let (a, sp) = RichText.ns(text, style: style, linkColor: UIColor(linkColor))
+        v.raw = text
+        v.source = a
+        v.spoilers = sp
+        v.revealed = []
+        v.linkColor = UIColor(linkColor)
+        v.onTap = onTap
+        v.onOpen = { u in openURL(u) }
+        v.apply()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: SpoilerTextView, context: Context) -> CGSize? {
+        let w = proposal.width ?? UIScreen.main.bounds.width - 80
+        let h = uiView.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: w, height: ceil(h))
     }
 }

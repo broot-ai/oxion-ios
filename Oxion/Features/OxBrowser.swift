@@ -787,6 +787,8 @@ struct BrowserPanel: View {
 
 struct ShareToChatsSheet: View {
     let url: URL
+    /// только чаты Oxion: без системного «Поделиться» и без копирования ссылки
+    var chatsOnly = false
     @Environment(\.dismiss) private var dismiss
     @State private var chats: [ChatItem] = []
     @State private var picked: [Int] = []
@@ -817,12 +819,12 @@ struct ShareToChatsSheet: View {
                 roundButton("xmark") { dismiss() }
                 Spacer()
                 VStack(spacing: 1) {
-                    Text("Поделиться").font(.headline)
+                    Text(chatsOnly ? "Отправить в чат" : "Поделиться").font(.headline)
                     Text(picked.isEmpty ? "Выберите чаты" : "Выбрано: \(picked.count)").font(.subheadline).foregroundStyle(.secondary)
                         .contentTransition(.numericText())
                 }
                 Spacer()
-                roundButton("square.and.arrow.up") { system = true }
+                if chatsOnly { Color.clear.frame(width: 50, height: 50) } else { roundButton("square.and.arrow.up") { system = true } }
             }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -843,7 +845,9 @@ struct ShareToChatsSheet: View {
         .padding(.top, 18)
         .overlay(alignment: .bottom) {
             Button {
-                if picked.isEmpty {
+                if picked.isEmpty && chatsOnly {
+                    Haptic.error()
+                } else if picked.isEmpty {
                     UIPasteboard.general.url = url
                     Haptic.success()
                     OxAlert.show(icon: "link", title: "Ссылка скопирована", message: url.host() ?? "")
@@ -854,7 +858,7 @@ struct ShareToChatsSheet: View {
             } label: {
                 HStack {
                     if sending { ProgressView().tint(.white) }
-                    Text(picked.isEmpty ? "Скопировать ссылку" : "Отправить").font(.headline)
+                    Text(picked.isEmpty ? (chatsOnly ? "Выберите чат" : "Скопировать ссылку") : "Отправить").font(.headline)
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: 54)

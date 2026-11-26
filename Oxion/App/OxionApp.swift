@@ -173,6 +173,8 @@ final class AppModel {
     var exerciseBox: IdBox?
     /// профиль, открытый по ссылке …/@имя или упоминанию @имя
     var profileBox: IdBox?
+    /// ветка, открытая по ссылке …/t/123
+    var postBox: IdBox?
 
     struct IdBox: Identifiable { let id: Int }
 
@@ -247,6 +249,8 @@ final class AppModel {
         case "trainer":
             selectedTab = .trainers
             if parts.count > 1, let id = Int(parts[1]), id > 0 { openTrainerId = id }
+        case "post" where parts.count > 1:
+            if let id = Int(parts[1]), id > 0 { postBox = IdBox(id: id) }
         case "user" where parts.count > 1:
             if let id = Int(parts[1]), id > 0 { profileBox = IdBox(id: id) }
         case "u" where parts.count > 1:
@@ -567,6 +571,12 @@ struct MainTabView: View {
             NavigationStack {
                 UserProfileView(userId: b.id)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.profileBox = nil } } }
+            }
+        }
+        .sheet(item: $model.postBox) { b in
+            NavigationStack {
+                PostDetailView(postId: b.id)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.postBox = nil } } }
             }
         }
         .sheet(item: $model.workoutBox) { b in NavigationStack { WorkoutDetailView(workoutId: b.id, onChanged: {}) } }

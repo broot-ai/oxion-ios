@@ -11,6 +11,9 @@ struct UserProfileView: View {
     @State private var posts: [FeedItem] = []
     @State private var errorText: String?
     @State private var route: FeedRoute?
+    @Environment(\.feedPush) private var feedPush
+    /// внутри вкладки «Лента» — пушим в общий стек, иначе — в свой
+    private func go(_ r: FeedRoute) { if let feedPush { feedPush(r) } else { route = r } }
     @State private var chat: ChatRef?
     @State private var compose: ComposeRequest?
     @State private var showCard = false
@@ -32,13 +35,13 @@ struct UserProfileView: View {
                             case "post": compose = ComposeRequest()
                             case "photo": showPhotoPick = true
                             case "bio": showBio = true
-                            default: route = .search
+                            default: go(.search)
                             }
                         }
                     }
                     if let pin = u.pinned, tab == "posts" {
                         Label("Закреплено", systemImage: "pin.fill").font(.caption).foregroundStyle(Color.oxHint).padding(.horizontal, 16)
-                        ThreadPost(post: pin, onOpen: { route = .post(pin.id) }, onUser: { _ in }, onCompose: { compose = $0 })
+                        ThreadPost(post: pin, onOpen: { go(.post(pin.id)) }, onUser: { if $0 != userId { go(.user($0)) } }, onCompose: { compose = $0 })
                         Divider().overlay(Color.primary.opacity(0.06))
                     }
                     if posts.isEmpty {
@@ -46,8 +49,8 @@ struct UserProfileView: View {
                     }
                     ForEach(posts) { item in
                         ThreadPost(post: item.post,
-                                   onOpen: { route = .post(item.post.chainOf ?? item.post.id) },
-                                   onUser: { if $0 != userId { route = .user($0) } },
+                                   onOpen: { go(.post(item.post.chainOf ?? item.post.id)) },
+                                   onUser: { if $0 != userId { go(.user($0)) } },
                                    onChange: { change in
                                        for i in posts.indices where posts[i].post.id == item.post.id { change(&posts[i].post) }
                                    },
@@ -67,6 +70,10 @@ struct UserProfileView: View {
         .navigationDestination(item: $route) { FeedDestination(route: $0) }
         .navigationDestination(item: $chat) { ChatView(chatId: $0.id, title: $0.name) }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await loadPosts() } } }
+        .onReceive(NotificationCenter.default.publisher(for: .oxPostDeleted)) { n in
+            guard let id = n.object as? Int else { return }
+            withAnimation(.smooth(duration: 0.3)) { posts.removeAll { $0.post.id == id || $0.post.chainOf == id } }
+        }
         .fullScreenCover(isPresented: $showCard) { MyCardSheet() }
         .sheet(isPresented: $showNote) { NoteComposerSheet(current: u?.note) { nu in withAnimation(.smooth(duration: 0.3)) { u = nu } } }
         .sheet(isPresented: $showBio) { BioEditSheet(current: u?.bio ?? "") { nu in withAnimation(.smooth(duration: 0.3)) { u = nu } } }
@@ -226,12 +233,15 @@ struct ActivityView: View {
     @State private var items: [ActivityItem] = []
     @State private var loaded = false
     @State private var route: FeedRoute?
+    @Environment(\.feedPush) private var feedPush
+    /// внутри вкладки «Лента» — пушим в общий стек, иначе — в свой
+    private func go(_ r: FeedRoute) { if let feedPush { feedPush(r) } else { route = r } }
 
     var body: some View {
         List {
             ForEach(items) { a in
                 Button {
-                    if let p = a.post { route = .post(p.open ?? p.id) } else { route = .user(a.actor.id) }
+                    if let p = a.post { go(.post(p.open ?? p.id)) } else { go(.user(a.actor.id)) }
                 } label: {
                     HStack(alignment: .top, spacing: 12) {
                         ZStack(alignment: .bottomTrailing) {
@@ -322,6 +332,9 @@ struct FeedSearchView: View {
     @State private var result: FSearch?
     @State private var suggest: [FPerson] = []
     @State private var route: FeedRoute?
+    @Environment(\.feedPush) private var feedPush
+    /// внутри вкладки «Лента» — пушим в общий стек, иначе — в свой
+    private func go(_ r: FeedRoute) { if let feedPush { feedPush(r) } else { route = r } }
 
     var body: some View {
         List {
@@ -337,7 +350,7 @@ struct FeedSearchView: View {
                 if let ps = r.posts, !ps.isEmpty {
                     Section("Ветки") {
                         ForEach(ps) { p in
-                            ThreadPost(post: p, onOpen: { route = .post(p.id) }, onUser: { route = .user($0) })
+                            ThreadPost(post: p, onOpen: { go(.post(p.id)) }, onUser: { go(.user($0)) })
                                 .listRowInsets(EdgeInsets())
                         }
                     }
@@ -359,7 +372,7 @@ struct FeedSearchView: View {
     }
 
     private func personRow(_ u: FPerson) -> some View {
-        Button { route = .user(u.id) } label: {
+        Button { go(.user(u.id)) } label: {
             HStack(spacing: 12) {
                 Avatar(url: API.media(u.photo), name: u.name ?? "?", size: 44)
                 VStack(alignment: .leading, spacing: 2) {

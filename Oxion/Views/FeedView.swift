@@ -49,11 +49,25 @@ final class FeedStore {
         for i in items.indices where items[i].post.id == id { change(&items[i].post) }
     }
 
-    func remove(_ id: Int) { items.removeAll { $0.post.id == id } }
+    func remove(_ id: Int) { items.removeAll { $0.post.id == id || $0.post.chainOf == id } }
+    func insertTop(_ p: Post) {
+        guard !items.contains(where: { $0.post.id == p.id }) else { return }
+        items.insert(FeedItem(post: p, repostBy: nil), at: 0)
+    }
     func removeAuthor(_ uid: Int) { items.removeAll { $0.post.author.id == uid } }
 }
 
 // MARK: - Навигация внутри ленты
+
+/// Переход внутри вкладки «Лента»: экраны ветки, профиля, темы пушат в общий стек FeedView.
+/// Так касания по профилю/ветке работают на любой глубине и «Назад» ведёт куда нужно.
+private struct FeedPushKey: EnvironmentKey { static let defaultValue: ((FeedRoute) -> Void)? = nil }
+extension EnvironmentValues {
+    var feedPush: ((FeedRoute) -> Void)? {
+        get { self[FeedPushKey.self] }
+        set { self[FeedPushKey.self] = newValue }
+    }
+}
 
 enum FeedRoute: Hashable {
     case post(Int)
@@ -152,10 +166,18 @@ struct FeedView: View {
             }
             .navigationDestination(for: FeedRoute.self) { FeedDestination(route: $0) }
             .sheet(item: $compose) { req in
-                ComposerView(request: req) { id in
-                    if req.parent == nil { path.append(.post(id)) }
-                    Task { await store.load(reset: true) }
-                }
+                // после публикации остаёмся в ленте: новая ветка сразу появляется сверху
+                ComposerView(request: req) { _ in }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .oxPostDeleted)) { n in
+                if let id = n.object as? Int { withAnimation(.smooth(duration: 0.3)) { store.remove(id) } }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .oxionRefreshFeed)) { _ in
+                Task { await store.load(reset: true) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .oxPostCreated)) { n in
+                guard let p = n.object as? Post, p.parentId == nil, p.chainOf == nil else { return }
+                withAnimation(.spring(duration: 0.4, bounce: 0.2)) { store.insertTop(p) }
             }
             .oxRefreshable { await store.load(reset: true) }
             .onOxionRefresh { await store.load(reset: true) }
@@ -165,6 +187,7 @@ struct FeedView: View {
                 Task { await store.load(reset: true) }
             }
         }
+        .environment(\.feedPush) { path.append($0) }
     }
 
     private var tabBar: some View {
@@ -315,6 +338,8 @@ struct ThreadPost: View {
 
     @Environment(AppModel.self) private var model
     @State private var heart = false
+    @State private var showWorkout = false
+    @State private var sendToChats = false
 
     var body: some View {
         let p = post
@@ -353,12 +378,19 @@ struct ThreadPost: View {
                     }
                     if let t = p.text, !t.isEmpty {
                         // разметка (**жирный**, ||спойлер|| …), ссылки и @упоминания
-                        RichPostText(text: t, font: big ? .title3 : .body, onTap: { onOpen?() })
+                        RichPostText(text: t, font: big ? .title3 : .body, uiStyle: big ? .title3 : .body, onTap: { onOpen?() })
                     }
                     if AppSettings.autoloadPhotos, let photos = p.photos, !photos.isEmpty {
-                        PhotoStrip(urls: photos.compactMap { API.media($0) })
-                            .onTapGesture(count: 2) { doubleLike() }
-                            .onTapGesture { onOpen?() }
+                        Group {
+                            if photos.count > 1 {
+                                PhotoCarousel(urls: photos.compactMap { API.media($0) }, onTap: { onOpen?() }, onDoubleTap: { doubleLike() })
+                                    .padding(.trailing, -16)   // карусель уходит за правый край, как в Threads
+                            } else {
+                                PhotoStrip(urls: photos.compactMap { API.media($0) })
+                                    .onTapGesture(count: 2) { doubleLike() }
+                                    .onTapGesture { onOpen?() }
+                            }
+                        }
                             .overlay {
                                 if heart {
                                     Image(systemName: "heart.fill")
@@ -373,7 +405,11 @@ struct ThreadPost: View {
                     if p.aiLabel == true {
                         Label("Данные ИИ", systemImage: "sparkles").font(.caption2).foregroundStyle(Color.oxHint)
                     }
-                    if let w = p.workout { PostWorkoutCard(w: w) }
+                    if let w = p.workout {
+                        Button { showWorkout = true } label: { PostWorkoutCard(w: w, tappable: true) }
+                            .buttonStyle(.plain)
+                            .sheet(isPresented: $showWorkout) { PostWorkoutSheet(postId: p.id, w: w, author: p.author.name) }
+                    }
                     if let pr = p.product { PostProductCard(p: pr) }
                     if let poll = p.poll { PollView(poll: poll) { opt in Task { await vote(opt) } } }
                     if let q = p.quote { QuoteCard(q: q) }
@@ -456,11 +492,11 @@ struct ThreadPost: View {
             } label: {
                 actionLabel("arrow.2.squarepath", (p.reposts ?? 0) + (p.quotes ?? 0), tint: p.reposted == true ? Color.lime : Color.oxHint)
             }
-            ShareLink(item: FeedTime.link(p.id)) {
-                actionLabel("paperplane", 0, tint: Color.oxHint)
-            }
+            // самолётик — отправить в чаты Oxion (поделиться наружу — в меню «…»)
+            actionButton("paperplane", 0, tint: Color.oxHint) { sendToChats = true }
             Spacer()
         }
+        .sheet(isPresented: $sendToChats) { ShareToChatsSheet(url: PostLink.url(p.id), chatsOnly: true) }
         .padding(.leading, -8)
         .padding(.top, 2)
     }
@@ -535,17 +571,24 @@ struct PostMenu: View {
     var onRemove: () -> Void
     var onRemoveAuthor: (Int) -> Void
     @State private var translate = false
+    @State private var shareChats = false
+    @State private var shareOut = false
 
     var body: some View {
         Menu {
             Section {
+                Button { shareChats = true } label: { Label("Отправить в чат Oxion", systemImage: "paperplane") }
+                Button { shareOut = true } label: { Label("Поделиться ссылкой…", systemImage: "square.and.arrow.up") }
+                Button {
+                    UIPasteboard.general.url = PostLink.url(post.id)
+                    Haptic.success()
+                    OxAlert.show(icon: "link", title: "Ссылка скопирована")
+                } label: { Label("Копировать ссылку", systemImage: "link") }
+            }
+            Section {
                 if let t = post.text, !t.isEmpty {
                     Button { translate = true } label: { Label("Показать перевод", systemImage: "translate") }
                 }
-                Button {
-                    UIPasteboard.general.string = FeedTime.link(post.id)
-                    Haptic.success()
-                } label: { Label("Копировать ссылку", systemImage: "link") }
                 Button {
                     let was = post.saved ?? false
                     onChange { $0.saved = !was }
@@ -553,7 +596,7 @@ struct PostMenu: View {
                 } label: { Label(post.saved == true ? "Убрать из сохранённых" : "Сохранить", systemImage: post.saved == true ? "bookmark.fill" : "bookmark") }
                 if let t = post.text, !t.isEmpty {
                     Button {
-                        UIPasteboard.general.string = t
+                        UIPasteboard.general.string = RichText.plain(t)
                         Haptic.success()
                     } label: { Label("Копировать текст", systemImage: "doc.on.doc") }
                 }
@@ -572,8 +615,16 @@ struct PostMenu: View {
                 } label: { Label("Кто может отвечать", systemImage: "bubble.left.and.exclamationmark.bubble.right") }
                 Button(role: .destructive) {
                     OxAlert.confirm(icon: "trash.fill", title: "Удалить ветку?", message: "Ответы и репосты тоже исчезнут", action: "Удалить", destructive: true) {
+                        // сразу убираем со всех экранов, сервер — следом; при ошибке вернём обновлением
+                        let id = post.id
+                        withAnimation(.smooth(duration: 0.3)) { onRemove() }
+                        NotificationCenter.default.post(name: .oxPostDeleted, object: id)
+                        Haptic.success()
                         Task {
-                            if let err = await PostActions.delete(post.id) { OxAlert.error(err) } else { onRemove() }
+                            if let err = await PostActions.delete(id) {
+                                OxAlert.error("Не удалось удалить: \(err)")
+                                NotificationCenter.default.post(name: .oxionRefreshFeed, object: nil)
+                            }
                         }
                     }
                 } label: { Label("Удалить", systemImage: "trash") }
@@ -627,7 +678,9 @@ struct PostMenu: View {
                 .frame(width: 34, height: 28)
                 .contentShape(Rectangle())
         }
-        .translationPresentation(isPresented: $translate, text: post.text ?? "")
+        .translationPresentation(isPresented: $translate, text: RichText.plain(post.text ?? ""))
+        .sheet(isPresented: $shareChats) { ShareToChatsSheet(url: PostLink.url(post.id), chatsOnly: true) }
+        .sheet(isPresented: $shareOut) { ActivitySheet(items: [PostLink.url(post.id)]).presentationDetents([.medium, .large]) }
     }
 
     private func replyToButton(_ key: String, _ title: String) -> some View {
@@ -714,9 +767,7 @@ enum FeedTime {
         return "\(n)"
     }
 
-    static func link(_ id: Int) -> String {
-        AppSettings.serverURL.absoluteString + "/#post/\(id)"
-    }
+    static func link(_ id: Int) -> String { PostLink.url(id).absoluteString }
 }
 
 // MARK: - Вложения поста
@@ -746,20 +797,31 @@ struct PhotoStrip: View {
 
 struct PostWorkoutCard: View {
     let w: JSONValue
+    var tappable = false
+    static func summary(_ w: JSONValue) -> String {
+        let ex = w["exercises"]?.array ?? []
+        let sets = w["sets_n"]?.int ?? w["sets"]?.int ?? ex.reduce(0) { $0 + ($1["sets"]?.array.count ?? 0) }
+        let vol = w["volume"]?.int ?? 0
+        return "\(ex.count) упр. · \(sets) подх." + (vol > 0 ? " · \(vol) кг" : "")
+    }
     var body: some View {
         let groups = (w["groups"]?.array ?? []).compactMap { $0.string }
         HStack(spacing: 12) {
             MuscleThumb(key: groups.first, size: 56)
             VStack(alignment: .leading, spacing: 3) {
                 Text(w["title"]?.string ?? "Тренировка").font(.headline)
-                Text("\((w["exercises"]?.array ?? []).count) упр. · \(w["sets"]?.int ?? 0) подх." + ((w["volume"]?.int ?? 0) > 0 ? " · \(w["volume"]?.int ?? 0) кг" : ""))
+                Text(Self.summary(w))
                     .font(.caption)
                     .foregroundStyle(Color.oxHint)
             }
             Spacer()
+            if tappable {
+                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(Color.oxHint)
+            }
         }
         .padding(12)
         .oxCardBG(18)
+        .contentShape(Rectangle())
     }
 }
 
@@ -852,14 +914,17 @@ struct TopicFeedView: View {
     @State private var store = FeedStore()
     @State private var compose: ComposeRequest?
     @State private var route: FeedRoute?
+    @Environment(\.feedPush) private var feedPush
+    /// внутри вкладки «Лента» — пушим в общий стек, иначе — в свой
+    private func go(_ r: FeedRoute) { if let feedPush { feedPush(r) } else { route = r } }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(store.items) { item in
                     ThreadPost(post: item.post,
-                               onOpen: { route = .post(item.post.chainOf ?? item.post.id) },
-                               onUser: { route = .user($0) },
+                               onOpen: { go(.post(item.post.chainOf ?? item.post.id)) },
+                               onUser: { go(.user($0)) },
                                onChange: { change in store.update(item.post.id, change) },
                                onRemove: { store.remove(item.post.id) },
                                onCompose: { compose = $0 })
@@ -875,6 +940,9 @@ struct TopicFeedView: View {
         .navigationTitle(name)
         .navigationDestination(item: $route) { FeedDestination(route: $0) }
         .sheet(item: $compose) { ComposerView(request: $0) { _ in Task { await store.load(reset: true) } } }
+        .onReceive(NotificationCenter.default.publisher(for: .oxPostDeleted)) { n in
+            if let id = n.object as? Int { withAnimation(.smooth(duration: 0.3)) { store.remove(id) } }
+        }
         .task {
             store.topic = key
             await store.load(reset: true)
