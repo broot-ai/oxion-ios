@@ -459,7 +459,10 @@ struct ComposerView: View {
 
     private func applyFormat(_ mk: String) {
         guard let i = focusedIndex else { return }
-        RichText.wrap(&parts[i].text, &parts[i].sel, mk)
+        var t = parts[i].text, sel = parts[i].sel
+        RichText.wrap(&t, &sel, mk)
+        parts[i].text = t
+        parts[i].sel = sel
     }
 
     private func refreshMention() {
