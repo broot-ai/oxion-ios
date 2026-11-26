@@ -29,6 +29,7 @@ struct StoryItem: Decodable, Identifiable, Hashable {
     var likes: Int?
     let privacy: String?
     var link: StoryLink? = nil
+    var areas: [StoryArea]? = nil
     var isVideo: Bool { kind == "video" }
 }
 
@@ -239,6 +240,7 @@ struct StoriesNavTitle: View {
 struct StoryViewer: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var appModel
+    @Environment(\.openURL) private var openURL
     @State private var store = StoriesStore.shared
     @State var groups: [StoryGroup]
     @State var gi: Int
@@ -374,10 +376,45 @@ struct StoryViewer: View {
                 }
                 .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 30, perform: {}, onPressingChanged: { p in paused = p })
                 // ветка, которой поделились: карточка и кнопка «Посмотреть ветку»
-                if let l = s.link, l.type == "post", ready {
-                    linkLayer(l, size: geo.size)
+                if ready {
+                    if let areas = s.areas, !areas.isEmpty {
+                        ForEach(Array(areas.enumerated()), id: \.offset) { _, a in areaLayer(a, s, size: geo.size) }
+                    } else if let l = s.link, l.type == "post" {
+                        linkLayer(l, size: geo.size)
+                    }
                 }
             }
+        }
+    }
+
+    /// зона наклейки: ссылка, карта, реакция, ветка
+    @ViewBuilder private func areaLayer(_ a: StoryArea, _ s: StoryItem, size: CGSize) -> some View {
+        let k = max(size.width / 9, size.height / 16)
+        let dw = 9 * k, dh = 16 * k
+        let ox = (size.width - dw) / 2, oy = (size.height - dh) / 2
+        let r = a.rect.count == 4 ? a.rect : [0, 0, 0, 0]
+        let f = CGRect(x: ox + r[0] * dw, y: oy + r[1] * dh, width: max(44, r[2] * dw), height: max(44, r[3] * dh))
+        if a.type == "post", let id = a.id {
+            linkLayer(StoryLink(type: "post", id: id, rect: r), size: size)
+        } else {
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(width: f.width, height: f.height)
+                .position(x: f.midX, y: f.midY)
+                .onTapGesture {
+                    switch a.type {
+                    case "url":
+                        if let u = a.url.flatMap(URL.init(string:)) { paused = true; openURL(u) }
+                    case "geo":
+                        if let lat = a.lat, let lon = a.lon {
+                            let q = (a.title ?? "").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                            if let u = URL(string: "https://maps.apple.com/?ll=\(lat),\(lon)&q=\(q)") { paused = true; openURL(u) }
+                        }
+                    case "reaction":
+                        if !isMine && s.liked != true { like(s) } else { Haptic.tap(.soft) }
+                    default: break
+                    }
+                }
         }
     }
 
@@ -773,6 +810,17 @@ struct StoryPreset: Identifiable {
     }
 }
 
+struct StoryArea: Decodable, Hashable {
+    let type: String
+    let rect: [Double]
+    var url: String? = nil
+    var title: String? = nil
+    var lat: Double? = nil
+    var lon: Double? = nil
+    var emoji: String? = nil
+    var id: Int? = nil
+}
+
 struct StoryLink: Decodable, Hashable {
     let type: String
     let id: Int
@@ -816,7 +864,7 @@ struct StoryComposer: View {
         }
         .sheet(isPresented: $share) {
             if let e = exported {
-                StoryShareSheet(media: e.media, caption: caption, linkPost: e.linkPost, linkRect: e.linkRect) { dismiss() }
+                StoryShareSheet(media: e.media, caption: caption, linkPost: e.linkPost, linkRect: e.linkRect, areas: e.areas) { dismiss() }
             }
         }
         .onAppear {
@@ -947,6 +995,7 @@ struct StoryShareSheet: View {
     let caption: String
     var linkPost: Int? = nil
     var linkRect: CGRect? = nil
+    var areas: [[String: Any]] = []
     var done: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -1063,6 +1112,9 @@ struct StoryShareSheet: View {
             "allow_shots": allowShots ? "1" : "0"
         ]
         if privacy == .selected { fields["selected"] = selected.map(String.init).joined(separator: ",") }
+        if !areas.isEmpty, let d = try? JSONSerialization.data(withJSONObject: areas), let js = String(data: d, encoding: .utf8) {
+            fields["areas"] = js
+        }
         if let linkPost {
             fields["link_post"] = String(linkPost)
             if let r = linkRect { fields["link_rect"] = [r.minX, r.minY, r.width, r.height].map { String(format: "%.4f", $0) }.joined(separator: ",") }

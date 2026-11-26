@@ -440,9 +440,14 @@ struct ChatRow: View {
                     if let g = c.peer.group {
                         Image(systemName: g == "channel" ? "megaphone.fill" : "person.2.fill").font(.caption).foregroundStyle(.secondary)
                     }
+                    // огонёк OXION слева, галочка тренера справа — как в профиле
+                    if c.peer.official != nil { OxionSeal(size: 16) }
                     Text(c.peer.name ?? "Пользователь")
                         .font(.headline)
                         .lineLimit(1)
+                    if c.peer.trainer == true {
+                        Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)
+                    }
                     if c.muted == true {
                         Image(systemName: "speaker.slash.fill").font(.caption2).foregroundStyle(.secondary)
                     }
@@ -864,6 +869,9 @@ struct ChatView: View {
                 } label: {
                     VStack(spacing: 1) {
                         HStack(spacing: 4) {
+                            if let o = peer?.official, let p = peer {
+                                OxionSealButton(official: o, userId: p.id, name: p.name ?? "", photo: p.photo, size: 16, animated: false)
+                            }
                             Text(peer?.name ?? title).font(.headline).lineLimit(1)
                             if peer?.trainer == true {
                                 Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.limeInk)

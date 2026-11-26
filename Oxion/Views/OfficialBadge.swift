@@ -154,6 +154,9 @@ struct OfficialSheet: View {
             (Text(name).foregroundColor(Color.limeInk) + Text(" — ") + Text(official.headline))
                 .font(.title3.weight(.bold))
                 .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .minimumScaleFactor(0.85)
             HStack(spacing: 8) {
                 Avatar(url: API.media(photo), name: name, size: 26)
                 Text(name).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -187,7 +190,7 @@ struct OfficialSheet: View {
             .padding(.bottom, 6)
         }
         .padding(.horizontal, 22)
-        .presentationDetents([.height(520)])
+        .presentationDetents([.height(560), .large])
         .presentationDragIndicator(.visible)
     }
 

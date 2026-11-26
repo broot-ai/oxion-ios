@@ -74,7 +74,7 @@ struct StoryPostCardData: Equatable {
 }
 
 struct StoryOverlay: Identifiable, Equatable {
-    enum Kind: Equatable { case text, emoji, image, shape, post }
+    enum Kind: Equatable { case text, emoji, image, shape, post, link, geo, weather, reaction }
     let id = UUID()
     var kind: Kind
     var center = CGPoint(x: 0.5, y: 0.45)     // доли холста
@@ -89,10 +89,31 @@ struct StoryOverlay: Identifiable, Equatable {
     var image: UIImage?
     var shape: StoryShapeKind = .rect
     var post: StoryPostCardData?
+    // интерактивные наклейки
+    var url = ""
+    var lat: Double = 0
+    var lon: Double = 0
+    var temp = 0
+    var wcode = 0
+    var day = true
+    var variant = 0            // стиль наклейки (по нажатию меняется)
 
     static func == (a: StoryOverlay, b: StoryOverlay) -> Bool {
         a.id == b.id && a.center == b.center && a.scale == b.scale && a.angle == b.angle && a.text == b.text
             && a.color == b.color && a.style == b.style && a.font == b.font && a.emoji == b.emoji && a.shape == b.shape
+            && a.variant == b.variant && a.url == b.url
+    }
+
+    /// интерактивная наклейка → «зона» для зрителя (ссылка, карта, реакция, ветка)
+    func area(rect: CGRect) -> [String: Any]? {
+        let r = [rect.minX, rect.minY, rect.width, rect.height]
+        switch kind {
+        case .link: return ["type": "url", "rect": r, "url": url, "title": text]
+        case .geo: return ["type": "geo", "rect": r, "lat": lat, "lon": lon, "title": text]
+        case .reaction: return ["type": "reaction", "rect": r, "emoji": emoji]
+        case .post: return post.map { ["type": "post", "rect": r, "id": $0.postId] }
+        default: return nil
+        }
     }
 }
 
@@ -145,7 +166,7 @@ enum StoryTool: String, CaseIterable, Identifiable {
         case .pen: "Ручка"
         case .arrow: "Стрелка"
         case .marker: "Маркер"
-        case .liner: "Линер"
+        case .liner: "Неон"
         case .pencil: "Карандаш"
         case .crayon: "Мелок"
         case .eraser: "Ластик"
@@ -189,6 +210,14 @@ final class StoryEditState {
     var overTrash = false
     var canvas: CGSize = .zero
     var undo: [PKDrawing] = []
+    /// размеры наклеек без масштаба (для зон нажатия у зрителя)
+    var sizes: [UUID: CGSize] = [:]
+    /// у какой реакции открыт выбор эмодзи
+    var reactionPicker: UUID?
+    /// звук к истории
+    var audio: StoryAudio?
+    var muted = false
+    var paused = false
 
     func add(_ o: StoryOverlay) {
         withAnimation(.spring(duration: 0.35, bounce: 0.3)) { overlays.append(o) }
@@ -210,6 +239,7 @@ struct StoryExport {
     let media: StoryMedia
     let linkPost: Int?
     let linkRect: CGRect?        // доли холста
+    var areas: [[String: Any]] = []
 }
 
 // MARK: - Экран редактора
@@ -225,9 +255,16 @@ struct StoryEditorView: View {
     @State private var st = StoryEditState()
     @State private var preview: UIImage?
     @State private var stickers = false
+    @State private var linkSheet = false
+    @State private var geoSheet = false
+    @State private var soundSheet = false
     @State private var exporting = false
     @State private var drawBackup: PKDrawing?
     @State private var adjustBackup: StoryAdjust?
+    @State private var audioPlayer: AVPlayer?
+    @State private var savedToast = false
+
+    static let blue = Color(hex: 0x3478F6)
 
     var body: some View {
         VStack(spacing: 10) {
@@ -248,17 +285,40 @@ struct StoryEditorView: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 6)
         }
-        .overlay { if st.editing != nil { textEditor } }
+        .overlay { if st.editing != nil { StoryTextEditor(state: st) } }
         .overlay { if exporting { ZStack { Color.black.opacity(0.5); ProgressView("Готовим историю…").tint(.white).foregroundStyle(.white) }.ignoresSafeArea() } }
         .sheet(isPresented: $stickers) {
-            StoryStickerSheet { o in st.add(o) }
+            StoryStickerSheet(onPick: { o in st.add(o) },
+                              onLink: { linkSheet = true },
+                              onGeo: { geoSheet = true },
+                              onSound: { soundSheet = true })
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+        }
+        .sheet(isPresented: $linkSheet) {
+            StoryLinkSheet { url, title in
+                var o = StoryOverlay(kind: .link); o.url = url; o.text = title
+                st.add(o)
+            }
+        }
+        .sheet(isPresented: $geoSheet) {
+            StoryGeoSheet { title, lat, lon in
+                var o = StoryOverlay(kind: .geo); o.text = title; o.lat = lat; o.lon = lon
+                st.add(o)
+            }
+        }
+        .sheet(isPresented: $soundSheet) {
+            StorySoundSheet { a in
+                st.audio = a
+                startAudio()
+            }
         }
         .task(id: st.adjust) { await refreshPreview() }
         .onAppear {
             if st.overlays.isEmpty && !initialOverlays.isEmpty { st.overlays = initialOverlays }
         }
+        .onDisappear { audioPlayer?.pause() }
         .preferredColorScheme(.dark)
     }
 
@@ -278,30 +338,77 @@ struct StoryEditorView: View {
                     .allowsHitTesting(st.mode == .none)
             }
             if st.dragging != nil {
-                Image(systemName: "trash.fill")
+                Image(systemName: "trash")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 54, height: 54)
-                    .background(st.overTrash ? Color.red : Color.black.opacity(0.45), in: Circle())
+                    .background(st.overTrash ? Color.red : Color.black.opacity(0.35), in: Circle())
+                    .overlay(Circle().stroke(.white, lineWidth: 2))
                     .scaleEffect(st.overTrash ? 1.2 : 1)
                     .animation(.spring(duration: 0.25), value: st.overTrash)
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 24)
                     .allowsHitTesting(false)
             }
-            if st.mode == .none {
-                // подпись внизу холста
-                TextField("Добавить подпись…", text: $caption, axis: .vertical)
-                    .lineLimit(1...3)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16).padding(.vertical, 11)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(12)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .opacity(st.dragging == nil ? 1 : 0)
+            if st.mode == .none && st.dragging == nil {
+                topControls
+                VStack(spacing: 8) {
+                    if let a = st.audio {
+                        StoryTrimBar(audio: a) { start in
+                            st.audio?.start = start
+                            restartAudio()
+                        }
+                        .padding(.horizontal, 10)
+                    }
+                    // подпись внизу холста
+                    HStack(spacing: 8) {
+                        TextField("Добавить подпись…", text: $caption, axis: .vertical)
+                            .lineLimit(1...3)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16).padding(.vertical, 11)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    }
+                    .padding(.horizontal, 10)
+                }
+                .padding(.bottom, 10)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            if savedToast {
+                Label("Сохранено в «Фото»", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .transition(.opacity.combined(with: .scale))
             }
         }
+        .onTapGesture { if st.reactionPicker != nil { withAnimation { st.reactionPicker = nil } } }
     }
+
+    /// сверху справа: пауза, звук, сохранить
+    private var topControls: some View {
+        HStack(spacing: 18) {
+            if isVideo || st.audio != nil {
+                Button {
+                    st.paused.toggle()
+                    if st.paused { player?.pause(); audioPlayer?.pause() } else { player?.play(); audioPlayer?.play() }
+                } label: { Image(systemName: st.paused ? "play.circle" : "pause.circle") }
+                Button {
+                    st.muted.toggle()
+                    player?.isMuted = st.muted
+                    audioPlayer?.isMuted = st.muted
+                } label: { Image(systemName: st.muted ? "speaker.slash" : "speaker.wave.2") }
+            }
+            Button { Task { await saveToPhotos() } } label: { Image(systemName: "arrow.down.to.line") }
+        }
+        .font(.system(size: 20, weight: .medium))
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.35), radius: 4)
+        .buttonStyle(.plain)
+        .padding(.top, 14).padding(.trailing, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+    }
+
+    private var isVideo: Bool { if case .video = media { return true } else { return false } }
 
     @ViewBuilder private func base(_ size: CGSize) -> some View {
         switch media {
@@ -329,19 +436,47 @@ struct StoryEditorView: View {
         if !Task.isCancelled { preview = out }
     }
 
-    // MARK: нижняя панель
+    // MARK: звук
+    private func startAudio() {
+        guard let a = st.audio else { return }
+        audioPlayer?.pause()
+        let p = AVPlayer(url: a.url)
+        p.isMuted = st.muted
+        audioPlayer = p
+        if isVideo { player?.isMuted = true; st.muted = false }
+        restartAudio()
+    }
+
+    private func restartAudio() {
+        guard let a = st.audio, let p = audioPlayer else { return }
+        p.seek(to: CMTime(seconds: a.start, preferredTimescale: 600))
+        if !st.paused { p.play() }
+        // зацикливаем выбранный кусок
+        let token = a.start
+        Task {
+            while let cur = st.audio, cur.start == token, audioPlayer === p {
+                try? await Task.sleep(for: .milliseconds(250))
+                if p.currentTime().seconds >= token + cur.length {
+                    await p.seek(to: CMTime(seconds: token, preferredTimescale: 600))
+                    if !st.paused { p.play() }
+                }
+            }
+        }
+    }
+
+    // MARK: нижняя панель (как в Telegram)
     @ViewBuilder private var bottomBar: some View {
         switch st.mode {
         case .none:
             HStack(spacing: 12) {
                 circleButton("chevron.left") { onBack() }
-                HStack(spacing: 4) {
+                HStack(spacing: 2) {
                     toolButton("pencil.tip.crop.circle", "Рисунок") { startDraw() }
-                    toolButton("textformat", "Текст") { addText() }
+                    toolButton("character.textbox", "Текст") { addText() }
                     toolButton("face.smiling", "Стикеры") { stickers = true }
                     toolButton("slider.horizontal.3", "Настройки") { adjustBackup = st.adjust; withAnimation(.smooth) { st.mode = .adjust } }
                 }
-                .padding(.horizontal, 6).padding(.vertical, 4)
+                .padding(.horizontal, 6).padding(.vertical, 3)
                 .glassEffect(.regular, in: .capsule)
                 Spacer(minLength: 0)
                 Button { Task { await finish() } } label: {
@@ -349,9 +484,9 @@ struct StoryEditorView: View {
                         Text("ДАЛЕЕ").font(.subheadline.weight(.heavy))
                         Image(systemName: "chevron.right").font(.caption.weight(.heavy))
                     }
-                    .foregroundStyle(Color.onLime)
-                    .padding(.horizontal, 18).frame(height: 48)
-                    .background(Color.lime, in: Capsule())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18).frame(height: 46)
+                    .background(Self.blue, in: Capsule())
                 }
                 .disabled(exporting)
             }
@@ -390,8 +525,8 @@ struct StoryEditorView: View {
 
     private func toolButton(_ icon: String, _ label: String, _ act: @escaping () -> Void) -> some View {
         Button(action: act) {
-            Image(systemName: icon).font(.system(size: 20, weight: .medium)).foregroundStyle(.white)
-                .frame(width: 48, height: 44).contentShape(Rectangle())
+            Image(systemName: icon).font(.system(size: 20, weight: .regular)).foregroundStyle(.white)
+                .frame(width: 46, height: 42).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -408,9 +543,9 @@ struct StoryEditorView: View {
 
     private func doneButton(_ act: @escaping () -> Void) -> some View {
         Button(action: act) {
-            Image(systemName: "checkmark").font(.system(size: 19, weight: .bold)).foregroundStyle(Color.onLime)
-                .frame(width: 48, height: 48)
-                .background(Color.lime, in: Circle())
+            Image(systemName: "checkmark").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(Self.blue, in: Circle())
         }
         .buttonStyle(.plain)
     }
@@ -418,8 +553,8 @@ struct StoryEditorView: View {
     private func segment(_ t: String, on: Bool, _ act: @escaping () -> Void) -> some View {
         Button(action: act) {
             Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                .padding(.horizontal, 14).frame(height: 38)
-                .background(on ? Color.white.opacity(0.18) : .clear, in: Capsule())
+                .padding(.horizontal, 16).frame(height: 40)
+                .background(on ? Color.white.opacity(0.16) : .clear, in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -428,6 +563,7 @@ struct StoryEditorView: View {
     private func startDraw() {
         drawBackup = st.drawing
         st.undo = []
+        if st.tool == .pencil || st.tool == .crayon { st.tool = .pen }
         withAnimation(.smooth) { st.mode = .draw }
     }
 
@@ -438,10 +574,9 @@ struct StoryEditorView: View {
                 Button {
                     if let last = st.undo.popLast() { st.drawing = last; Haptic.tap(.soft) }
                 } label: {
-                    Image(systemName: "arrow.uturn.backward").font(.headline).foregroundStyle(.white).frame(width: 44, height: 44)
+                    Image(systemName: "arrow.uturn.backward").font(.headline).foregroundStyle(.white).frame(width: 46, height: 46)
                 }
                 .glassEffect(.regular.interactive(), in: .circle)
-                .disabled(st.undo.isEmpty)
                 .opacity(st.undo.isEmpty ? 0.45 : 1)
                 Spacer()
                 Button {
@@ -451,75 +586,79 @@ struct StoryEditorView: View {
                     Haptic.tap(.rigid)
                 } label: {
                     Text("Очистить всё").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 16).frame(height: 40)
+                        .padding(.horizontal, 16).frame(height: 44)
                 }
                 .glassEffect(.regular.interactive(), in: .capsule)
+                .opacity(st.drawing.strokes.isEmpty ? 0.45 : 1)
             }
             .padding(.horizontal, 14)
-            .padding(.top, 10)
+            .padding(.top, 12)
             .frame(maxHeight: .infinity, alignment: .top)
 
             // слева: толщина
             StoryWidthSlider(value: $st.width, color: st.color)
-                .frame(width: 34, height: min(260, size.height * 0.4))
+                .frame(width: 34, height: min(280, size.height * 0.42))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 6)
 
-            // снизу: инструменты и цвета
-            VStack(spacing: 10) {
-                HStack(alignment: .bottom, spacing: 14) {
+            // снизу: «настоящие» маркеры, как в Telegram
+            VStack(spacing: 12) {
+                HStack(alignment: .bottom, spacing: 0) {
                     ColorPicker("", selection: $st.color, supportsOpacity: true)
                         .labelsHidden()
-                        .frame(width: 30, height: 30)
-                    ForEach(StoryTool.allCases) { t in
+                        .scaleEffect(1.25)
+                        .frame(width: 44, height: 44)
+                    Spacer(minLength: 4)
+                    ForEach([StoryTool.pen, .arrow, .marker, .liner, .eraser]) { t in
                         Button {
-                            withAnimation(.spring(duration: 0.25, bounce: 0.3)) { st.tool = t }
+                            withAnimation(.spring(duration: 0.28, bounce: 0.35)) { st.tool = t }
                             Haptic.tap(.soft)
                         } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: t.icon)
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(t == .eraser ? Color.white : st.color)
-                                    .frame(width: 34, height: 36)
-                                    .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                Text(t.title).font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
-                            }
-                            .offset(y: st.tool == t ? -10 : 0)
+                            StoryPenTool(tool: t, color: st.color, width: st.width)
+                                .offset(y: st.tool == t ? 0 : 18)
+                                .frame(width: 44, height: 92, alignment: .bottom)
+                                .clipped()
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(t.title)
                     }
+                    Spacer(minLength: 4)
                     Menu {
                         ForEach(StoryShapeKind.allCases) { s in
                             Button { addShape(s) } label: { Label(s.title, systemImage: s.icon) }
                         }
                     } label: {
-                        Image(systemName: "plus").font(.headline).foregroundStyle(.white)
-                            .frame(width: 30, height: 30).background(.white.opacity(0.2), in: Circle())
+                        Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 36, height: 36).background(.white.opacity(0.22), in: Circle())
                     }
+                    .frame(width: 44, height: 44)
                 }
                 HStack(spacing: 0) {
-                    ForEach([0xFF453A, 0xFF9F0A, 0xFFD60A, 0xB2EE37, 0x30D158, 0x64D2FF, 0x0A84FF, 0xBF5AF2, 0xFFFFFF, 0x000000], id: \.self) { c in
+                    ForEach([0xF2584D, 0xF2973A, 0xF7D54A, 0x5DC66B, 0x8AE3DE, 0x3B82F6, 0xB061EE, 0xFFFFFF], id: \.self) { c in
                         let col = Color(hex: UInt32(c))
+                        let on = st.color.hexKey == col.hexKey
                         Button {
                             st.color = col
                             if st.tool == .eraser { st.tool = .pen }
                             Haptic.tap(.soft)
                         } label: {
-                            Circle().fill(col)
-                                .frame(width: 26, height: 26)
-                                .overlay(Circle().stroke(.white, lineWidth: st.color == col ? 3 : 1).padding(-3))
-                                .frame(maxWidth: .infinity)
+                            ZStack {
+                                Circle().fill(col).frame(width: on ? 22 : 34, height: on ? 22 : 34)
+                                if on { Circle().stroke(col, lineWidth: 3.5).frame(width: 34, height: 34) }
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+            .padding(.bottom, 14)
+            .padding(.top, 40)
+            .background(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom))
             .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func addShape(_ s: StoryShapeKind) {
@@ -537,10 +676,6 @@ struct StoryEditorView: View {
         o.style = .filled
         st.overlays.append(o)
         st.editing = o.id
-    }
-
-    private var textEditor: some View {
-        StoryTextEditor(state: st)
     }
 
     // MARK: настройки
@@ -564,29 +699,62 @@ struct StoryEditorView: View {
                 Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(v.wrappedValue == 0 ? .white.opacity(0.6) : .white)
                 Spacer()
                 if v.wrappedValue != 0 {
-                    Text(String(format: "%+.2f", v.wrappedValue)).font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(Color.lime)
+                    Text(String(format: "%+.2f", v.wrappedValue)).font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(Color(hex: 0xF7D54A))
                 }
             }
-            Slider(value: v, in: r).tint(Color.lime)
+            Slider(value: v, in: r).tint(Color(hex: 0xF7D54A))
         }
     }
 
-    // MARK: готово → экспорт
-    private func finish() async {
-        st.editing = nil
+    // MARK: сохранить в «Фото»
+    private func saveToPhotos() async {
         let size = st.canvas
         guard size.width > 1 else { return }
-        // ссылка на ветку: берём карточку, место — в долях холста
+        var img: UIImage?
+        switch media {
+        case .photo(let i):
+            let r = ImageRenderer(content: StoryRenderLayer(state: st, base: st.adjust.apply(i.oxResized(maxSide: 2200)), size: size))
+            r.scale = 1080 / size.width
+            img = r.uiImage
+        case .video:
+            OxAlert.show(icon: "info.circle", title: "Видео сохранится после публикации")
+            return
+        }
+        guard let img else { return }
+        UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
+        Haptic.success()
+        withAnimation { savedToast = true }
+        try? await Task.sleep(for: .seconds(1.6))
+        withAnimation { savedToast = false }
+    }
+
+    // MARK: готово → экспорт
+    private func areas(_ size: CGSize) -> [[String: Any]] {
+        st.overlays.compactMap { o in
+            let s = st.sizes[o.id] ?? CGSize(width: 160, height: 60)
+            let w = s.width * o.scale / size.width, h = s.height * o.scale / size.height
+            return o.area(rect: CGRect(x: o.center.x - w / 2, y: o.center.y - h / 2, width: w, height: h))
+        }
+    }
+
+    private func finish() async {
+        st.editing = nil
+        st.reactionPicker = nil
+        audioPlayer?.pause()
+        let size = st.canvas
+        guard size.width > 1 else { return }
         var linkPost: Int?
         var linkRect: CGRect?
         if let card = st.overlays.last(where: { $0.kind == .post }), let p = card.post {
             linkPost = p.postId
-            let w = StoryPostCard.width * card.scale / size.width
-            let h = StoryPostCard.estimatedHeight(p) * card.scale / size.height
+            let cs = st.sizes[card.id] ?? CGSize(width: StoryPostCard.width, height: StoryPostCard.estimatedHeight(p))
+            let w = cs.width * card.scale / size.width
+            let h = cs.height * card.scale / size.height
             linkRect = CGRect(x: card.center.x - w / 2, y: card.center.y - h / 2, width: w, height: h)
         }
-        guard st.hasEdits else {
-            onNext(StoryExport(media: media, linkPost: linkPost, linkRect: linkRect))
+        let zones = areas(size)
+        guard st.hasEdits || st.audio != nil else {
+            onNext(StoryExport(media: media, linkPost: linkPost, linkRect: linkRect, areas: zones))
             return
         }
         exporting = true
@@ -597,10 +765,16 @@ struct StoryEditorView: View {
             let r = ImageRenderer(content: StoryRenderLayer(state: st, base: base, size: size))
             r.scale = 1080 / size.width
             r.isOpaque = true
-            if let out = r.uiImage {
-                onNext(StoryExport(media: .photo(out), linkPost: linkPost, linkRect: linkRect))
+            guard let out = r.uiImage else { OxAlert.error("Не удалось подготовить историю"); return }
+            if let a = st.audio {
+                // фото + звук → видео из кадра с музыкой
+                guard let still = await StoryVideoBurn.still(out, seconds: a.length),
+                      let v = await StoryVideoBurn.export(url: still, overlay: nil, adjust: StoryAdjust(), canvas: size, audio: a) else {
+                    OxAlert.error("Не удалось добавить звук"); return
+                }
+                onNext(StoryExport(media: .video(v), linkPost: linkPost, linkRect: linkRect, areas: zones))
             } else {
-                OxAlert.error("Не удалось подготовить историю")
+                onNext(StoryExport(media: .photo(out), linkPost: linkPost, linkRect: linkRect, areas: zones))
             }
         case .video(let url):
             var overlay: UIImage?
@@ -610,12 +784,21 @@ struct StoryEditorView: View {
                 r.isOpaque = false
                 overlay = r.uiImage
             }
-            if let out = await StoryVideoBurn.export(url: url, overlay: overlay, adjust: st.adjust, canvas: size) {
-                onNext(StoryExport(media: .video(out), linkPost: linkPost, linkRect: linkRect))
+            if let out = await StoryVideoBurn.export(url: url, overlay: overlay, adjust: st.adjust, canvas: size, audio: st.audio) {
+                onNext(StoryExport(media: .video(out), linkPost: linkPost, linkRect: linkRect, areas: zones))
             } else {
                 OxAlert.error("Не удалось обработать видео")
             }
         }
+    }
+}
+
+extension Color {
+    /// ключ цвета для сравнения (Color == сравнивает «по-своему»)
+    var hexKey: Int {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return Int(r * 255) << 16 | Int(g * 255) << 8 | Int(b * 255)
     }
 }
 
@@ -668,6 +851,10 @@ struct StoryOverlayContent: View {
             }
         case .shape: StoryShapeView(kind: o.shape, color: o.color)
         case .post: if let p = o.post { StoryPostCard(data: p) }
+        case .link: StoryChip(icon: "link", text: o.text.isEmpty ? (URL(string: o.url)?.host() ?? o.url) : o.text, variant: o.variant)
+        case .geo: StoryChip(icon: "mappin.and.ellipse", text: o.text, variant: o.variant)
+        case .weather: StoryWeatherChip(temp: o.temp, code: o.wcode, day: o.day, variant: o.variant)
+        case .reaction: StoryReactionBubble(emoji: o.emoji)
         }
     }
 
@@ -851,6 +1038,18 @@ struct StoryOverlayItem: View {
 
     var body: some View {
         StoryOverlayContent(o: o)
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { state.sizes[o.id] = $0 }
+            .overlay(alignment: .top) {
+                if o.kind == .reaction && state.reactionPicker == o.id {
+                    StoryReactionPicker { e in
+                        o.emoji = e
+                        state.reactionPicker = nil
+                    }
+                    .fixedSize()
+                    .offset(y: -64)
+                    .scaleEffect(1 / max(0.3, o.scale))
+                }
+            }
             .scaleEffect(o.scale * mag)
             .rotationEffect(.degrees(o.angle) + rot)
             .position(x: o.center.x * size.width + drag.width, y: o.center.y * size.height + drag.height)
@@ -886,7 +1085,15 @@ struct StoryOverlayItem: View {
                 )
             )
             .onTapGesture {
-                if o.kind == .text { state.editing = o.id }
+                switch o.kind {
+                case .text: state.editing = o.id
+                case .link, .geo, .weather:
+                    withAnimation(.spring(duration: 0.25)) { o.variant = (o.variant + 1) % 3 }
+                    Haptic.tap(.soft)
+                case .reaction:
+                    withAnimation(.spring(duration: 0.3, bounce: 0.3)) { state.reactionPicker = state.reactionPicker == o.id ? nil : o.id }
+                default: break
+                }
             }
     }
 }
@@ -1111,96 +1318,71 @@ struct StoryCanvasView: UIViewRepresentable {
     }
 }
 
-// MARK: - Стикеры: эмодзи, фото, фигуры
-
-struct StoryStickerSheet: View {
-    var onPick: (StoryOverlay) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var tab = 0
-    @State private var photo: PhotosPickerItem?
-
-    private let emojis = ["🔥", "💪", "🏋️", "🏃", "🥇", "🏆", "⚡️", "✅", "❤️", "😍", "😂", "😎", "🤯", "🥵", "🙌", "👏",
-                          "💯", "🎯", "🚀", "⭐️", "✨", "🌟", "🍏", "🥑", "🥗", "🍗", "🥤", "💧", "😴", "🧘", "🚴", "🏊",
-                          "⛹️", "🤸", "🥊", "🏆", "📈", "📉", "⏱️", "🗓️", "🎉", "🥳", "😤", "🤝", "👊", "🫶", "👀", "🙏",
-                          "😅", "😭", "🤩", "😇", "🤔", "😏", "🫡", "💥", "🌈", "☀️", "🌙", "❄️", "🍕", "🍔", "🍫", "☕️"]
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                Picker("", selection: $tab) {
-                    Text("Эмодзи").tag(0)
-                    Text("Фото").tag(1)
-                    Text("Фигуры").tag(2)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                ScrollView {
-                    switch tab {
-                    case 0:
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 14) {
-                            ForEach(Array(emojis.enumerated()), id: \.offset) { _, e in
-                                Button {
-                                    var o = StoryOverlay(kind: .emoji); o.emoji = e
-                                    onPick(o); dismiss()
-                                } label: { Text(e).font(.system(size: 40)) }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(16)
-                    case 1:
-                        PhotosPicker(selection: $photo, matching: .images) {
-                            VStack(spacing: 10) {
-                                Image(systemName: "photo.badge.plus").font(.system(size: 40)).foregroundStyle(Color.lime)
-                                Text("Выбрать фото из галереи").font(.headline)
-                                Text("Фото ляжет поверх истории — его можно двигать, увеличивать и поворачивать")
-                                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            }
-                            .frame(maxWidth: .infinity).padding(28)
-                            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .padding(16)
-                        }
-                    default:
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 16) {
-                            ForEach(StoryShapeKind.allCases) { s in
-                                ForEach([Color.white, Color.lime, Color(hex: 0xFF453A)], id: \.self) { c in
-                                    Button {
-                                        var o = StoryOverlay(kind: .shape); o.shape = s; o.color = c
-                                        onPick(o); dismiss()
-                                    } label: {
-                                        StoryShapeView(kind: s, color: c).scaleEffect(0.42).frame(height: 70)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .padding(16)
-                    }
-                }
-            }
-            .navigationTitle("Стикеры")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
-            .onChange(of: photo) { _, it in
-                guard let it else { return }
-                Task {
-                    if let d = try? await it.loadTransferable(type: Data.self), let i = UIImage(data: d) {
-                        var o = StoryOverlay(kind: .image); o.image = i.oxResized(maxSide: 900)
-                        onPick(o); dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Видео: настройки + рисунок/наклейки «впекаются» в кадр
 
 enum StoryVideoBurn {
-    static func export(url: URL, overlay: UIImage?, adjust: StoryAdjust, canvas: CGSize) async -> URL? {
-        let asset = AVURLAsset(url: url)
-        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+    /// видео из одного кадра (для фото со звуком)
+    static func still(_ img: UIImage, seconds: Double) async -> URL? {
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("story-still-\(UUID().uuidString).mov")
+        guard let cg = img.cgImage, let w = try? AVAssetWriter(outputURL: out, fileType: .mov) else { return nil }
+        let W = cg.width - cg.width % 2, H = cg.height - cg.height % 2
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: W, AVVideoHeightKey: H])
+        let ad = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB, kCVPixelBufferWidthKey as String: W, kCVPixelBufferHeightKey as String: H])
+        guard w.canAdd(input) else { return nil }
+        w.add(input)
+        guard w.startWriting() else { return nil }
+        w.startSession(atSourceTime: .zero)
+        var pb: CVPixelBuffer?
+        CVPixelBufferCreate(nil, W, H, kCVPixelFormatType_32ARGB, [kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true] as CFDictionary, &pb)
+        guard let buf = pb else { return nil }
+        CVPixelBufferLockBaseAddress(buf, [])
+        if let ctx = CGContext(data: CVPixelBufferGetBaseAddress(buf), width: W, height: H, bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buf),
+                               space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue) {
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: W, height: H))
+        }
+        CVPixelBufferUnlockBaseAddress(buf, [])
+        let fps: Int32 = 2
+        let frames = max(2, Int(seconds * Double(fps)) + 1)
+        for i in 0..<frames {
+            while !input.isReadyForMoreMediaData { try? await Task.sleep(for: .milliseconds(5)) }
+            ad.append(buf, withPresentationTime: CMTime(value: CMTimeValue(i), timescale: fps))
+        }
+        input.markAsFinished()
+        await w.finishWriting()
+        return w.status == .completed ? out : nil
+    }
+
+    static func export(url: URL, overlay: UIImage?, adjust: StoryAdjust, canvas: CGSize, audio: StoryAudio? = nil) async -> URL? {
+        let src = AVURLAsset(url: url)
+        guard let track = try? await src.loadTracks(withMediaType: .video).first,
               let nat = try? await track.load(.naturalSize),
-              let tr = try? await track.load(.preferredTransform) else { return nil }
+              let tr = try? await track.load(.preferredTransform),
+              let dur = try? await src.load(.duration) else { return nil }
+        // своя сборка: видео + свой звук + выбранный трек
+        let comp = AVMutableComposition()
+        let length = audio.map { CMTimeMinimum(dur, CMTime(seconds: $0.length, preferredTimescale: 600)) } ?? dur
+        let range = CMTimeRange(start: .zero, duration: length)
+        guard let vt = comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { return nil }
+        try? vt.insertTimeRange(range, of: track, at: .zero)
+        vt.preferredTransform = tr
+        var mixParams: [AVMutableAudioMixInputParameters] = []
+        if let at = try? await src.loadTracks(withMediaType: .audio).first,
+           let ct = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+            try? ct.insertTimeRange(range, of: at, at: .zero)
+            let p = AVMutableAudioMixInputParameters(track: ct); p.setVolume(audio == nil ? 1 : 0.35, at: .zero)
+            mixParams.append(p)
+        }
+        if let a = audio {
+            let aa = AVURLAsset(url: a.url)
+            if let at = try? await aa.loadTracks(withMediaType: .audio).first,
+               let ct = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                let ar = CMTimeRange(start: CMTime(seconds: a.start, preferredTimescale: 600), duration: length)
+                try? ct.insertTimeRange(ar, of: at, at: .zero)
+                let p = AVMutableAudioMixInputParameters(track: ct); p.setVolume(1, at: .zero)
+                mixParams.append(p)
+            }
+        }
         let vs = nat.applying(tr)
         let vw = abs(vs.width), vh = abs(vs.height)
         guard vw > 0, vh > 0 else { return nil }
@@ -1216,14 +1398,21 @@ enum StoryVideoBurn {
         }
         let a = adjust
         let overlayImage = ov
-        guard let comp = try? await AVMutableVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { req in
-            let src = req.sourceImage
-            var img = a.apply(src.clampedToExtent()).cropped(to: src.extent)
-            if let o = overlayImage { img = o.composited(over: img).cropped(to: src.extent) }
-            req.finish(with: img, context: nil)
-        }) else { return nil }
-        guard let ex = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else { return nil }
-        ex.videoComposition = comp
+        let needsVideoFX = overlayImage != nil || !a.isIdentity
+        guard let ex = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetHighestQuality) else { return nil }
+        if needsVideoFX {
+            guard let vc = try? await AVMutableVideoComposition.videoComposition(with: comp, applyingCIFiltersWithHandler: { req in
+                let src = req.sourceImage
+                var img = a.apply(src.clampedToExtent()).cropped(to: src.extent)
+                if let o = overlayImage { img = o.composited(over: img).cropped(to: src.extent) }
+                req.finish(with: img, context: nil)
+            }) else { return nil }
+            ex.videoComposition = vc
+        }
+        if !mixParams.isEmpty {
+            let mix = AVMutableAudioMix(); mix.inputParameters = mixParams
+            ex.audioMix = mix
+        }
         let out = FileManager.default.temporaryDirectory.appendingPathComponent("story-edit-\(UUID().uuidString).mp4")
         do {
             try await ex.export(to: out, as: .mp4)

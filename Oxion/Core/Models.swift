@@ -398,6 +398,8 @@ struct Peer: Decodable {
     /// "group" | "channel" — это группа или канал, а не человек
     var group: String? = nil
     var members: Int? = nil
+    /// официальная отметка OXION
+    var official: OxOfficial? = nil
 }
 
 struct ChatItem: Decodable, Identifiable {
