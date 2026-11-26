@@ -52,6 +52,20 @@ final class RichTextView: UITextView {
     private var fmtButtons: [(RichFlags, UIButton)] = []
     private var dustLayers: [CAEmitterLayer] = []
 
+    /// Своя связка TextKit 1 (нужны прямоугольники строк для частиц спойлера).
+    /// ВАЖНО: не использовать UITextView(usingTextLayoutManager:) — это фабрика UIKit, она создаёт
+    /// обычный UITextView, а не наш подкласс, и обращение к нашим полям роняло приложение (SIGSEGV).
+    init() {
+        let storage = NSTextStorage()
+        let lm = NSLayoutManager()
+        storage.addLayoutManager(lm)
+        let tc = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        tc.widthTracksTextView = true
+        lm.addTextContainer(tc)
+        super.init(frame: .zero, textContainer: tc)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) не используется") }
+
     var baseAttrs: [NSAttributedString.Key: Any] {
         [.font: baseFont, .foregroundColor: UIColor.label]
     }
@@ -361,7 +375,7 @@ struct RichComposeField: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> RichTextView {
-        let tv = RichTextView(usingTextLayoutManager: false)
+        let tv = RichTextView()
         tv.backgroundColor = .clear
         tv.isScrollEnabled = false
         tv.textContainerInset = .zero
