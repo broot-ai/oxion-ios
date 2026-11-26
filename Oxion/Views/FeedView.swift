@@ -139,20 +139,7 @@ struct FeedView: View {
             .navigationTitle("Лента")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    // логотип по центру, как в Threads; нажатие — наверх и обновить
-                    Button {
-                        Haptic.tap(.soft)
-                        Task { await store.load(reset: true) }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "bolt.heart.fill").font(.headline).foregroundStyle(Color.limeInk)
-                            Text("oxion").font(.system(.title3, design: .rounded).weight(.heavy)).foregroundStyle(Color.primary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Лента OXION")
-                }
+                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
                 ToolbarItem(placement: .topBarLeading) {
                     Button { compose = ComposeRequest() } label: { Image(systemName: "square.and.pencil") }
                         .accessibilityLabel("Новая публикация")
@@ -161,7 +148,6 @@ struct FeedView: View {
                     Button { path.append(.friends) } label: { Image(systemName: "person.2.fill") }
                         .accessibilityLabel("Друзья")
                     Button { path.append(.search) } label: { Image(systemName: "magnifyingglass") }
-                    Button { path.append(.activity) } label: { Image(systemName: "heart") }
                 }
             }
             .navigationDestination(for: FeedRoute.self) { FeedDestination(route: $0) }

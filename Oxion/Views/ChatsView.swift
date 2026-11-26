@@ -586,6 +586,7 @@ struct ChatView: View {
     @State private var peer: Peer?
     @State private var peerReadId = 0
     @State private var request: ChatRequestState?
+    @State private var onScreen = false
     @AppStorage("chat.quickReaction") private var quickReaction = "❤️"
     /// удаляемые сообщения: распадаются на частицы, потом исчезают
     @State private var dissolving: [Int: Date] = [:]
@@ -796,9 +797,13 @@ struct ChatView: View {
         .translationPresentation(isPresented: Binding(get: { translateText != nil }, set: { if !$0 { translateText = nil } }),
                                  text: translateText ?? "")
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
-            guard shielded else { return }
+            // только видимый экран переписки и один раз на снимок (iOS бывает шлёт событие дважды,
+            // а в стеке может быть открыто две копии одной переписки)
+            guard shielded, onScreen, ShotGuard.allow(chatId) else { return }
             Task { await reportScreenshot() }
         }
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
         // ссылки из переписки — во встроенный браузер (и в защищённых от снимков чатах тоже)
         .modifier(InAppBrowserLinks())
         .safeAreaInset(edge: .bottom) {
@@ -823,6 +828,8 @@ struct ChatView: View {
                 }
             }
         }
+        // при жесте «назад» iOS чуть уменьшает экран — пусть углы будут скруглены, как у самого экрана, а не квадратные
+        .mask { RoundedRectangle(cornerRadius: ScreenCorner.radius, style: .continuous).ignoresSafeArea() }
         .navigationTitle(peer?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -1713,4 +1720,23 @@ struct PlainComposer: View {
             .onChange(of: focused) { if f != focused { f = focused } }
             .onChange(of: f) { if focused != f { focused = f } }
     }
+}
+
+
+/// Один снимок экрана — одно уведомление
+@MainActor enum ShotGuard {
+    private static var last: [Int: Date] = [:]
+    static func allow(_ chatId: Int) -> Bool {
+        if let t = last[chatId], Date().timeIntervalSince(t) < 3 { return false }
+        last[chatId] = Date()
+        return true
+    }
+}
+
+enum ScreenCorner {
+    /// скругление углов экрана этого iPhone
+    static let radius: CGFloat = {
+        if let r = UIScreen.main.value(forKey: "_displayCornerRadius") as? CGFloat, r > 0 { return r }
+        return 55
+    }()
 }

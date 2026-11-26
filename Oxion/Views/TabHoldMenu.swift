@@ -8,11 +8,17 @@ enum TabHold {
     struct Press: Equatable { let index: Int; let itemFrame: CGRect }
 
     private final class Recognizer: UILongPressGestureRecognizer {}
-    private final class Target: NSObject {
+    private final class Target: NSObject, UIGestureRecognizerDelegate {
         static let shared = Target()
         var handler: ((Press) -> Void)?
+        // панель вкладок iOS 26 сама ловит касания (перетаскивание по вкладкам) — не мешаем друг другу
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
         @objc func fire(_ g: UILongPressGestureRecognizer) {
-            guard g.state == .began, let bar = g.view as? UITabBar else { return }
+            guard g.state == .began else { return }
+            var v = g.view
+            while let cur = v, !(cur is UITabBar) { v = cur.superview }
+            guard let bar = v as? UITabBar else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             let n = max(1, bar.items?.count ?? 1)
             // ширина «таблетки» с вкладками: у панели iOS 26 по краям поля
             let inset: CGFloat = bar.bounds.width > 300 ? 22 : 0
@@ -27,16 +33,29 @@ enum TabHold {
     static func install(_ handler: @escaping (Press) -> Void) {
         Target.shared.handler = handler
         Task {
-            for _ in 0..<10 {
+            // панель появляется не сразу (вход, приветствие) — ждём до минуты
+            for _ in 0..<120 {
                 if let bar = findTabBar() {
                     if !(bar.gestureRecognizers ?? []).contains(where: { $0 is Recognizer }) {
                         let g = Recognizer(target: Target.shared, action: #selector(Target.fire(_:)))
-                        g.minimumPressDuration = 0.38
+                        g.minimumPressDuration = 0.35
+                        g.cancelsTouchesInView = false
+                        g.delegate = Target.shared
                         bar.addGestureRecognizer(g)
+                        // на iOS 26 вкладки рисует отдельная «таблетка» внутри панели — вешаем и на неё
+                        for v in bar.subviews where v.bounds.width > bar.bounds.width * 0.5 {
+                            if !(v.gestureRecognizers ?? []).contains(where: { $0 is Recognizer }) {
+                                let g2 = Recognizer(target: Target.shared, action: #selector(Target.fire(_:)))
+                                g2.minimumPressDuration = 0.35
+                                g2.cancelsTouchesInView = false
+                                g2.delegate = Target.shared
+                                v.addGestureRecognizer(g2)
+                            }
+                        }
                     }
                     return
                 }
-                try? await Task.sleep(for: .milliseconds(400))
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
     }

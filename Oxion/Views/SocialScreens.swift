@@ -152,6 +152,7 @@ struct UserProfileView: View {
                     }
             }
             if let b = u.bio, !b.isEmpty { Text(b) }
+            if let c = u.channel { ProfileChannelRow(channel: c) }
             HStack(spacing: 16) {
                 Text("\(u.followers ?? 0)").bold() + Text(" подписчиков").foregroundColor(Color.oxHint)
                 Text("\(u.following ?? 0)").bold() + Text(" подписок").foregroundColor(Color.oxHint)

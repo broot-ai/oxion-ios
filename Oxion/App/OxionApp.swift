@@ -485,6 +485,7 @@ struct MainTabView: View {
                 TabHoldOverlay(press: hold, actions: holdActions(tabOrder[hold.index])) { self.hold = nil }
             }
         }
+        .onChange(of: model.selectedTab) { TabHold.install { p in hold = p } }
         .onAppear {
             TabHold.install { p in hold = p }
             // свайп от края экрана — соседняя вкладка
@@ -519,8 +520,6 @@ struct MainTabView: View {
         }
         .onChange(of: model.selectedTab) {
             Haptic.tap(.soft)
-            let b = UIScreen.main.bounds
-            FX.play(.dust, at: CGPoint(x: b.midX, y: b.maxY - 70))
         }
         .onReceive(NotificationCenter.default.publisher(for: .oxionFocusChanged)) { _ in
             withAnimation { focusHideFeed = OxFocus.hideFeed }

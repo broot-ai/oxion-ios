@@ -3863,3 +3863,14 @@
 "Запрос на переписку отправлен" = "Message request sent";
 "Заблокировать?" = "Block?";
 "Этот человек больше не сможет вам писать." = "This person won't be able to message you.";
+
+"Изменить фотографию" = "Change photo";
+"Укажите имя и, если хотите, добавьте фотографию для вашего профиля." = "Enter your name and add an optional profile photo.";
+"Раздел «О себе» виден всем в вашем профиле." = "Your bio is visible to everyone.";
+"Номер" = "Phone";
+"Указать" = "Add";
+"Город и цель" = "City and goal";
+"Не указан" = "Not set";
+"Канал показывается в вашем профиле — так подписчики найдут ваши новости." = "Your channel is shown in your profile so followers can find your news.";
+"Не показывать канал" = "Don’t show channel";
+"Нет своих каналов" = "No channels yet";

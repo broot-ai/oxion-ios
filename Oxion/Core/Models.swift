@@ -37,6 +37,9 @@ struct Me: Decodable {
     let registered: Bool?
     let hasTrainer: Bool?
     let admin: Bool?
+    var bio: String? = nil
+    var phone: String? = nil
+    var channel: MyChannel? = nil
 
     var displayName: String {
         if let n = name, !n.isEmpty { return n }
@@ -165,6 +168,7 @@ struct FUser: Decodable {
     let pinned: Post?
     var note: String? = nil
     var todo: [FTodo]? = nil
+    var channel: MyChannel? = nil
     var username: String? = nil
     var usernames: [String]? = nil
 }
