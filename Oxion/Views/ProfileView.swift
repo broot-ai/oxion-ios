@@ -466,6 +466,7 @@ struct AppSettingsHubView: View {
                     }
                 }
                 .tint(Color.lime)
+                link("О OXION", "flame.fill", Color.lime) { AboutOxionView() }
                 link("Работа в Oxion", "briefcase.fill", Color(hex: 0x3FD6C9)) { WorkView() }
                 Button {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
