@@ -623,10 +623,6 @@ struct ChatView: View {
     @State private var pullArmed = false
     @State private var scrollDragging = false
     @State private var showSummary = false
-    @State private var fwdShown = false
-    @State private var toast: String?
-    @State private var jumpTarget: Int?
-    @State private var flashId: Int?
     // группа или канал
     @State private var group: GroupInfo?
     @State private var senders: [Int: GSender] = [:]
@@ -644,14 +640,6 @@ struct ChatView: View {
     }
 
     private var shielded: Bool { protect?.on == true }
-
-    private func showToast(_ t: String) {
-        withAnimation(.spring(duration: 0.3)) { toast = t }
-        Task {
-            try? await Task.sleep(for: .seconds(2.2))
-            withAnimation(.easeOut(duration: 0.25)) { if toast == t { toast = nil } }
-        }
-    }
 
     /// Мгновенно встать на последнее сообщение (несколько попыток — ленивый список дорисовывает высоты)
     private func jumpToBottom(_ proxy: ScrollViewProxy, _ id: Int) {
@@ -766,14 +754,6 @@ struct ChatView: View {
                     .ignoresSafeArea(edges: .top)
                     .allowsHitTesting(false)
             }
-            // переписка сдвигается вправо, пока слева открыт список чатов для пересылки
-            .offset(x: fwdShown ? ForwardDragPanel.width : 0)
-            // из сводки: прыжок к сообщению
-            .onChange(of: jumpTarget) { _, id in
-                guard let id else { return }
-                withAnimation(.smooth(duration: 0.4)) { proxy.scrollTo(id, anchor: .center) }
-                jumpTarget = nil
-            }
             // при открытии — сразу внизу, без прокрутки сверху вниз
             .opacity(didInitialScroll || messages.isEmpty ? 1 : 0)
             .onChange(of: messages.last?.id) { old, new in
@@ -810,18 +790,12 @@ struct ChatView: View {
         .background { if shielded { ChatWallpaperBackground() } }
         .overlay {
             if let id = fwdDrag {
-                ForwardDragPanel(currentChatId: chatId, messageId: id, shown: $fwdShown,
-                                 onForwarded: { name in showToast("Сообщение переслано: \(name)") }) { fwdDrag = nil }
+                ForwardDragPanel(currentChatId: chatId, messageId: id) { fwdDrag = nil }
                     .environment(chats)
             }
         }
-        .overlay(alignment: .bottom) {
-            if let t = toast { ChatToast(text: t).padding(.bottom, 90) }
-        }
         .sheet(item: $fwdSheet) { m in ForwardSheet(currentChatId: chatId, messageId: m.id).environment(chats) }
-        .sheet(isPresented: $showSummary) {
-            ChatSummarySheet(chatId: chatId, title: group?.title ?? peer?.name ?? title) { id in jumpTarget = id }
-        }
+        .sheet(isPresented: $showSummary) { ChatSummarySheet(chatId: chatId, title: peer?.name ?? title) }
         .sheet(item: $productBox) { b in
             NavigationStack { ProductView(productId: b.id, onCart: { _ in }) }
         }
