@@ -224,6 +224,9 @@ final class StoryEditState {
     var sizes: [UUID: CGSize] = [:]
     /// у какой реакции открыт выбор эмодзи
     var reactionPicker: UUID?
+    /// направляющие «магнита» при перетаскивании
+    var guides: Set<StoryGuide> = []
+    var angleSnapped = false
     /// звук к истории
     var audio: StoryAudio?
     var muted = false
@@ -352,6 +355,7 @@ struct StoryEditorView: View {
                 StoryOverlayItem(o: $o, state: st, size: size)
                     .allowsHitTesting(st.mode == .none)
             }
+            if st.dragging != nil { StoryGuidesView(guides: st.guides, size: size) }
             if st.dragging != nil {
                 Image(systemName: "trash")
                     .font(.system(size: 20, weight: .semibold))
@@ -1049,13 +1053,27 @@ struct StoryOverlayItem: View {
     let state: StoryEditState
     let size: CGSize
 
-    @GestureState private var drag: CGSize = .zero
+    /// сдвиг пальцем с учётом «магнита»
+    @State private var live: CGSize = .zero
     @GestureState private var mag: CGFloat = 1
-    @GestureState private var rot: Angle = .zero
+    @State private var rotLive: Double = 0
 
     var body: some View {
+        let active = state.dragging == o.id
         StoryOverlayContent(o: o)
             .onGeometryChange(for: CGSize.self) { $0.size } action: { state.sizes[o.id] = $0 }
+            .overlay {
+                // рамка выделения с «ручками», как в Telegram
+                if active && !state.overTrash {
+                    let lw = 1.5 / max(0.3, o.scale * mag)
+                    RoundedRectangle(cornerRadius: 10 / max(0.3, o.scale), style: .continuous)
+                        .stroke(.white, style: StrokeStyle(lineWidth: lw, dash: [6 / max(0.3, o.scale), 4 / max(0.3, o.scale)]))
+                        .padding(-8 / max(0.3, o.scale))
+                        .overlay(alignment: .leading) { handle.offset(x: -8 / max(0.3, o.scale) - 5) }
+                        .overlay(alignment: .trailing) { handle.offset(x: 8 / max(0.3, o.scale) + 5) }
+                        .allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .top) {
                 if o.kind == .reaction && state.reactionPicker == o.id {
                     StoryReactionPicker { e in
@@ -1068,36 +1086,41 @@ struct StoryOverlayItem: View {
                 }
             }
             .scaleEffect(o.scale * mag)
-            .rotationEffect(.degrees(o.angle) + rot)
-            .position(x: o.center.x * size.width + drag.width, y: o.center.y * size.height + drag.height)
-            .opacity(state.dragging == o.id && state.overTrash ? 0.4 : 1)
+            .rotationEffect(.degrees(o.angle + rotLive))
+            .position(x: o.center.x * size.width + live.width, y: o.center.y * size.height + live.height)
+            .opacity(active && state.overTrash ? 0.4 : 1)
             .gesture(
                 SimultaneousGesture(
                     DragGesture(minimumDistance: 1)
-                        .updating($drag) { v, s, _ in s = v.translation }
                         .onChanged { v in
                             if state.dragging != o.id { state.dragging = o.id; state.bringToFront(o.id) }
+                            live = snap(v.translation)
                             let y = o.center.y * size.height + v.translation.height
                             let over = y > size.height - 90 && abs(o.center.x * size.width + v.translation.width - size.width / 2) < 90
                             if over != state.overTrash { state.overTrash = over; if over { Haptic.tap(.medium) } }
                         }
-                        .onEnded { v in
+                        .onEnded { _ in
                             if state.overTrash {
                                 state.remove(o.id)
                             } else {
-                                o.center.x = min(1.1, max(-0.1, o.center.x + v.translation.width / size.width))
-                                o.center.y = min(1.1, max(-0.1, o.center.y + v.translation.height / size.height))
+                                o.center.x = min(1.1, max(-0.1, o.center.x + live.width / size.width))
+                                o.center.y = min(1.1, max(-0.1, o.center.y + live.height / size.height))
                             }
+                            live = .zero
                             state.dragging = nil
                             state.overTrash = false
+                            state.guides = []
                         },
                     SimultaneousGesture(
                         MagnifyGesture()
                             .updating($mag) { v, s, _ in s = v.magnification }
                             .onEnded { v in o.scale = min(6, max(0.25, o.scale * v.magnification)) },
                         RotateGesture()
-                            .updating($rot) { v, s, _ in s = v.rotation }
-                            .onEnded { v in o.angle += v.rotation.degrees }
+                            .onChanged { v in rotLive = snapAngle(o.angle + v.rotation.degrees) - o.angle }
+                            .onEnded { _ in
+                                o.angle += rotLive
+                                rotLive = 0
+                            }
                     )
                 )
             )
@@ -1112,6 +1135,77 @@ struct StoryOverlayItem: View {
                 default: break
                 }
             }
+    }
+
+    private var handle: some View {
+        Circle().fill(.white).frame(width: 10, height: 10)
+            .overlay(Circle().stroke(Color(hex: 0x3478F6), lineWidth: 2))
+            .scaleEffect(1 / max(0.3, o.scale * mag))
+    }
+
+    /// «Магнит»: центр элемента липнет к центру экрана (по горизонтали и вертикали),
+    /// левый/правый край — к краям безопасной зоны. Показываем направляющие и даём лёгкий отклик.
+    private func snap(_ t: CGSize) -> CGSize {
+        let W = size.width, H = size.height
+        let sz = state.sizes[o.id] ?? CGSize(width: 120, height: 60)
+        let hw = sz.width * o.scale * mag / 2
+        let threshold: CGFloat = 9
+        let inset = StoryGuide.inset
+        var x = o.center.x * W + t.width
+        var y = o.center.y * H + t.height
+        var g: Set<StoryGuide> = []
+        if abs(x - W / 2) < threshold { x = W / 2; g.insert(.centerX) }
+        else if abs((x - hw) - inset) < threshold { x = inset + hw; g.insert(.left) }
+        else if abs((x + hw) - (W - inset)) < threshold { x = W - inset - hw; g.insert(.right) }
+        if abs(y - H / 2) < threshold { y = H / 2; g.insert(.centerY) }
+        if g != state.guides {
+            if !g.subtracting(state.guides).isEmpty { UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.7) }
+            state.guides = g
+        }
+        return CGSize(width: x - o.center.x * W, height: y - o.center.y * H)
+    }
+
+    /// поворот липнет к 0°/90°/180°/270°
+    private func snapAngle(_ a: Double) -> Double {
+        let n = (a / 90).rounded() * 90
+        if abs(a - n) < 4 {
+            if !state.angleSnapped { state.angleSnapped = true; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+            return n
+        }
+        state.angleSnapped = false
+        return a
+    }
+}
+
+enum StoryGuide: Hashable {
+    case centerX, centerY, left, right
+    static let inset: CGFloat = 14
+}
+
+/// Тонкие направляющие «магнита» на холсте
+struct StoryGuidesView: View {
+    let guides: Set<StoryGuide>
+    let size: CGSize
+    var body: some View {
+        ZStack {
+            ForEach(Array(guides), id: \.self) { g in
+                switch g {
+                case .centerX: line(vertical: true).position(x: size.width / 2, y: size.height / 2)
+                case .left: line(vertical: true).position(x: StoryGuide.inset, y: size.height / 2)
+                case .right: line(vertical: true).position(x: size.width - StoryGuide.inset, y: size.height / 2)
+                case .centerY: line(vertical: false).position(x: size.width / 2, y: size.height / 2)
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.12), value: guides)
+    }
+    private func line(vertical: Bool) -> some View {
+        Rectangle().fill(Color(hex: 0x5AC8FA).opacity(0.9))
+            .frame(width: vertical ? 1 : size.width, height: vertical ? size.height : 1)
+            .shadow(color: .black.opacity(0.3), radius: 1)
+            .transition(.opacity)
     }
 }
 
