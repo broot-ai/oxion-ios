@@ -16,7 +16,7 @@ struct ForwardResponse: Decodable {
 enum ChatForward {
     /// переслать и вернуть имя чата для подсказки
     @MainActor
-    static func send(_ messageId: Int, to chats: [ChatItem], text: String = "") async -> Bool {
+    static func send(_ messageId: Int, to chats: [ChatItem], text: String = "", quiet: Bool = false) async -> Bool {
         do {
             var body: [String: Any] = ["chat_ids": chats.map(\.id)]
             if !text.isEmpty { body["text"] = text }
@@ -24,6 +24,7 @@ enum ChatForward {
             Haptic.success()
             OxSound.play(.sent)
             let who = chats.count == 1 ? (chats[0].peer.name ?? "чат") : "\(chats.count) чата"
+            if quiet { return true }
             OxAlert.show(icon: "arrowshape.turn.up.right.fill", title: "Переслано", message: "Сообщение переслано: \(who)")
             return true
         } catch {
@@ -43,107 +44,128 @@ struct ForwardStartDrop: DropDelegate {
     func performDrop(info: DropInfo) -> Bool { onEnd(); return false }
 }
 
-/// Панель чатов, которая выезжает слева, пока тащишь сообщение
+/// Как в Telegram: пока тащишь сообщение, слева выезжает список чатов, а переписка сдвигается вправо.
+/// Бросил на чат — переслано, внизу маленькая подсказка «Сообщение переслано: …».
 struct ForwardDragPanel: View {
     let currentChatId: Int
     let messageId: Int
+    @Binding var shown: Bool
+    var onForwarded: (String) -> Void = { _ in }
     var onClose: () -> Void
     @Environment(ChatsStore.self) private var chats
     @State private var target: Int?
-    @State private var shown = false
 
+    static var width: CGFloat { min(UIScreen.main.bounds.width * 0.8, 340) }
     private var list: [ChatItem] { chats.items.filter { $0.id != currentChatId && $0.archived != true } }
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                // всё вне панели — «отмена»: бросил мимо, панель уехала
-                Color.black.opacity(shown ? 0.28 : 0)
+                // всё вне панели (видимая полоска переписки справа) — «отмена»
+                Color.clear
+                    .contentShape(Rectangle())
                     .ignoresSafeArea()
                     .onDrop(of: [.plainText], isTargeted: nil) { _ in close(); return true }
                     .onTapGesture { close() }
 
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("Переслать").font(.title3.bold())
-                        Spacer()
-                        Button { close() } label: {
-                            Image(systemName: "xmark").font(.subheadline.bold()).frame(width: 32, height: 32)
+                VStack(spacing: 0) {
+                    ZStack {
+                        Text("Чаты").font(.headline)
+                        HStack {
+                            Text("Изменить").font(.body).foregroundStyle(.secondary)
+                                .padding(.horizontal, 14).frame(height: 36)
+                                .glassEffect(.regular, in: .capsule)
+                            Spacer()
                         }
-                        .buttonStyle(.glass)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, geo.safeAreaInsets.top + 8)
+                    .padding(.horizontal, 14)
+                    .padding(.top, geo.safeAreaInsets.top + 6)
                     .padding(.bottom, 8)
-                    Text("Отпустите сообщение на чате").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 6)
                     ScrollView {
-                        LazyVStack(spacing: 2) {
+                        LazyVStack(spacing: 0) {
                             ForEach(list) { c in row(c) }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 40)
+                        .padding(.bottom, 90)
                     }
+                    .scrollIndicators(.hidden)
                 }
-                .frame(width: min(geo.size.width * 0.78, 340))
+                .frame(width: Self.width)
                 .frame(maxHeight: .infinity, alignment: .top)
-                .background(.regularMaterial)
-                .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 28, topTrailingRadius: 28, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 24, x: 6)
-                .offset(x: shown ? 0 : -min(geo.size.width * 0.78, 340) - 30)
+                .background(Color(.systemBackground))
+                .overlay(alignment: .trailing) { Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 0.5) }
+                .shadow(color: .black.opacity(0.18), radius: 18, x: 4)
+                .offset(x: shown ? 0 : -Self.width - 24)
                 .ignoresSafeArea()
             }
         }
         .onAppear {
             Haptic.tap(.soft)
-            withAnimation(.spring(duration: 0.38, bounce: 0.18)) { shown = true }
+            withAnimation(.spring(duration: 0.4, bounce: 0.12)) { shown = true }
         }
     }
 
     private func row(_ c: ChatItem) -> some View {
         let on = target == c.id
         return HStack(spacing: 12) {
-            Avatar(url: API.media(c.peer.photo), name: c.peer.name ?? "?", size: on ? 50 : 44)
+            Avatar(url: API.media(c.peer.photo), name: c.peer.name ?? "?", size: 54)
             VStack(alignment: .leading, spacing: 2) {
-                Text(c.peer.name ?? "Пользователь").font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(c.last ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing: 4) {
+                    if c.peer.official != nil { OxionSeal(size: 14) }
+                    Text(c.peer.name ?? "Пользователь").font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                    if c.peer.trainer == true { Image(systemName: "checkmark.seal.fill").font(.caption2).foregroundStyle(Color.limeInk) }
+                }
+                Text(c.last ?? "").font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 0)
-            if on {
-                Image(systemName: "arrowshape.turn.up.right.circle.fill").font(.title2).foregroundStyle(Color.limeInk)
-                    .transition(.scale.combined(with: .opacity))
-            }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(on ? Color.lime.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .scaleEffect(on ? 1.03 : 1)
-        .animation(.spring(duration: 0.25), value: on)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(on ? Color.accentColor.opacity(0.14) : Color.clear)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5).padding(.leading, 80)
+        }
+        .animation(.easeOut(duration: 0.15), value: on)
         .contentShape(Rectangle())
         .onDrop(of: [.plainText], isTargeted: Binding(get: { target == c.id }, set: { v in
             if v { if target != c.id { target = c.id; Haptic.tap(.soft) } } else if target == c.id { target = nil }
         })) { _ in
-            let chat = c
-            Task {
-                if await ChatForward.send(messageId, to: [chat]) {
-                    // в списке чатов этот чат поднимется наверх
-                    await chats.load()
-                }
-            }
-            close()
+            forward(c)
             return true
         }
-        .onTapGesture {
-            let chat = c
-            Task { _ = await ChatForward.send(messageId, to: [chat]); await chats.load() }
-            close()
+        .onTapGesture { forward(c) }
+    }
+
+    private func forward(_ c: ChatItem) {
+        let chat = c
+        let name = c.peer.name ?? "чат"
+        close()
+        Task {
+            if await ChatForward.send(messageId, to: [chat], quiet: true) {
+                onForwarded(name)
+                await chats.load()
+            }
         }
     }
 
     private func close() {
-        withAnimation(.smooth(duration: 0.28)) { shown = false }
+        withAnimation(.spring(duration: 0.34, bounce: 0.08)) { shown = false }
         Task {
-            try? await Task.sleep(for: .milliseconds(280))
+            try? await Task.sleep(for: .milliseconds(340))
             onClose()
         }
+    }
+}
+
+/// Маленькая тёмная подсказка внизу чата (как «Message forwarded to …» в Telegram)
+struct ChatToast: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(Color.black.opacity(0.82), in: Capsule())
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 }
 
@@ -225,7 +247,11 @@ struct ForwardSheet: View {
 // MARK: - Краткое содержание чата
 
 struct ChatSummary: Decodable {
+    struct Topic: Decodable, Hashable { let word: String; let msgId: Int?; let avatars: [String]? }
+    struct Item: Decodable, Hashable { let time: String?; let text: String; let msgId: Int?; let photos: [String]?; let topics: [Topic]? }
     let text: String
+    var items: [Item]? = nil
+    var range: String? = nil
     let period: String?
     let count: Int?
     let photos: [String]?
@@ -233,31 +259,26 @@ struct ChatSummary: Decodable {
     let empty: Bool?
 }
 
-/// Подсказка внизу чата, пока тянешь вверх
+/// Подсказка внизу чата, пока тянешь вверх: кружок с двойной стрелкой, как в Telegram
 struct PullSummaryHint: View {
     /// 0…1 — насколько дотянули
     let progress: CGFloat
     var body: some View {
         let ready = progress >= 1
-        HStack(spacing: 8) {
-            ZStack {
-                Circle().stroke(Color.primary.opacity(0.15), lineWidth: 2.5)
-                Circle().trim(from: 0, to: min(1, progress))
-                    .stroke(Color.limeInk, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Image(systemName: ready ? "sparkles" : "arrow.up")
-                    .font(.system(size: 11, weight: .bold))
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .frame(width: 24, height: 24)
-            Text(ready ? "Отпустите — краткое содержание" : "Потяните для краткого содержания")
-                .font(.footnote.weight(.semibold))
-                .contentTransition(.opacity)
+        ZStack {
+            Circle().fill(.ultraThinMaterial)
+            Circle().trim(from: 0, to: min(1, progress))
+                .stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Image(systemName: ready ? "sparkles" : "chevron.up.2")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .contentTransition(.symbolEffect(.replace))
         }
-        .padding(.horizontal, 14).padding(.vertical, 9)
-        .glassEffect(.regular, in: .capsule)
-        .opacity(Double(min(1, 0.35 + progress * 1.6)))
-        .scaleEffect(0.85 + 0.15 * min(1, progress), anchor: .bottom)
+        .frame(width: 52, height: 52)
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+        .opacity(Double(min(1, 0.3 + progress * 1.6)))
+        .scaleEffect(0.7 + 0.3 * min(1, progress))
         .animation(.smooth(duration: 0.2), value: ready)
         .allowsHitTesting(false)
     }
@@ -266,65 +287,45 @@ struct PullSummaryHint: View {
 struct ChatSummarySheet: View {
     let chatId: Int
     let title: String
+    var onJump: (Int) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var data: ChatSummary?
     @State private var error: String?
-    @State private var typing = true
+    @State private var shownItems = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 10) {
-                        AIAvatar(size: 34, active: data == nil || typing)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Краткое содержание").font(.title2.bold())
-                            Text(data.map { periodText($0) } ?? "Читаю переписку…")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                                .contentTransition(.opacity)
-                        }
-                    }
-                    if let ph = data?.photos, !ph.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(ph, id: \.self) { u in
-                                    RemoteImage(url: API.media(u))
-                                        .frame(width: 64, height: 64)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                }
-                            }
-                        }
-                        .transition(.opacity)
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(data?.range ?? " ")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .redacted(reason: data == nil ? .placeholder : [])
+                        Text(data?.period == "24 часа" || data == nil ? "Сводка за 24 часа" : "Сводка последних сообщений")
+                            .font(.title2.bold())
                     }
                     if let d = data {
-                        if d.empty == true || d.text.isEmpty {
+                        let items = d.items ?? []
+                        if d.empty == true || (items.isEmpty && d.text.isEmpty) {
                             Text("В переписке пока нечего пересказывать").foregroundStyle(.secondary)
                         } else {
-                            AITypingText(text: d.text, animate: typing) {
-                                withAnimation(.smooth(duration: 0.3)) { typing = false }
+                            ForEach(Array(items.enumerated()), id: \.offset) { i, it in
+                                itemView(it)
+                                    .opacity(i < shownItems ? 1 : 0)
+                                    .offset(y: i < shownItems ? 0 : 12)
                             }
-                            .font(.body)
                         }
                     } else if let error {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
                     } else {
-                        // скелет, пока ИИ думает
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(0..<5, id: \.self) { i in
-                                RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.08))
-                                    .frame(height: 12)
-                                    .frame(maxWidth: i == 4 ? 180 : .infinity, alignment: .leading)
-                            }
-                        }
-                        .phaseAnimator([0.45, 1.0]) { v, p in v.opacity(p) } animation: { _ in .easeInOut(duration: 0.8) }
+                        skeleton
                     }
                 }
-                .padding(20)
-                .animation(.smooth(duration: 0.35), value: data == nil)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 100)
             }
-            .oxFitSheet()
             .defaultScrollAnchor(.top)
-            .navigationTitle("«\(title)»")
+            .navigationTitle("«\(title)» — сводка")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -332,11 +333,12 @@ struct ChatSummarySheet: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if let d = data, !d.text.isEmpty, !typing {
-                    ShareLink(item: "Краткое содержание чата «\(title)» — \(periodText(d))\n\n" + d.text.replacingOccurrences(of: "**", with: "")) {
-                        Text("Поделиться").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                if let d = data, !d.text.isEmpty {
+                    ShareLink(item: "Сводка чата «\(title)»\(d.range.map { " · " + $0 } ?? "")\n\n" + d.text) {
+                        Text("Поделиться сводкой").font(.headline).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(Color(hex: 0x3478F6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
-                    .buttonStyle(.glassProminent)
                     .padding(.horizontal, 20).padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -346,16 +348,101 @@ struct ChatSummarySheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func periodText(_ d: ChatSummary) -> String {
-        let n = d.count ?? 0
-        return d.period == "24 часа" ? "За последние 24 часа · \(n) сообщ." : "Последние \(n) сообщ."
+    private func itemView(_ it: ChatSummary.Item) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let t = it.time, !t.isEmpty {
+                Text(t).font(.caption.monospacedDigit().weight(.medium)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .overlay(Capsule().stroke(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            }
+            Text(highlighted(it))
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+                .onTapGesture { if let id = it.msgId { jump(id) } }
+            if let ph = it.photos, !ph.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(ph, id: \.self) { u in
+                        RemoteImage(url: API.media(u))
+                            .frame(width: 52, height: 52)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .contentShape(Rectangle())
+                    }
+                }
+            }
+            if let tp = it.topics, !tp.isEmpty {
+                FlowLayoutSimple(spacing: 8) {
+                    ForEach(tp, id: \.self) { t in
+                        Button { if let id = t.msgId ?? it.msgId { jump(id) } } label: {
+                            HStack(spacing: 6) {
+                                if let av = t.avatars, !av.isEmpty {
+                                    HStack(spacing: -8) {
+                                        ForEach(av.prefix(3), id: \.self) { a in
+                                            Avatar(url: API.media(a), name: t.word, size: 22)
+                                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                                        }
+                                    }
+                                }
+                                Text(t.word).font(.subheadline.weight(.medium))
+                                Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+                            }
+                            .foregroundStyle(Color(hex: 0x3478F6))
+                            .padding(.leading, (t.avatars?.isEmpty ?? true) ? 12 : 4).padding(.trailing, 10)
+                            .frame(height: 32)
+                            .background(Color(hex: 0x3478F6).opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    /// ключевые слова тем — цветом ссылки
+    private func highlighted(_ it: ChatSummary.Item) -> AttributedString {
+        var a = AttributedString(it.text)
+        for t in it.topics ?? [] {
+            if let r = a.range(of: t.word, options: .caseInsensitive) { a[r].foregroundColor = Color(hex: 0x3478F6) }
+        }
+        return a
+    }
+
+    private var skeleton: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 9) {
+                    Capsule().fill(Color.primary.opacity(0.08)).frame(width: 54, height: 20)
+                    ForEach(0..<3, id: \.self) { i in
+                        RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.08))
+                            .frame(height: 12).frame(maxWidth: i == 2 ? 200 : .infinity, alignment: .leading)
+                    }
+                    HStack(spacing: 6) {
+                        ForEach(0..<4, id: \.self) { _ in RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)).frame(width: 40, height: 40) }
+                    }
+                }
+            }
+        }
+        .phaseAnimator([0.45, 1.0]) { v, p in v.opacity(p) } animation: { _ in .easeInOut(duration: 0.8) }
+    }
+
+    private func jump(_ id: Int) {
+        Haptic.tap(.soft)
+        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            onJump(id)
+        }
     }
 
     private func load() async {
         do {
             let r: ChatSummary = try await API.call("/chats/\(chatId)/summary", method: "POST", body: [:])
-            withAnimation(.smooth(duration: 0.35)) { data = r }
+            withAnimation(.smooth(duration: 0.3)) { data = r }
             Haptic.success()
+            // блоки появляются по очереди
+            for i in 1...max(1, r.items?.count ?? 1) {
+                try? await Task.sleep(for: .milliseconds(140))
+                withAnimation(.smooth(duration: 0.35)) { shownItems = i }
+            }
         } catch {
             withAnimation { self.error = error.localizedDescription }
             Haptic.tap(.rigid)
