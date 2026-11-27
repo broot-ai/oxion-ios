@@ -177,6 +177,8 @@ final class AppModel {
     var postBox: IdBox?
     /// экран «Кольцевая лампа»
     var ringLight = false
+    /// клуб партнёра, открытый по QR / ссылке …/g/КОД
+    var clubOpen: ClubOpen?
 
     struct IdBox: Identifiable { let id: Int }
 
@@ -229,6 +231,18 @@ final class AppModel {
         case "exercises", "catalog": showCatalog = true
         case "run": sheet = .run
         case "ringlight", "light": ringLight = true
+        case "club" where parts.count > 1:
+            clubOpen = ClubOpen(id: parts[1].uppercased(), source: parts.count > 2 ? parts[2] : "link")
+        case "ref" where parts.count > 1:
+            let code = parts[1].uppercased()
+            Task {
+                do {
+                    let _: OK = try await API.call("/refs/claim", method: "POST", body: ["code": code])
+                    OxAlert.show(icon: "person.2.fill", title: "Приглашение принято", message: "Код друга \(code) засчитан")
+                } catch {
+                    OxAlert.show(icon: "person.2", tint: .orange, title: "Приглашение", message: error.localizedDescription)
+                }
+            }
         case "devices": sheet = .devices
         case "book":
             Task {
@@ -457,7 +471,8 @@ struct MainTabView: View {
         switch QRLinks.parse(code) {
         case .trainer(let id): model.handle(route: "trainer/\(id)")
         case .user(let id): scanUser = AppModel.IdBox(id: id)
-        case .url(let u): openURL(u)
+        case .url(let u):
+            if let r = ProfileLink.route(for: u) { model.handle(route: r) } else { openURL(u) }
         case .text(let t):
             UIPasteboard.general.string = t
             OxAlert.show(icon: "qrcode", title: "Текст из QR скопирован", message: t)
@@ -580,6 +595,12 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $model.ringLight) { RingLightScreen() }
         .fullScreenCover(item: $storiesStore.shareDraft) { pr in
             StoryComposer(preset: pr)
+        }
+        .sheet(item: $model.clubOpen) { o in
+            NavigationStack {
+                ClubView(code: o.id, source: o.source)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.clubOpen = nil } } }
+            }
         }
         .sheet(item: $model.postBox) { b in
             NavigationStack {

@@ -258,6 +258,7 @@ struct ProfileView: View {
             list.append(OxSearchItem("Мой профиль в ленте", E, "person.crop.square.fill", Color(hex: 0x8E7CFF), ["посты", "публикации", "лента", "мои фото", "подписчики"], push: { UserProfileView(userId: model.me?.id ?? 0) }))
             list.append(OxSearchItem("Моя визитка и QR", E, "qrcode", Color.lime, ["qr", "куар", "визитка", "код", "поделиться профилем", "ссылка на профиль"], run: { showCard = true }))
             list.append(OxSearchItem("Пригласить друзей", E, "person.badge.plus", Color.lime, ["контакты", "друзья", "пригласить", "приглашение", "реферал"], push: { ContactsInviteView() }))
+            list.append(OxSearchItem("Партнёры и клубы", E, "qrcode.viewfinder", Color(hex: 0xFF9F0A), ["партнёры", "зал", "клуб", "qr", "сканер", "скидки", "пригласить", "компания"], push: { PartnersHubView() }))
             list.append(OxSearchItem("Работа в Oxion", E, "briefcase.fill", Color(hex: 0x3FD6C9), ["вакансии", "работа", "карьера", "стать тренером"], push: { WorkView() }))
             list.append(OxSearchItem("Настройки", S, "gearshape.fill", Color(hex: 0x8E8E93), ["настройки", "параметры", "уведомления", "оформление", "тема"], push: { AppSettingsHubView() }))
         list.append(OxSearchItem("Медали", S, "medal.fill", Color(hex: 0xFFB000), ["медали", "достижения", "награды", "ачивки", "game center"], push: { MedalsView() }))
@@ -467,6 +468,7 @@ struct AppSettingsHubView: View {
                 }
                 .tint(Color.lime)
                 link("О OXION", "flame.fill", Color.lime) { AboutOxionView() }
+                link("Партнёры и клубы", "qrcode.viewfinder", Color(hex: 0xFF9F0A)) { PartnersHubView() }
                 link("Работа в Oxion", "briefcase.fill", Color(hex: 0x3FD6C9)) { WorkView() }
                 Button {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }

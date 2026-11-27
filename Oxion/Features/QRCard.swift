@@ -489,7 +489,10 @@ struct MyCardSheet: View {
         case .user(let id):
             openUser = id
         case .url(let u):
-            openURL(u)
+            if let r = ProfileLink.route(for: u) {
+                dismiss()
+                Task { try? await Task.sleep(for: .seconds(0.4)); model.handle(route: r) }
+            } else { openURL(u) }
         case .text(let t):
             UIPasteboard.general.string = t
             OxAlert.show(icon: "qrcode", title: "Текст из QR скопирован", message: t)

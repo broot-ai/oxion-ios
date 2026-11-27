@@ -325,6 +325,7 @@ enum ProfileLink {
             if (host == "u" || host == "user"), let first = rest.first { return host + "/" + first }
             if host == "post", let first = rest.first, Int(first) != nil { return "post/" + first }
             if host.hasPrefix("@") { return "u/" + host.dropFirst() }
+            if (host == "club" || host == "ref"), let first = rest.first { return host + "/" + first + (rest.count > 1 ? "/" + rest[1] : "") }
             return nil
         }
         guard scheme == "http" || scheme == "https",
@@ -335,6 +336,12 @@ enum ProfileLink {
         // ссылка на ветку: …/t/123 и старая …/#post/123
         if p.count == 2, p[0] == "t", Int(p[1]) != nil { return "post/" + p[1] }
         if let f = url.fragment, f.hasPrefix("post/"), Int(f.dropFirst(5)) != nil { return f }
+        // клуб (QR на ресепшене) и приглашение: …/g/КОД?src=qr, …/r/КОД
+        if p.count == 2, p[0] == "g" {
+            let qr = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "src" && $0.value == "qr" } == true
+            return "club/" + p[1] + (qr ? "/qr" : "/link")
+        }
+        if p.count == 2, p[0] == "r" { return "ref/" + p[1] }
         return nil
     }
 }
