@@ -27,7 +27,7 @@ struct AboutOxionView: View {
                 .padding(.bottom, 40)
             }
         }
-        .background(Color.oxBG.ignoresSafeArea())
+        .background(Color(.systemBackground).ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
