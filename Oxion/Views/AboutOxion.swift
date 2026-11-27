@@ -37,13 +37,12 @@ struct AboutOxionView: View {
     // фото основателя: внизу плавно растворяется в фон
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
+            // фото целиком, без обрезки (лицо не уходит под «остров»)
             Image("founder-maxim")
                 .resizable()
-                .scaledToFill()
-                .frame(height: 520)
+                .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity)
-                .clipped()
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.62), .init(color: .clear, location: 1)],
                                      startPoint: .top, endPoint: .bottom))
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
