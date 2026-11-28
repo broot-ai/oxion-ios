@@ -224,10 +224,18 @@ enum PanelTile: String, CaseIterable, Identifiable, Codable {
         case .torch: "flashlight.on.fill"
         }
     }
-    /// широкий модуль — на всю строку
-    var wide: Bool { self == .heartRate || self == .music }
+    /// размер по умолчанию: пульс и музыка — широкие
+    var defaultSize: TileSize { (self == .heartRate || self == .music) ? .wide : .small }
     /// раскрывается долгим нажатием
     var expandable: Bool { self == .devices || self == .heartRate || self == .restTimer }
+}
+
+/// Размер модуля, как в Пункте управления: удерживайте и тяните уголок
+enum TileSize: String, Codable, CaseIterable {
+    case small, wide, large
+    var bigger: TileSize? { switch self { case .small: .wide; case .wide: .large; case .large: nil } }
+    var smaller: TileSize? { switch self { case .small: nil; case .wide: .small; case .large: .wide } }
+    var title: String { switch self { case .small: "маленький"; case .wide: "широкий"; case .large: "большой" } }
 }
 
 @MainActor
@@ -237,17 +245,26 @@ final class PanelLayout {
     var tiles: [PanelTile] {
         didSet { UserDefaults.standard.set(tiles.map(\.rawValue), forKey: "panel_tiles_v2") }
     }
+    var sizes: [String: TileSize] {
+        didSet { if let d = try? JSONEncoder().encode(sizes) { UserDefaults.standard.set(d, forKey: "panel_sizes_v1") } }
+    }
     private init() {
         let raw = UserDefaults.standard.stringArray(forKey: "panel_tiles_v2")
         tiles = raw?.compactMap(PanelTile.init) ?? [.devices, .audio, .heartRate, .restTimer, .startWorkout, .music, .torch, .watch]
+        if let d = UserDefaults.standard.data(forKey: "panel_sizes_v1"), let m = try? JSONDecoder().decode([String: TileSize].self, from: d) {
+            sizes = m
+        } else { sizes = [:] }
     }
 
-    /// Ряды: широкий модуль — один в ряду, квадратные — по два
+    func size(_ t: PanelTile) -> TileSize { sizes[t.rawValue] ?? t.defaultSize }
+    func setSize(_ t: PanelTile, _ v: TileSize) { sizes[t.rawValue] = v }
+
+    /// Ряды: широкий и большой модуль — один в ряду, маленькие — по два
     var rows: [[PanelTile]] {
         var out: [[PanelTile]] = []
         var pending: PanelTile?
         for t in tiles {
-            if t.wide {
+            if size(t) != .small {
                 out.append([t])
             } else if let p = pending {
                 out.append([p, t]); pending = nil
@@ -263,12 +280,17 @@ final class PanelLayout {
 private let heartRed = Color(hex: 0xFF3B5C)
 
 struct DevicePanelView: View {
+    /// true — открыта шторкой от Dynamic Island (без навигации, свой заголовок)
+    var overlay: Bool = false
+    var onClose: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @State private var hub = BLEHub.shared
     @State private var layout = PanelLayout.shared
     @State private var editing = false
+    @State private var arranging = false
     @State private var expanded: PanelTile?
+    @State private var wiggle = false
     @Namespace private var ns
 
     private let gap: CGFloat = 12
@@ -276,30 +298,40 @@ struct DevicePanelView: View {
 
     var body: some View {
         ZStack {
-            backdrop
+            if !overlay { backdrop }
+            else {
+                // пустое место шторки: нажатие закрывает (в режиме правки — выходит из него)
+                Color.clear.contentShape(Rectangle()).ignoresSafeArea()
+                    .onTapGesture { if arranging { endArranging() } else { onClose?() } }
+            }
             ScrollView {
                 VStack(spacing: gap) {
+                    if overlay || arranging { panelHeader }
                     statusHeader
                     ForEach(Array(layout.rows.enumerated()), id: \.offset) { _, row in
                         HStack(spacing: gap) {
                             ForEach(row) { t in
                                 module(t)
-                                    .frame(height: side)
+                                    .frame(height: layout.size(t) == .large ? side * 2 + gap : side)
                                     .frame(maxWidth: .infinity)
                             }
-                            if row.count == 1 && !row[0].wide { Color.clear.frame(maxWidth: .infinity, maxHeight: side) }
+                            if row.count == 1 && layout.size(row[0]) == .small { Color.clear.frame(maxWidth: .infinity, maxHeight: side) }
                         }
                     }
-                    Text("Удерживайте модуль, чтобы раскрыть его — как в Пункте управления. Эти же модули можно вынести в Пункт управления iPhone и на экран блокировки: «Изменить» → «Добавить элемент управления» / «Добавить виджеты» → OXION.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                        .padding(.horizontal, 6)
+                    if !overlay {
+                        Text("Удерживайте Bluetooth, Пульс или Отдых, чтобы раскрыть модуль. Удерживайте любой другой модуль — включится правка: уголок меняет размер, «−» убирает. Шторка открывается свайпом вниз от Dynamic Island.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 8)
+                            .padding(.horizontal, 6)
+                    }
                 }
                 .padding(16)
                 .padding(.bottom, 40)
                 .animation(.spring(duration: 0.45, bounce: 0.25), value: layout.tiles)
+                .animation(.spring(duration: 0.45, bounce: 0.25), value: layout.sizes)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .blur(radius: expanded == nil ? 0 : 14)
             .allowsHitTesting(expanded == nil)
 
@@ -311,12 +343,108 @@ struct DevicePanelView: View {
         .navigationTitle("Устройства")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+            if !overlay {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { arranging ? endArranging() : startArranging() } label: {
+                        Image(systemName: arranging ? "checkmark" : "slider.horizontal.3")
+                    }
+                }
             }
         }
         .sheet(isPresented: $editing) { PanelEditor() }
         .onAppear { hub.start() }
+    }
+
+    // заголовок шторки и режима правки
+    private var panelHeader: some View {
+        HStack(spacing: 10) {
+            if arranging {
+                let rest = PanelTile.allCases.filter { !layout.tiles.contains($0) }
+                Menu {
+                    ForEach(rest) { t in
+                        Button { Haptic.tap(); withAnimation { layout.tiles.append(t) } } label: { Label(t.title, systemImage: t.icon) }
+                    }
+                    Divider()
+                    Button { editing = true } label: { Label("Порядок модулей", systemImage: "arrow.up.arrow.down") }
+                    Button(role: .destructive) {
+                        withAnimation { layout.sizes = [:] }
+                    } label: { Label("Сбросить размеры", systemImage: "arrow.counterclockwise") }
+                } label: {
+                    Label("Добавить", systemImage: "plus").font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .glassEffect(.regular.interactive(), in: .capsule)
+                }
+                .tint(.primary)
+                Spacer()
+                Button { endArranging() } label: {
+                    Text("Готово").font(.subheadline.weight(.bold)).foregroundStyle(Color.onLime)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(Color.lime, in: Capsule())
+                }
+            } else {
+                Text("Устройства").font(.title2.bold())
+                Spacer()
+                Button { startArranging() } label: {
+                    Image(systemName: "square.resize").font(.headline)
+                        .frame(width: 40, height: 40)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                }
+                .tint(.primary)
+                if overlay {
+                    Button { onClose?() } label: {
+                        Image(systemName: "chevron.up").font(.headline)
+                            .frame(width: 40, height: 40)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
+                    .tint(.primary)
+                }
+            }
+        }
+        .padding(.horizontal, 2)
+        .padding(.bottom, 2)
+    }
+
+    private func startArranging() {
+        guard !arranging else { return }
+        OxHaptics.play(.select)
+        withAnimation(.spring(duration: 0.35, bounce: 0.3)) { arranging = true }
+        withAnimation(.easeInOut(duration: 0.13).repeatForever(autoreverses: true)) { wiggle = true }
+    }
+
+    private func endArranging() {
+        Haptic.tap()
+        withAnimation(.spring(duration: 0.35)) { arranging = false; wiggle = false }
+    }
+
+    /// уголок изменения размера: тянуть наружу — больше, внутрь — меньше, нажатие — по кругу
+    private func resizeHandle(_ t: PanelTile) -> some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 12, weight: .heavy))
+            .foregroundStyle(Color.onLime)
+            .frame(width: 30, height: 30)
+            .background(Color.lime, in: Circle())
+            .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 2))
+            .padding(6)
+            .contentShape(Rectangle().inset(by: -10))
+            .onTapGesture {
+                let cur = layout.size(t)
+                let next = cur.bigger ?? .small
+                resize(t, next)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 6)
+                    .onEnded { v in
+                        let d = max(v.translation.width, v.translation.height)
+                        let cur = layout.size(t)
+                        if d > 30, let b = cur.bigger { resize(t, b) }
+                        else if d < -30, let s = cur.smaller { resize(t, s) }
+                    }
+            )
+    }
+
+    private func resize(_ t: PanelTile, _ v: TileSize) {
+        Haptic.tap(.medium)
+        withAnimation(.spring(duration: 0.45, bounce: 0.3)) { layout.setSize(t, v) }
     }
 
     // фон: мягкие цветные пятна, чтобы стекло «играло»
@@ -361,17 +489,45 @@ struct DevicePanelView: View {
             case .audio: AudioModule()
             case .restTimer: RestModule()
             case .watch: WatchModule()
-            case .startWorkout: WorkoutModule { model.handle(route: "workout") }
+            case .startWorkout: WorkoutModule { onClose?(); model.handle(route: "workout") }
             case .torch: TorchModule()
             }
         }
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(!arranging)
             .glassEffect(t == .startWorkout ? .regular.tint(Color.lime).interactive() : .regular.interactive(), in: .rect(cornerRadius: 32))
+            .overlay(alignment: .topLeading) {
+                if arranging {
+                    Button {
+                        Haptic.tap()
+                        withAnimation(.spring(duration: 0.4)) { layout.tiles.removeAll { $0 == t } }
+                    } label: {
+                        Image(systemName: "minus").font(.system(size: 13, weight: .heavy)).foregroundStyle(.primary)
+                            .frame(width: 28, height: 28)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: -6, y: -6)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if arranging { resizeHandle(t).transition(.scale.combined(with: .opacity)) }
+            }
+            .overlay(alignment: .bottom) {
+                if arranging {
+                    Text(layout.size(t).title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                        .padding(.bottom, 10)
+                }
+            }
+            .rotationEffect(.degrees(arranging ? (wiggle ? 0.8 : -0.8) * (t.rawValue.count.isMultiple(of: 2) ? 1 : -1) : 0))
+            .scaleEffect(arranging ? 0.96 : 1)
             .matchedGeometryEffect(id: t.id, in: ns, isSource: expanded != t)
             .opacity(expanded == t ? 0 : 1)
-            .onLongPressGesture(minimumDuration: 0.35) {
-                if t.expandable { open(t) }
+            .onLongPressGesture(minimumDuration: 0.4) {
+                if arranging { return }
+                if t.expandable { open(t) } else { startArranging() }
             }
     }
 

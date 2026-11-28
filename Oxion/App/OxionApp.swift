@@ -71,6 +71,8 @@ struct OxionApp: App {
             RootView()
                 .environment(model)
                 .modifier(AppTextSize())
+                // первый свайп сверху — приложению: шторка «Устройства» от Dynamic Island
+                .defersSystemGestures(on: .top)
                 // ссылки открываются во встроенном браузере, как в Telegram
                 .modifier(InAppBrowserLinks())
                 .onReceive(NotificationCenter.default.publisher(for: .oxionOpenRoute)) { n in
@@ -243,7 +245,7 @@ final class AppModel {
                     OxAlert.show(icon: "person.2", tint: .orange, title: "Приглашение", message: error.localizedDescription)
                 }
             }
-        case "devices": sheet = .devices
+        case "devices": PullPanel.shared.show()
         case "book":
             Task {
                 guard let my: CoachMy = try? await API.call("/coach/my"),
@@ -526,6 +528,7 @@ struct MainTabView: View {
             WelcomeFlow { Welcome.seen = true; WhatsNew.markSeen(); welcome = false }
         }
         .task {
+            PullPanel.shared.attach(model)
             // приветствие в стиле Apple Фитнес — один раз; вместо него «Что нового» не показываем
             if !Welcome.seen {
                 try? await Task.sleep(for: .seconds(0.6))
